@@ -176,7 +176,7 @@ export default function ResultScreen() {
               <Ionicons
                 name={toastMessage.includes('SAVED') ? 'checkmark-circle' : 'information-circle'}
                 size={16}
-                color={toastMessage.includes('SAVED') ? colors.emeraldForest : colors.brickRed}
+                color={toastMessage.includes('SAVED') ? colors.deepGreen : colors.brickRed}
               />
               <TypewriterText size="xs" bold color={colors.charcoal} style={{ marginLeft: 8 }}>
                 {toastMessage}
@@ -248,7 +248,7 @@ export default function ResultScreen() {
               <StampButton
                 title="Delete"
                 onPress={handleConfirmDelete}
-                variant="destructive"
+                variant="danger"
                 style={styles.modalBtn}
               />
             </View>
