@@ -82,9 +82,6 @@ export default function ComposeScreen() {
           meta.place ? `Auto-detected: ${meta.place}` : `Auto-detected year: ${meta.year}`
         );
         setTimeout(() => setAutoDetectedNotice(null), 4000);
-      } else if (result.metadataUnavailable) {
-        setAutoDetectedNotice('Photo details unavailable in Expo Go — fill in below');
-        setTimeout(() => setAutoDetectedNotice(null), 5000);
       }
     } catch (e) {
       console.warn('[Compose] Metadata extraction error:', e);
