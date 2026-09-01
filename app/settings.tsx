@@ -229,7 +229,7 @@ export default function SettingsScreen() {
         {/* App Info */}
         <View style={styles.infoBox}>
           <TypewriterText size="xs" color={colors.inkMuted} style={styles.infoText}>
-            FIELD NOTES v1.0.0
+            FIELDS v1.0.0 · TRAVEL JOURNAL & STAMPS
           </TypewriterText>
           <TypewriterText size="xs" color={colors.inkMuted} style={styles.infoText}>
             Installation ID: {installationId.slice(0, 16)}…

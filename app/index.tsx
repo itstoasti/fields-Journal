@@ -66,11 +66,11 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.wordmarkContainer}>
-          <TypewriterText size="wordmark" bold letterSpacing={2} color={colors.charcoal} style={styles.titleText}>
-            FIELD NOTES
+          <TypewriterText size="wordmark" bold letterSpacing={3} color={colors.charcoal} style={styles.titleText}>
+            FIELDS
           </TypewriterText>
-          <TypewriterText size="xs" bold letterSpacing={3} color={colors.charcoal} style={styles.subtitleText}>
-            RUBBER STAMP TRAVEL EDITIONS
+          <TypewriterText size="xs" bold letterSpacing={2.5} color={colors.charcoal} style={styles.subtitleText}>
+            TRAVEL JOURNAL & STAMPS
           </TypewriterText>
         </View>
 
