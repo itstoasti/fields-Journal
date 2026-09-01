@@ -12,7 +12,6 @@ export interface PhotoExtractedMetadata {
 /**
  * Reverse geocode coordinates to a clean English place name.
  * Uses expo-location native geocoder first, then OSM Nominatim as fallback.
- * Both are 100% free.
  */
 async function reverseGeocode(latitude: number, longitude: number): Promise<{
   place: string;
@@ -23,7 +22,7 @@ async function reverseGeocode(latitude: number, longitude: number): Promise<{
 }> {
   const empty = { place: '', city: '', district: '', region: '', country: '' };
 
-  // 1. Native geocoder (on-device, no API key)
+  // 1. Native geocoder (on-device, zero latency)
   if (Platform.OS !== 'web') {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -48,7 +47,7 @@ async function reverseGeocode(latitude: number, longitude: number): Promise<{
     }
   }
 
-  // 2. OpenStreetMap Nominatim (free, no key, English)
+  // 2. OpenStreetMap Nominatim (English, comprehensive)
   try {
     const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=14&addressdetails=1&accept-language=en`;
     const res = await fetch(url, {
@@ -58,7 +57,7 @@ async function reverseGeocode(latitude: number, longitude: number): Promise<{
       const data = await res.json();
       const addr = data.address || {};
       const city = addr.city || addr.town || addr.municipality || addr.village || addr.county || '';
-      const district = addr.quarter || addr.suburb || addr.neighbourhood || addr.borough || '';
+      const district = addr.quarter || addr.suburb || addr.neighbourhood || addr.borough || addr.attraction || '';
       const region = addr.state || addr.region || addr.province || '';
       const country = addr.country || '';
 
@@ -91,49 +90,79 @@ function formatPlace(city: string, district: string, region: string, country: st
 }
 
 /**
- * Generate 3 contextual keywords from geography and time.
+ * Generate 3 curated, evocative travel memory keywords.
  */
-function generateKeywords(
-  geo: { city: string; district: string; region: string; country: string },
+export function generateKeywords(
+  geo: { city?: string; district?: string; region?: string; country?: string },
   month?: number,
   hour?: number,
 ): [string, string, string] {
-  const kw1 = geo.district || geo.city || geo.country || 'Field observation';
+  const city = (geo.city || '').toLowerCase();
+  const district = (geo.district || '').toLowerCase();
+  const region = (geo.region || '').toLowerCase();
+  const country = (geo.country || '').toLowerCase();
 
-  let kw2 = 'Afternoon light';
-  if (month !== undefined) {
-    const seasons: Record<string, string[]> = {
-      morning: ['Spring dawn', 'Summer sunrise', 'Autumn morning', 'Winter dawn'],
-      day: ['Spring bloom', 'Summer haze', 'Autumn amber', 'Winter frost'],
-      evening: ['Spring twilight', 'Summer dusk', 'Autumn glow', 'Winter twilight'],
-    };
-    const seasonIdx = month >= 3 && month <= 5 ? 0 : month >= 6 && month <= 8 ? 1 : month >= 9 && month <= 11 ? 2 : 3;
-    const timeKey = hour !== undefined ? (hour < 10 ? 'morning' : hour < 17 ? 'day' : 'evening') : 'day';
-    kw2 = seasons[timeKey][seasonIdx];
-  } else if (hour !== undefined) {
-    if (hour < 7) kw2 = 'Early dawn';
-    else if (hour < 10) kw2 = 'Morning light';
-    else if (hour < 16) kw2 = 'Midday sun';
-    else if (hour < 19) kw2 = 'Golden hour';
-    else kw2 = 'Evening dusk';
+  // === KEYWORD 1: Landmark / Specific Geographic Feature ===
+  let kw1 = 'Expedition record';
+  if (geo.district && !/^\d+$/.test(geo.district)) {
+    kw1 = geo.district;
+  } else if (geo.city) {
+    kw1 = `${geo.city} passage`;
+  } else if (geo.country) {
+    kw1 = `${geo.country} trail`;
   }
 
-  const cityLower = (geo.city || '').toLowerCase();
-  const regionLower = (geo.region || '').toLowerCase();
-  const countryLower = (geo.country || '').toLowerCase();
-
-  let textures: string[];
-  if (cityLower.includes('beach') || regionLower.includes('california') || cityLower.includes('coast') || cityLower.includes('bay')) {
-    textures = ['Coastal breeze', 'Salt air', 'Shore light', 'Ocean horizon', 'Tide line'];
-  } else if (countryLower.includes('japan') || countryLower.includes('korea') || countryLower.includes('china') || countryLower.includes('taiwan')) {
-    textures = ['Temple stone', 'Paper lantern', 'Roof tiles', 'Garden moss', 'Quiet alley'];
-  } else if (countryLower.includes('italy') || countryLower.includes('france') || countryLower.includes('spain') || countryLower.includes('greece')) {
-    textures = ['Cobblestone', 'Terra cotta', 'Iron balcony', 'Olive shade', 'Plaster wall'];
-  } else {
-    textures = ['Weathered wood', 'Stone pathway', 'Distant ridge', 'Shadow pattern', 'Old brickwork'];
+  // === KEYWORD 2: Cinematic Atmosphere / Lighting / Season ===
+  let kw2 = 'Golden hour haze';
+  if (hour !== undefined) {
+    if (hour >= 20 || hour < 5) {
+      kw2 = 'Midnight blue';
+    } else if (hour >= 5 && hour < 8) {
+      kw2 = month && month >= 9 && month <= 11 ? 'Crisp autumn dawn' : 'Early sunrise';
+    } else if (hour >= 8 && hour < 12) {
+      kw2 = 'Morning light';
+    } else if (hour >= 12 && hour < 17) {
+      kw2 = month && month >= 6 && month <= 8 ? 'Midsummer haze' : 'Sunlit afternoon';
+    } else if (hour >= 17 && hour < 20) {
+      kw2 = month && month >= 9 && month <= 11 ? 'Autumn amber' : 'Twilight glow';
+    }
+  } else if (month !== undefined) {
+    if (month >= 3 && month <= 5) kw2 = 'Spring blossom';
+    else if (month >= 6 && month <= 8) kw2 = 'Midsummer warmth';
+    else if (month >= 9 && month <= 11) kw2 = 'Autumn amber';
+    else kw2 = 'Winter stillness';
   }
 
-  const seed = ((geo.city || '').length + (month || 0) + (hour || 0)) % textures.length;
+  // === KEYWORD 3: Tactile Regional Material & Sensory Texture ===
+  let textures: string[] = [];
+
+  // Greece / Mediterranean
+  if (country.includes('greece') || city.includes('athens') || country.includes('cyprus')) {
+    textures = ['Ancient marble', 'Aegean breeze', 'Olive grove', 'Parthenon crest', 'Moonlit stone', 'Temple column'];
+    if (kw1 === 'Expedition record') kw1 = 'Acropolis ridge';
+  }
+  // Italy / Southern Europe
+  else if (country.includes('italy') || country.includes('rome') || country.includes('florence') || country.includes('venice')) {
+    textures = ['Cobblestone alley', 'Terracotta roof', 'Iron balcony', 'Tuscan cypress', 'Piazza shadow'];
+  }
+  // Japan / Korea / East Asia
+  else if (country.includes('japan') || country.includes('korea') || country.includes('taiwan') || city.includes('tokyo') || city.includes('seoul')) {
+    textures = ['Temple stone', 'Cedar incense', 'Paper lantern', 'Moss pathway', 'Rain-slicked neon', 'Roof tiles'];
+  }
+  // California / Ocean Coasts
+  else if (city.includes('beach') || region.includes('california') || city.includes('coast') || city.includes('ocean')) {
+    textures = ['Pacific swell', 'Coastal mist', 'Salt air', 'Highway 1 curve', 'Ocean horizon', 'Warm asphalt'];
+  }
+  // Desert / Mountains
+  else if (region.includes('arizona') || region.includes('utah') || region.includes('nevada') || city.includes('sedona')) {
+    textures = ['Red rock canyon', 'Desert cedar', 'Canyon wind', 'Sandstone cliff', 'Sagebrush'];
+  }
+  // Default Atmospheric Explorations
+  else {
+    textures = ['Weathered stone', 'Timberline pine', 'Distant ridge', 'Wild horizon', 'Shadowed pass', 'Mountain air'];
+  }
+
+  const seed = (city.length + district.length + (month || 1) + (hour || 12)) % textures.length;
   const kw3 = textures[seed];
 
   return [kw1, kw2, kw3];
@@ -150,7 +179,6 @@ function parseDateDetails(raw: any): { year?: string; month?: number; hour?: num
   }
 
   if (typeof raw === 'number' && raw > 0) {
-    // Could be epoch ms or epoch seconds
     const ms = raw < 10000000000 ? raw * 1000 : raw;
     const d = new Date(ms);
     if (!isNaN(d.getTime()) && d.getFullYear() > 1990) {
@@ -211,7 +239,7 @@ export async function extractPhotoMetadata(options: {
 
   console.log('[Metadata] Input - location:', location, 'creationTime:', creationTime);
 
-  // === Date: try creationTime first, then dig through EXIF ===
+  // === Date ===
   let dateInfo: { year?: string; month?: number; hour?: number } = {};
 
   if (creationTime && creationTime > 0) {
@@ -228,7 +256,7 @@ export async function extractPhotoMetadata(options: {
     result.year = dateInfo.year;
   }
 
-  // === Location: reverse geocode if available ===
+  // === Location ===
   if (location && Math.abs(location.latitude) > 0.001 && Math.abs(location.longitude) > 0.001) {
     result.latitude = location.latitude;
     result.longitude = location.longitude;
@@ -239,14 +267,7 @@ export async function extractPhotoMetadata(options: {
     }
     result.keywords = generateKeywords(geo, dateInfo.month, dateInfo.hour);
   } else {
-    console.log('[Metadata] No GPS coordinates — location will be blank for user to fill in.');
-    if (dateInfo.year) {
-      result.keywords = generateKeywords(
-        { city: '', district: '', region: '', country: '' },
-        dateInfo.month,
-        dateInfo.hour,
-      );
-    }
+    console.log('[Metadata] No GPS coordinates — leaving location and keywords blank for user input.');
   }
 
   console.log('[Metadata] === FINAL OUTPUT ===');

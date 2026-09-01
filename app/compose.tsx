@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -67,15 +67,11 @@ export default function ComposeScreen() {
         creationTime: result.creationTime,
       });
 
-      if (meta.place) {
-        setPlace(meta.place);
-      }
+      setPlace(meta.place || '');
       if (meta.year) {
         setYear(meta.year);
       }
-      if (meta.keywords && meta.keywords.length > 0) {
-        setKeywordsText(meta.keywords.join(' · '));
-      }
+      setKeywordsText(meta.keywords && meta.keywords.length > 0 ? meta.keywords.join(' · ') : '');
 
       if (meta.place || meta.year) {
         setAutoDetectedNotice(
@@ -194,10 +190,19 @@ export default function ComposeScreen() {
     return 'MAKE NOTE';
   };
 
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  const handleInputFocus = (offset = 350) => {
+    setTimeout(() => {
+      scrollViewRef.current?.scrollTo({ y: offset, animated: true });
+    }, 150);
+  };
+
   return (
     <PaperContainer>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 30}
         style={styles.keyboardView}
       >
         {/* Top Bar with Back Arrow and Centered Header (1:1 with mockup) */}
@@ -220,8 +225,10 @@ export default function ComposeScreen() {
         </View>
 
         <ScrollView
+          ref={scrollViewRef}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
           {/* Photo Section: 4-Corner Masking Tape Frame */}
@@ -295,6 +302,7 @@ export default function ComposeScreen() {
                 placeholderTextColor={colors.inkMuted}
                 style={styles.cellInput}
                 autoCorrect={false}
+                onFocus={() => handleInputFocus(220)}
               />
             </View>
 
@@ -311,6 +319,7 @@ export default function ComposeScreen() {
                   placeholderTextColor={colors.inkMuted}
                   style={styles.cellInput}
                   keyboardType="numeric"
+                  onFocus={() => handleInputFocus(280)}
                 />
               </View>
 
@@ -325,6 +334,7 @@ export default function ComposeScreen() {
                   placeholderTextColor={colors.inkMuted}
                   style={styles.cellInput}
                   keyboardType="numeric"
+                  onFocus={() => handleInputFocus(280)}
                 />
               </View>
             </View>
@@ -341,11 +351,12 @@ export default function ComposeScreen() {
                 placeholderTextColor={colors.inkMuted}
                 style={styles.cellInput}
                 autoCorrect={false}
+                onFocus={() => handleInputFocus(340)}
               />
             </View>
           </View>
 
-          <View style={{ height: 110 }} />
+          <View style={{ height: 180 }} />
         </ScrollView>
 
         {/* Bottom Bar with MAKE NOTE Action Button (1:1 with mockup) */}
@@ -388,6 +399,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xs,
+    paddingBottom: 220,
   },
   photoContainer: {
     marginVertical: spacing.xs,

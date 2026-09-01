@@ -1,6 +1,6 @@
 /**
- * Pure binary EXIF parser for JPEG files.
- * Extracts GPS coordinates (Latitude, Longitude) and DateTimeOriginal directly from JPEG binary bytes.
+ * Pure binary EXIF parser for JPEG files on mobile.
+ * Reads GPS coordinates (Latitude, Longitude) and DateTimeOriginal directly from JPEG binary bytes.
  */
 
 export interface ParsedExif {
@@ -12,82 +12,89 @@ export interface ParsedExif {
 export function parseJpegBinaryExif(buffer: ArrayBuffer): ParsedExif {
   const result: ParsedExif = {};
   const view = new DataView(buffer);
+  const maxLen = view.byteLength;
 
-  try {
-    // Verify JPEG SOI (0xFFD8)
-    if (view.getUint16(0) !== 0xffd8) {
-      return result;
-    }
+  if (maxLen < 12) {
+    console.log('[ExifReader] Buffer too small:', maxLen);
+    return result;
+  }
 
-    let offset = 2;
-    const maxLen = view.byteLength;
+  // Look for 0xFFE1 (APP1 Exif marker) anywhere in the buffer
+  let app1Pos = -1;
+  const searchLimit = Math.min(maxLen - 8, 131072);
 
-    while (offset < maxLen - 4) {
-      const marker = view.getUint16(offset);
-      offset += 2;
+  for (let i = 0; i < searchLimit; i++) {
+    if (view.getUint8(i) === 0xff && view.getUint8(i + 1) === 0xe1) {
+      const dataStart = i + 4;
+      if (dataStart + 6 <= maxLen) {
+        const isExif =
+          view.getUint8(dataStart) === 0x45 && // E
+          view.getUint8(dataStart + 1) === 0x78 && // x
+          view.getUint8(dataStart + 2) === 0x69 && // i
+          view.getUint8(dataStart + 3) === 0x66 && // f
+          view.getUint8(dataStart + 4) === 0x00 &&
+          view.getUint8(dataStart + 5) === 0x00;
 
-      // APP1 Marker for EXIF is 0xFFE1
-      if (marker === 0xffe1) {
-        const segLen = view.getUint16(offset);
-        const app1Start = offset + 2;
-
-        // Check for 'Exif\0\0' header (0x45786966 0x0000)
-        if (
-          view.getUint32(app1Start) === 0x45786966 &&
-          view.getUint16(app1Start + 4) === 0x0000
-        ) {
-          const tiffStart = app1Start + 6;
-          parseTiffHeader(view, tiffStart, result);
+        if (isExif) {
+          app1Pos = i;
+          console.log(`[ExifReader] Found valid APP1 Exif header at byte offset ${i}`);
+          break;
         }
-        break;
-      } else if ((marker & 0xff00) === 0xff00 && marker !== 0xffd8 && marker !== 0xffd9) {
-        // Skip other JPEG segment
-        const segLen = view.getUint16(offset);
-        offset += segLen;
-      } else {
-        break;
       }
     }
+  }
+
+  if (app1Pos === -1) {
+    console.log('[ExifReader] No APP1 Exif marker found in file header.');
+    return result;
+  }
+
+  try {
+    const tiffStart = app1Pos + 10;
+    parseTiffHeader(view, tiffStart, result);
   } catch (e) {
-    console.warn('[ExifReader] Binary parsing error (non-fatal):', e);
+    console.warn('[ExifReader] Error parsing TIFF header:', e);
   }
 
   return result;
 }
 
 function parseTiffHeader(view: DataView, tiffStart: number, result: ParsedExif): void {
+  if (tiffStart + 8 > view.byteLength) return;
+
   const endian = view.getUint16(tiffStart);
   let littleEndian = false;
 
   if (endian === 0x4949) {
-    // 'II' = Intel Little Endian
-    littleEndian = true;
+    littleEndian = true; // 'II' = Intel Little Endian
   } else if (endian === 0x4d4d) {
-    // 'MM' = Motorola Big Endian
-    littleEndian = false;
+    littleEndian = false; // 'MM' = Motorola Big Endian
   } else {
+    console.log(`[ExifReader] Unknown endian tag: 0x${endian.toString(16)}`);
     return;
   }
 
-  // Tag 0x002A (42)
-  if (view.getUint16(tiffStart + 2, littleEndian) !== 0x002a) {
+  const tag42 = view.getUint16(tiffStart + 2, littleEndian);
+  if (tag42 !== 0x002a) {
+    console.log(`[ExifReader] Invalid TIFF magic number: ${tag42}`);
     return;
   }
 
   const ifd0Offset = view.getUint32(tiffStart + 4, littleEndian);
-  if (ifd0Offset < 8) return;
+  console.log(`[ExifReader] TIFF endian: ${littleEndian ? 'Little' : 'Big'}, IFD0 offset: ${ifd0Offset}`);
 
-  parseIfd0(view, tiffStart, tiffStart + ifd0Offset, littleEndian, result);
+  parseIfd(view, tiffStart, tiffStart + ifd0Offset, littleEndian, result, 0);
 }
 
-function parseIfd0(
+function parseIfd(
   view: DataView,
   tiffStart: number,
   ifdOffset: number,
   littleEndian: boolean,
-  result: ParsedExif
+  result: ParsedExif,
+  depth: number
 ): void {
-  if (ifdOffset >= view.byteLength - 2) return;
+  if (depth > 5 || ifdOffset + 2 > view.byteLength) return;
 
   const count = view.getUint16(ifdOffset, littleEndian);
   let entryOffset = ifdOffset + 2;
@@ -105,6 +112,7 @@ function parseIfd0(
     if (tag === 0x0132 && !result.dateTime) {
       const strCount = view.getUint32(entryOffset + 4, littleEndian);
       result.dateTime = readStringValue(view, tiffStart, valueOffset, strCount, littleEndian);
+      console.log(`[ExifReader] Found IFD0 DateTime: ${result.dateTime}`);
     }
     // Exif Sub-IFD pointer (0x8769)
     else if (tag === 0x8769) {
@@ -113,17 +121,18 @@ function parseIfd0(
     // GPS IFD pointer (0x8825)
     else if (tag === 0x8825) {
       gpsIfdOffset = view.getUint32(valueOffset, littleEndian);
+      console.log(`[ExifReader] Found GPS IFD pointer at offset: ${gpsIfdOffset}`);
     }
 
     entryOffset += 12;
   }
 
-  if (exifSubIfdOffset !== null) {
-    parseExifSubIfd(view, tiffStart, tiffStart + exifSubIfdOffset, littleEndian, result);
-  }
-
   if (gpsIfdOffset !== null) {
     parseGpsIfd(view, tiffStart, tiffStart + gpsIfdOffset, littleEndian, result);
+  }
+
+  if (exifSubIfdOffset !== null) {
+    parseExifSubIfd(view, tiffStart, tiffStart + exifSubIfdOffset, littleEndian, result);
   }
 }
 
@@ -134,10 +143,12 @@ function parseExifSubIfd(
   littleEndian: boolean,
   result: ParsedExif
 ): void {
-  if (ifdOffset >= view.byteLength - 2) return;
+  if (ifdOffset + 2 > view.byteLength) return;
 
   const count = view.getUint16(ifdOffset, littleEndian);
   let entryOffset = ifdOffset + 2;
+
+  let nestedGpsOffset: number | null = null;
 
   for (let i = 0; i < count; i++) {
     if (entryOffset + 12 > view.byteLength) break;
@@ -149,9 +160,19 @@ function parseExifSubIfd(
     if ((tag === 0x9003 || tag === 0x9004) && !result.dateTime) {
       const strCount = view.getUint32(entryOffset + 4, littleEndian);
       result.dateTime = readStringValue(view, tiffStart, valueOffset, strCount, littleEndian);
+      console.log(`[ExifReader] Found DateTimeOriginal (0x${tag.toString(16)}): ${result.dateTime}`);
+    }
+    // Nested GPS IFD pointer (0x8825)
+    else if (tag === 0x8825) {
+      nestedGpsOffset = view.getUint32(valueOffset, littleEndian);
+      console.log(`[ExifReader] Found nested GPS IFD pointer in SubIFD at: ${nestedGpsOffset}`);
     }
 
     entryOffset += 12;
+  }
+
+  if (nestedGpsOffset !== null && (result.latitude === undefined || result.longitude === undefined)) {
+    parseGpsIfd(view, tiffStart, tiffStart + nestedGpsOffset, littleEndian, result);
   }
 }
 
@@ -162,7 +183,10 @@ function parseGpsIfd(
   littleEndian: boolean,
   result: ParsedExif
 ): void {
-  if (ifdOffset >= view.byteLength - 2) return;
+  if (ifdOffset + 2 > view.byteLength) {
+    console.log(`[ExifReader] GPS IFD offset ${ifdOffset} exceeds buffer size ${view.byteLength}`);
+    return;
+  }
 
   const count = view.getUint16(ifdOffset, littleEndian);
   let entryOffset = ifdOffset + 2;
@@ -179,19 +203,19 @@ function parseGpsIfd(
     const valCount = view.getUint32(entryOffset + 4, littleEndian);
     const valueOffset = entryOffset + 8;
 
-    // Tag 1: GPSLatitudeRef
+    // Tag 1: GPSLatitudeRef (0x0001)
     if (tag === 0x0001) {
       latRef = String.fromCharCode(view.getUint8(valueOffset));
     }
-    // Tag 2: GPSLatitude (3 Rationals)
+    // Tag 2: GPSLatitude (0x0002) - 3 Rationals
     else if (tag === 0x0002) {
       latValues = readRationals(view, tiffStart, valueOffset, valCount, littleEndian);
     }
-    // Tag 3: GPSLongitudeRef
+    // Tag 3: GPSLongitudeRef (0x0003)
     if (tag === 0x0003) {
       lonRef = String.fromCharCode(view.getUint8(valueOffset));
     }
-    // Tag 4: GPSLongitude (3 Rationals)
+    // Tag 4: GPSLongitude (0x0004) - 3 Rationals
     else if (tag === 0x0004) {
       lonValues = readRationals(view, tiffStart, valueOffset, valCount, littleEndian);
     }
@@ -201,7 +225,7 @@ function parseGpsIfd(
 
   if (latValues && latValues.length >= 3) {
     let lat = latValues[0] + latValues[1] / 60 + latValues[2] / 3600;
-    if (latRef === 'S') lat = -lat;
+    if (latRef === 'S') lat = -Math.abs(lat);
     if (!isNaN(lat) && Math.abs(lat) > 0.0001) {
       result.latitude = lat;
     }
@@ -209,11 +233,13 @@ function parseGpsIfd(
 
   if (lonValues && lonValues.length >= 3) {
     let lon = lonValues[0] + lonValues[1] / 60 + lonValues[2] / 3600;
-    if (lonRef === 'W') lon = -lon;
+    if (lonRef === 'W') lon = -Math.abs(lon);
     if (!isNaN(lon) && Math.abs(lon) > 0.0001) {
       result.longitude = lon;
     }
   }
+
+  console.log(`[ExifReader] GPS parsing result: lat=${result.latitude}, lon=${result.longitude}`);
 }
 
 function readStringValue(
