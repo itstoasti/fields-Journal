@@ -134,13 +134,13 @@ export default function SettingsScreen() {
           {[
             {
               id: 'grok-imagine-image-2.0',
-              label: 'grok-imagine-image-2.0',
-              subtitle: 'Default · Highest fidelity stamp carving & text',
+              label: 'grok-imagine-image-2.0 (High Quality)',
+              subtitle: 'Default · 2K resolution with standard quality (~5-6¢)',
             },
             {
-              id: 'grok-imagine-image',
-              label: 'grok-imagine-image',
-              subtitle: 'Standard · Fast generation',
+              id: 'grok-imagine-image-2.0-low',
+              label: 'grok-imagine-image-2.0 (2K Low)',
+              subtitle: 'Fast 2K resolution with low compute tier (~2-3¢)',
             },
           ].map((m, index) => {
             const isSelected = (selectedModel || 'grok-imagine-image-2.0') === m.id;
