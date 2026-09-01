@@ -6,7 +6,8 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -40,6 +41,7 @@
   "devDependencies": {
     "@types/react": "~19.1.0",
     "@types/react-native": "~0.73.0",
+    "patch-package": "^8.0.1",
     "typescript": "~5.7.0"
   },
   "private": true
