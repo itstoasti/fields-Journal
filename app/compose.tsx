@@ -111,9 +111,9 @@ export default function ComposeScreen() {
   const parseKeywords = (): [string, string, string] => {
     const parts = keywordsText.split(/[·,\n|]/).map((s) => s.trim()).filter(Boolean);
     return [
-      parts[0] || 'Cedar trees',
-      parts[1] || 'Temple bell',
-      parts[2] || 'Dusk mist',
+      parts[0] || '',
+      parts[1] || '',
+      parts[2] || '',
     ];
   };
 
@@ -125,7 +125,7 @@ export default function ComposeScreen() {
       pathname: '/pressing',
       params: {
         photoUri: selectedPhotoUri,
-        place: place.trim() || 'Kyoto Old District',
+        place: place.trim(),
         number: noteNumber.trim() || '01',
         keyword1: k1,
         keyword2: k2,

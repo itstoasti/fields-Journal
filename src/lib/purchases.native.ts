@@ -14,22 +14,30 @@ if (!isExpoGo) {
   }
 }
 
-const REVENUECAT_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY || 'goog_sample_key';
+const REVENUECAT_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY;
+const isRealRcKey = Boolean(
+  REVENUECAT_API_KEY &&
+  !REVENUECAT_API_KEY.includes('sample') &&
+  !REVENUECAT_API_KEY.includes('placeholder') &&
+  REVENUECAT_API_KEY.length > 15
+);
+
 export const PRODUCT_NOTES_20 = process.env.EXPO_PUBLIC_RC_PRODUCT_NOTES_20 || 'notes_20';
 
 let isPurchasesConfigured = false;
 
 export async function initializePurchases(appUserId: string): Promise<void> {
   if (isPurchasesConfigured) return;
-  if (isExpoGo || !Purchases) {
-    console.log('[Purchases] Expo Go detected: RevenueCat simulation enabled');
+
+  if (isExpoGo || !Purchases || !isRealRcKey) {
+    console.log('[Purchases] Development / Simulated RevenueCat mode enabled');
     isPurchasesConfigured = true;
     return;
   }
 
   try {
     Purchases.configure({
-      apiKey: REVENUECAT_API_KEY,
+      apiKey: REVENUECAT_API_KEY!,
       appUserID: appUserId,
     });
     isPurchasesConfigured = true;
