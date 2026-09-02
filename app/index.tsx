@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -7,7 +7,7 @@ import {
   FlatList,
   Dimensions,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import {
   PaperContainer,
@@ -25,6 +25,13 @@ export default function HomeScreen() {
   const router = useRouter();
   const notes = useAppStore((state) => state.notes);
   const entitlements = useAppStore((state) => state.entitlements);
+  const syncWithBackend = useAppStore((state) => state.syncWithBackend);
+
+  useFocusEffect(
+    useCallback(() => {
+      syncWithBackend();
+    }, [syncWithBackend])
+  );
 
   const handleNewNote = () => {
     router.push('/compose');

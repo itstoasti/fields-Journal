@@ -11,6 +11,7 @@ import { Platform } from 'react-native';
 const SAVED_NOTES_KEY = 'fn_saved_notes_json';
 const PRIVACY_CONSENT_KEY = 'fn_privacy_consented_v1';
 const SELECTED_MODEL_KEY = 'fn_selected_model_v1';
+const ENTITLEMENTS_KEY = 'fn_entitlements_v1';
 
 async function getStorageItem(key: string): Promise<string | null> {
   if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
@@ -106,25 +107,43 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
       }
 
-      // Populate local state immediately
+      // Load cached local entitlements immediately
+      let initialEntitlements: UserEntitlementState = {
+        freeUsed: 0,
+        adUsed: false,
+        credits: 0,
+        entitlement: 'free',
+      };
+      const savedEntitlements = await getStorageItem(ENTITLEMENTS_KEY);
+      if (savedEntitlements) {
+        try {
+          initialEntitlements = JSON.parse(savedEntitlements);
+        } catch {}
+      }
+
+      // Populate local state immediately with cached entitlements
       set({
         installationId,
         deviceId,
         notes: loadedNotes,
         hasConsentedPrivacy,
         selectedModel,
+        entitlements: initialEntitlements,
       });
 
       // Initialize purchases
       await initializePurchases(installationId);
 
-      // Fetch server entitlements with persistent deviceId
+      // Fetch authoritative server entitlements with persistent deviceId
       const serverEntitlements = await fetchUserEntitlements(installationId, deviceId);
 
       set({
         isInitialized: true,
         entitlements: serverEntitlements,
       });
+
+      // Persist to local storage
+      await setStorageItem(ENTITLEMENTS_KEY, JSON.stringify(serverEntitlements));
 
       // Preload ad if on ad step
       if (serverEntitlements.entitlement === 'ad' || serverEntitlements.freeUsed >= 2) {
@@ -181,6 +200,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     merged.entitlement = type;
     set({ entitlements: merged });
 
+    // Persist immediately
+    setStorageItem(ENTITLEMENTS_KEY, JSON.stringify(merged));
+
     if (type === 'ad') {
       rewardedAdManager.preloadAd();
     }
@@ -193,6 +215,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const serverEntitlements = await fetchUserEntitlements(id, devId);
       set({ entitlements: serverEntitlements });
+      await setStorageItem(ENTITLEMENTS_KEY, JSON.stringify(serverEntitlements));
       if (serverEntitlements.entitlement === 'ad') {
         rewardedAdManager.preloadAd();
       }

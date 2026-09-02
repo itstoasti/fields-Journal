@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -12,7 +12,7 @@ import {
   Keyboard,
   ActivityIndicator,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import {
   PaperContainer,
@@ -35,6 +35,13 @@ export default function ComposeScreen() {
   const getNextNoteNumber = useAppStore((state) => state.getNextNoteNumber);
   const hasConsentedPrivacy = useAppStore((state) => state.hasConsentedPrivacy);
   const getEntitlementType = useAppStore((state) => state.getEntitlementType);
+  const syncWithBackend = useAppStore((state) => state.syncWithBackend);
+
+  useFocusEffect(
+    useCallback(() => {
+      syncWithBackend();
+    }, [syncWithBackend])
+  );
 
   // Form states: starts empty so user provides their own photo
   const [selectedPhotoUri, setSelectedPhotoUri] = useState<string | null>(
