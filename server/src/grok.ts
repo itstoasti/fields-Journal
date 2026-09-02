@@ -38,11 +38,13 @@ async function executeXaiCall(
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   // Resolve model and quality
-  const isLowQuality =
-    requestedModel.toLowerCase().includes('low') ||
-    options.quality === 'low';
+  const isQualityModel = requestedModel.toLowerCase().includes('quality');
+  const isLowQuality = requestedModel.toLowerCase().includes('low') || options.quality === 'low';
 
-  const actualModel = 'grok-imagine-image-2.0';
+  const actualModel = isQualityModel
+    ? 'grok-imagine-image-quality'
+    : 'grok-imagine-image-2.0';
+
   const quality = isLowQuality ? 'low' : 'standard';
 
   try {

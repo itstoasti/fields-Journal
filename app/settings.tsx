@@ -128,29 +128,24 @@ export default function SettingsScreen() {
             AI GENERATION MODEL
           </TypewriterText>
           <TypewriterText size="xs" color={colors.inkMuted} style={{ marginTop: 4, marginBottom: spacing.md }}>
-            Select the AI model for rendering travel stamps:
+            Select the xAI Grok model for rendering travel stamps:
           </TypewriterText>
 
           {[
             {
               id: 'grok-imagine-image-2.0',
               label: 'grok-imagine-image-2.0 (High Quality)',
-              subtitle: 'xAI Grok · 2K resolution standard quality (~5-6¢)',
+              subtitle: 'Default · 2K resolution standard quality (~5-6¢)',
             },
             {
               id: 'grok-imagine-image-2.0-low',
               label: 'grok-imagine-image-2.0 (2K Low)',
-              subtitle: 'xAI Grok · Fast 2K low compute tier (~2-3¢)',
+              subtitle: 'Fast 2K resolution low compute tier (~2-3¢)',
             },
             {
-              id: 'gemini-2.5-flash-image',
-              label: 'Gemini 2.5 Flash Image (Nano Banana)',
-              subtitle: 'Google Gemini · Ultra-fast multimodal synthesis (~3¢)',
-            },
-            {
-              id: 'gemini-3.1-flash-image',
-              label: 'Gemini 3.1 Flash Image (Nano Banana 2)',
-              subtitle: 'Google Gemini · Next-gen multimodal synthesis (~4¢)',
+              id: 'grok-imagine-image-quality',
+              label: 'grok-imagine-image-quality (Ultra Quality)',
+              subtitle: 'Studio-grade maximum texture & detail (~7-8¢)',
             },
           ].map((m, index) => {
             const isSelected = (selectedModel || 'grok-imagine-image-2.0') === m.id;
