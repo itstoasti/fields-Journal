@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Dimensions,
+  Keyboard,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,6 +24,7 @@ import { useAppStore } from '../src/store/useAppStore';
 import { rewardedAdManager } from '../src/lib/ads';
 import { pickImageFromLibrary, pickImageFromCamera } from '../src/lib/picker';
 import { extractPhotoMetadata } from '../src/lib/metadata';
+import { searchLocationSuggestions, LocationSuggestion } from '../src/lib/locationSearch';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -44,6 +46,10 @@ export default function ComposeScreen() {
   const [isAdLoading, setIsAdLoading] = useState<boolean>(false);
   const [autoDetectedNotice, setAutoDetectedNotice] = useState<string | null>(null);
 
+  // Location search suggestions
+  const [locationSuggestions, setLocationSuggestions] = useState<LocationSuggestion[]>([]);
+  const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
   // Preload rewarded ad if on ad step
   const currentEntitlement = getEntitlementType();
   useEffect(() => {
@@ -51,6 +57,27 @@ export default function ComposeScreen() {
       rewardedAdManager.preloadAd();
     }
   }, [currentEntitlement]);
+
+  const handleLocationChange = (text: string) => {
+    setPlace(text);
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
+    if (text.trim().length >= 2) {
+      searchDebounceRef.current = setTimeout(async () => {
+        const results = await searchLocationSuggestions(text);
+        setLocationSuggestions(results);
+      }, 250);
+    } else {
+      setLocationSuggestions([]);
+    }
+  };
+
+  const handleSelectLocation = (suggestion: LocationSuggestion) => {
+    setPlace(suggestion.formatted);
+    setLocationSuggestions([]);
+    Keyboard.dismiss();
+  };
 
   const applyExtractedMetadata = async (result: {
     uri?: string;
@@ -67,11 +94,15 @@ export default function ComposeScreen() {
         creationTime: result.creationTime,
       });
 
-      setPlace(meta.place || '');
+      if (meta.place) {
+        setPlace(meta.place);
+      }
       if (meta.year) {
         setYear(meta.year);
       }
-      setKeywordsText(meta.keywords && meta.keywords.length > 0 ? meta.keywords.join(' · ') : '');
+      if (meta.keywords && meta.keywords.length > 0) {
+        setKeywordsText(meta.keywords.join(' · '));
+      }
 
       if (meta.place || meta.year) {
         setAutoDetectedNotice(
@@ -179,74 +210,85 @@ export default function ComposeScreen() {
       return;
     }
 
-    // Step 4: Free or Credit
+    // Step 4: Notes 1-2 Free or Credit
     executeProceedToPressing(entitlement);
-  };
-
-  const getButtonTitle = (): string => {
-    if (currentEntitlement === 'ad') {
-      return 'WATCH AD TO PRESS';
-    }
-    return 'MAKE NOTE';
   };
 
   const scrollViewRef = useRef<ScrollView>(null);
 
-  const handleInputFocus = (offset = 350) => {
+  const handleInputFocus = (offsetY: number) => {
     setTimeout(() => {
-      scrollViewRef.current?.scrollTo({ y: offset, animated: true });
-    }, 150);
+      scrollViewRef.current?.scrollTo({ y: offsetY, animated: true });
+    }, 100);
+  };
+
+  const getButtonTitle = () => {
+    const ent = getEntitlementType();
+    if (ent === 'free') return 'MAKE NOTE (FREE)';
+    if (ent === 'ad') return 'WATCH AD TO MAKE NOTE';
+    if (ent === 'credit') return 'MAKE NOTE (1 CREDIT)';
+    return 'PURCHASE NOTES';
   };
 
   return (
     <PaperContainer>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 30}
-        style={styles.keyboardView}
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        {/* Top Bar with Back Arrow and Centered Header (1:1 with mockup) */}
-        <View style={styles.header}>
-          <Pressable
-            onPress={() => router.back()}
-            style={styles.backButton}
-            hitSlop={14}
-            accessibilityRole="button"
-            accessibilityLabel="Back"
-          >
-            <Ionicons name="arrow-back" size={24} color={colors.charcoal} />
-          </Pressable>
-
-          <TypewriterText size="lg" bold letterSpacing={2} color={colors.charcoal}>
-            COMPOSE NOTE
-          </TypewriterText>
-
-          <View style={styles.placeholder} />
-        </View>
-
         <ScrollView
           ref={scrollViewRef}
           contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          {/* Photo Section: 4-Corner Masking Tape Frame */}
+          {/* Top Bar Navigation */}
+          <View style={styles.topBar}>
+            <Pressable
+              onPress={() => router.back()}
+              style={styles.backButton}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Back to Notebook"
+            >
+              <Ionicons name="arrow-back" size={24} color={colors.charcoal} />
+            </Pressable>
+
+            <TypewriterText size="sm" bold letterSpacing={2}>
+              NEW FIELD NOTE
+            </TypewriterText>
+
+            <View style={styles.placeholder} />
+          </View>
+
+          {/* Photo Selection Area */}
           {selectedPhotoUri ? (
-            <View style={styles.photoContainer}>
-              <PhotoTape uri={selectedPhotoUri} />
-              <View style={styles.changePhotoRow}>
-                <Pressable onPress={handlePickFromLibrary} style={styles.changeBtn}>
-                  <TypewriterText size="xs" color={colors.inkSecondary}>
-                    Choose another
+            <View style={styles.photoPreviewWrapper}>
+              <View style={styles.photoContainer}>
+                <PhotoTape
+                  uri={selectedPhotoUri}
+                  aspectRatio={4 / 3}
+                  label={place ? place.toUpperCase() : 'TRAVEL RECORD'}
+                  tapeColor="paperDark"
+                />
+              </View>
+              <View style={styles.photoActionsRow}>
+                <Pressable
+                  onPress={handlePickFromLibrary}
+                  style={styles.changePhotoButton}
+                >
+                  <Ionicons name="images-outline" size={14} color={colors.charcoal} />
+                  <TypewriterText size="xs" color={colors.charcoal} style={{ marginLeft: 6 }}>
+                    Change Photo
                   </TypewriterText>
                 </Pressable>
-                <TypewriterText size="xs" color={colors.inkMuted}>
-                  ·
-                </TypewriterText>
-                <Pressable onPress={handleTakePhoto} style={styles.changeBtn}>
-                  <TypewriterText size="xs" color={colors.inkSecondary}>
-                    Camera
+                <Pressable
+                  onPress={handleTakePhoto}
+                  style={styles.changePhotoButton}
+                >
+                  <Ionicons name="camera-outline" size={14} color={colors.charcoal} />
+                  <TypewriterText size="xs" color={colors.charcoal} style={{ marginLeft: 6 }}>
+                    Retake
                   </TypewriterText>
                 </Pressable>
               </View>
@@ -288,7 +330,7 @@ export default function ComposeScreen() {
             </View>
           )}
 
-          {/* Form Table: Boxed Grid Layout (1:1 with mockup) */}
+          {/* Form Table: Boxed Grid Layout */}
           <View style={styles.tableBox}>
             {/* Row 1: PLACE / LOCATION */}
             <View style={styles.tableCellTop}>
@@ -297,7 +339,7 @@ export default function ComposeScreen() {
               </TypewriterText>
               <TextInput
                 value={place}
-                onChangeText={setPlace}
+                onChangeText={handleLocationChange}
                 placeholder="Location / Place"
                 placeholderTextColor={colors.inkMuted}
                 style={styles.cellInput}
@@ -305,6 +347,31 @@ export default function ComposeScreen() {
                 onFocus={() => handleInputFocus(220)}
               />
             </View>
+
+            {/* Autocomplete Location Suggestions Dropdown */}
+            {locationSuggestions.length > 0 && (
+              <View style={styles.suggestionsCard}>
+                <View style={styles.suggestionsHeader}>
+                  <Ionicons name="sparkles" size={11} color={colors.brickRed} />
+                  <TypewriterText size="xs" bold color={colors.inkSecondary} letterSpacing={1} style={{ marginLeft: 4 }}>
+                    SUGGESTED LOCATIONS
+                  </TypewriterText>
+                </View>
+                {locationSuggestions.map((item, idx) => (
+                  <Pressable
+                    key={idx}
+                    style={[styles.suggestionRow, idx > 0 && styles.suggestionBorderTop]}
+                    onPress={() => handleSelectLocation(item)}
+                  >
+                    <Ionicons name="location-sharp" size={14} color={colors.brickRed} style={{ marginRight: 6 }} />
+                    <TypewriterText size="xs" bold color={colors.charcoal} style={{ flex: 1 }}>
+                      {item.formatted}
+                    </TypewriterText>
+                    <Ionicons name="arrow-forward" size={12} color={colors.inkMuted} />
+                  </Pressable>
+                ))}
+              </View>
+            )}
 
             {/* Row 2: Split 2 Columns (NO. | YEAR) */}
             <View style={styles.tableRowMiddle}>
@@ -359,7 +426,7 @@ export default function ComposeScreen() {
           <View style={{ height: 180 }} />
         </ScrollView>
 
-        {/* Bottom Bar with MAKE NOTE Action Button (1:1 with mockup) */}
+        {/* Bottom Bar with MAKE NOTE Action Button */}
         <View style={styles.bottomBar}>
           <StampButton
             title={getButtonTitle()}
@@ -376,55 +443,58 @@ export default function ComposeScreen() {
 }
 
 const styles = StyleSheet.create({
-  keyboardView: {
-    flex: 1,
-  },
-  header: {
+  scrollContent: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.xxl,
+  },
+  topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: spacing.lg,
   },
   backButton: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     alignItems: 'flex-start',
     justifyContent: 'center',
   },
   placeholder: {
-    width: 44,
+    width: 40,
   },
-  scrollContent: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xs,
-    paddingBottom: 220,
+  photoPreviewWrapper: {
+    marginBottom: spacing.xs,
+    alignItems: 'center',
   },
   photoContainer: {
-    marginVertical: spacing.xs,
-  },
-  changePhotoRow: {
-    flexDirection: 'row',
+    width: '100%',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
+  },
+  photoActionsRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
     marginTop: spacing.xs,
   },
-  changeBtn: {
+  changePhotoButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.sm,
+    backgroundColor: colors.paperDark,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.paperBorder,
   },
   emptyPhotoBox: {
+    backgroundColor: colors.paperDark,
     borderWidth: 1.5,
     borderColor: colors.charcoal,
     borderStyle: 'dashed',
-    borderRadius: 8,
+    borderRadius: 4,
     padding: spacing.xl,
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.5)',
-    marginVertical: spacing.md,
+    marginBottom: spacing.md,
   },
   pickerPromptTitle: {
     letterSpacing: 1.5,
@@ -442,7 +512,7 @@ const styles = StyleSheet.create({
   pickerButton: {
     flex: 1,
   },
-  // Exact 1:1 Boxed Table Grid Form
+  // Boxed Table Grid Form
   tableBox: {
     borderWidth: 1.5,
     borderColor: colors.charcoal,
@@ -482,6 +552,28 @@ const styles = StyleSheet.create({
     padding: 0,
     margin: 0,
     fontWeight: '600',
+  },
+  // Location Suggestions Dropdown
+  suggestionsCard: {
+    backgroundColor: '#FDFCFA',
+    borderBottomWidth: 1.5,
+    borderBottomColor: colors.charcoal,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  suggestionsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  suggestionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  suggestionBorderTop: {
+    borderTopWidth: 1,
+    borderTopColor: colors.paperBorder,
   },
   bottomBar: {
     position: 'absolute',
