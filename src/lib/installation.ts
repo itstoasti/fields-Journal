@@ -1,5 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
-import { Platform } from 'react-native';
+import { NativeModules, Platform } from 'react-native';
 
 const INSTALLATION_KEY = 'fn_installation_id';
 const PERSISTENT_DEVICE_KEY = 'fn_persistent_device_id_v1';
@@ -11,20 +11,6 @@ function generateRandomId(prefix = 'inst_'): string {
     result += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return result;
-}
-
-/**
- * Safely accesses native expo-application module if compiled in APK.
- */
-function getNativeApplication(): typeof import('expo-application') | null {
-  try {
-    // Dynamic require prevents crash if native module is not yet compiled into current APK
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const appModule = require('expo-application');
-    return appModule;
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -55,59 +41,63 @@ export async function getOrCreateInstallationId(): Promise<string> {
 }
 
 /**
- * Retrieves a hardware-persistent device ID that survives app uninstalls and data wipes.
- * - Android: Uses Application.getAndroidId() if available in native build
- * - iOS: Uses iOS Keychain with keychainService (survives app deletion) or vendor ID
+ * Retrieves a persistent device ID.
+ * Safely probes native hardware ID if native module is present in APK,
+ * with reliable SecureStore fallback.
  */
 export async function getPersistentDeviceId(): Promise<string> {
-  try {
-    const app = getNativeApplication();
-
-    if (Platform.OS === 'android' && app && typeof app.getAndroidId === 'function') {
-      const androidId = app.getAndroidId();
-      if (androidId && androidId.length > 0) {
-        return `android_${androidId}`;
-      }
-    } else if (Platform.OS === 'ios') {
-      const storedKey = await SecureStore.getItemAsync(PERSISTENT_DEVICE_KEY, {
-        keychainService: 'com.fieldnotes.app.device.v1',
-      });
-      if (storedKey) {
-        return storedKey;
-      }
-      let vendorId: string | null = null;
-      if (app && typeof app.getIosIdForVendorAsync === 'function') {
-        vendorId = await app.getIosIdForVendorAsync();
-      }
-      const deviceId = vendorId ? `ios_${vendorId}` : generateRandomId('ios_dev_');
-      await SecureStore.setItemAsync(PERSISTENT_DEVICE_KEY, deviceId, {
-        keychainService: 'com.fieldnotes.app.device.v1',
-      });
-      return deviceId;
-    }
-  } catch (err) {
-    console.warn('[Installation] Native device ID check completed with fallback:', err);
-  }
-
-  // Fallback persistent storage
+  // 1. Check if persistent key already exists in SecureStore
   try {
     const stored = await SecureStore.getItemAsync(PERSISTENT_DEVICE_KEY);
-    if (stored) return stored;
-    const fallbackId = generateRandomId('dev_');
-    await SecureStore.setItemAsync(PERSISTENT_DEVICE_KEY, fallbackId);
-    return fallbackId;
-  } catch {
-    // Web fallback
-    if (typeof localStorage !== 'undefined') {
-      let devId = localStorage.getItem(PERSISTENT_DEVICE_KEY);
-      if (!devId) {
-        devId = generateRandomId('web_dev_');
-        localStorage.setItem(PERSISTENT_DEVICE_KEY, devId);
-      }
-      return devId;
+    if (stored && stored.length > 0) {
+      return stored;
     }
-    return generateRandomId('dev_');
+  } catch {}
+
+  // 2. Check if native ExpoApplication module is registered in runtime before requiring
+  try {
+    const hasExpoAppModule = Boolean(
+      (globalThis as any)?.expo?.modules?.ExpoApplication ||
+      NativeModules?.ExpoApplication
+    );
+
+    if (hasExpoAppModule) {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const app = require('expo-application');
+      if (Platform.OS === 'android' && typeof app?.getAndroidId === 'function') {
+        const aId = app.getAndroidId();
+        if (aId) {
+          const devId = `android_${aId}`;
+          try {
+            await SecureStore.setItemAsync(PERSISTENT_DEVICE_KEY, devId);
+          } catch {}
+          return devId;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[Installation] Native application ID probe skipped:', e);
   }
+
+  // 3. Web fallback
+  if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+    let devId = localStorage.getItem(PERSISTENT_DEVICE_KEY);
+    if (!devId) {
+      devId = generateRandomId('web_dev_');
+      localStorage.setItem(PERSISTENT_DEVICE_KEY, devId);
+    }
+    return devId;
+  }
+
+  // 4. Generate and persist fallback device ID in SecureStore
+  const newDeviceId = generateRandomId('dev_');
+  try {
+    await SecureStore.setItemAsync(PERSISTENT_DEVICE_KEY, newDeviceId);
+  } catch (e) {
+    console.warn('[Installation] Could not persist device ID to SecureStore:', e);
+  }
+
+  return newDeviceId;
 }
 
 export async function getInstallationAndDeviceInfo(): Promise<{
