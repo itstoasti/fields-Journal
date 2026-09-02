@@ -47,11 +47,37 @@ export default function ComposeScreen() {
   const [isAdLoading, setIsAdLoading] = useState<boolean>(false);
   const [autoDetectedNotice, setAutoDetectedNotice] = useState<string | null>(null);
 
+  // Keyboard and scroll tracking
+  const [keyboardHeight, setKeyboardHeight] = useState<number>(0);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState<boolean>(false);
+
   // Location search suggestions
   const [locationSuggestions, setLocationSuggestions] = useState<LocationSuggestion[]>([]);
   const [isSearchingLocation, setIsSearchingLocation] = useState<boolean>(false);
   const searchDebounceRef = useRef<any>(null);
   const scrollViewRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        setIsKeyboardVisible(true);
+        setKeyboardHeight(e.endCoordinates.height);
+      }
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        setIsKeyboardVisible(false);
+        setKeyboardHeight(0);
+      }
+    );
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   // Preload rewarded ad if on ad step
   const currentEntitlement = getEntitlementType();
@@ -73,7 +99,7 @@ export default function ComposeScreen() {
           const results = await searchLocationSuggestions(text);
           setLocationSuggestions(results);
           if (results.length > 0) {
-            scrollViewRef.current?.scrollTo({ y: 260, animated: true });
+            scrollViewRef.current?.scrollTo({ y: 220, animated: true });
           }
         } finally {
           setIsSearchingLocation(false);
@@ -226,10 +252,16 @@ export default function ComposeScreen() {
     executeProceedToPressing(entitlement);
   };
 
-  const handleInputFocus = (offsetY: number) => {
+  const handleInputFocus = (target: 'place' | 'number' | 'year' | 'keywords') => {
     setTimeout(() => {
-      scrollViewRef.current?.scrollTo({ y: offsetY, animated: true });
-    }, 150);
+      if (target === 'place') {
+        scrollViewRef.current?.scrollTo({ y: 220, animated: true });
+      } else if (target === 'number' || target === 'year') {
+        scrollViewRef.current?.scrollTo({ y: 360, animated: true });
+      } else if (target === 'keywords') {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }
+    }, 200);
   };
 
   const getButtonTitle = () => {
@@ -248,7 +280,10 @@ export default function ComposeScreen() {
       >
         <ScrollView
           ref={scrollViewRef}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: isKeyboardVisible ? keyboardHeight + 140 : 160 },
+          ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           automaticallyAdjustKeyboardInsets={true}
@@ -358,7 +393,7 @@ export default function ComposeScreen() {
                 placeholderTextColor={colors.inkMuted}
                 style={styles.cellInput}
                 autoCorrect={false}
-                onFocus={() => handleInputFocus(260)}
+                onFocus={() => handleInputFocus('place')}
               />
             </View>
 
@@ -406,7 +441,7 @@ export default function ComposeScreen() {
                   placeholderTextColor={colors.inkMuted}
                   style={styles.cellInput}
                   keyboardType="numeric"
-                  onFocus={() => handleInputFocus(320)}
+                  onFocus={() => handleInputFocus('number')}
                 />
               </View>
 
@@ -421,7 +456,7 @@ export default function ComposeScreen() {
                   placeholderTextColor={colors.inkMuted}
                   style={styles.cellInput}
                   keyboardType="numeric"
-                  onFocus={() => handleInputFocus(320)}
+                  onFocus={() => handleInputFocus('year')}
                 />
               </View>
             </View>
@@ -438,26 +473,25 @@ export default function ComposeScreen() {
                 placeholderTextColor={colors.inkMuted}
                 style={styles.cellInput}
                 autoCorrect={false}
-                onFocus={() => handleInputFocus(380)}
+                onFocus={() => handleInputFocus('keywords')}
               />
             </View>
           </View>
-
-          {/* Extended Spacer to keep inputs well above keyboard */}
-          <View style={{ height: 260 }} />
         </ScrollView>
 
-        {/* Bottom Bar with MAKE NOTE Action Button */}
-        <View style={styles.bottomBar}>
-          <StampButton
-            title={getButtonTitle()}
-            onPress={handlePressAction}
-            variant="primary"
-            disabled={!selectedPhotoUri}
-            loading={isAdLoading}
-            style={styles.actionButton}
-          />
-        </View>
+        {/* Bottom Bar with MAKE NOTE Action Button - automatically hidden while keyboard is active */}
+        {!isKeyboardVisible && (
+          <View style={styles.bottomBar}>
+            <StampButton
+              title={getButtonTitle()}
+              onPress={handlePressAction}
+              variant="primary"
+              disabled={!selectedPhotoUri}
+              loading={isAdLoading}
+              style={styles.actionButton}
+            />
+          </View>
+        )}
       </KeyboardAvoidingView>
     </PaperContainer>
   );
@@ -467,7 +501,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
-    paddingBottom: spacing.xxl,
   },
   topBar: {
     flexDirection: 'row',
@@ -539,6 +572,7 @@ const styles = StyleSheet.create({
     borderColor: colors.charcoal,
     backgroundColor: colors.paper,
     marginTop: spacing.lg,
+    marginBottom: spacing.lg,
   },
   tableCellTop: {
     padding: spacing.md,
