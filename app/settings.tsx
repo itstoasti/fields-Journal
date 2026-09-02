@@ -9,7 +9,7 @@ import {
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { PaperContainer, TypewriterText, StampButton } from '../src/components';
-import { colors, fonts, fontSizes, layout, spacing } from '../src/theme';
+import { colors, fontSizes, layout, spacing } from '../src/theme';
 import { useAppStore } from '../src/store/useAppStore';
 import { restorePurchases } from '../src/lib/purchases';
 
@@ -29,6 +29,23 @@ export default function SettingsScreen() {
   );
 
   const [isRestoring, setIsRestoring] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    try {
+      await syncWithBackend();
+      const current = useAppStore.getState().entitlements;
+      Alert.alert(
+        'Account Synced',
+        `Live Server Status:\n• Credits Remaining: ${current.credits}\n• Free Notes Used: ${current.freeUsed}/2\n• Rewarded Ad Note Used: ${current.adUsed ? 'Yes' : 'No'}`
+      );
+    } catch (e: any) {
+      Alert.alert('Sync Error', e.message || 'Could not connect to backend server.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const handleRestorePurchases = async () => {
     setIsRestoring(true);
@@ -69,21 +86,25 @@ export default function SettingsScreen() {
     router.push('/modal/paywall');
   };
 
+  const handleClose = () => {
+    router.back();
+  };
+
   return (
     <PaperContainer>
-      {/* Top Bar */}
-      <View style={styles.topBar}>
+      {/* Header */}
+      <View style={styles.header}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={handleClose}
           style={styles.backButton}
-          hitSlop={12}
+          accessibilityLabel="Back to notes"
           accessibilityRole="button"
-          accessibilityLabel="Back"
+          hitSlop={12}
         >
-          <Ionicons name="arrow-back" size={22} color={colors.charcoal} />
+          <Ionicons name="arrow-back" size={24} color={colors.charcoal} />
         </Pressable>
 
-        <TypewriterText size="md" bold letterSpacing={2}>
+        <TypewriterText size="lg" bold letterSpacing={2} color={colors.charcoal}>
           SETTINGS
         </TypewriterText>
 
@@ -126,6 +147,17 @@ export default function SettingsScreen() {
               Ad note used: {entitlements.adUsed ? 'Yes' : 'No'}
             </TypewriterText>
           </View>
+
+          <View style={styles.syncRow}>
+            <StampButton
+              title={isSyncing ? 'Syncing...' : 'Sync Balance with Server'}
+              onPress={handleManualSync}
+              variant="secondary"
+              loading={isSyncing}
+              style={styles.syncBtn}
+              textStyle={styles.syncBtnText}
+            />
+          </View>
         </View>
 
         {/* AI Generation Model Selector */}
@@ -145,105 +177,102 @@ export default function SettingsScreen() {
             },
             {
               id: 'grok-imagine-image-2.0-low',
-              label: 'grok-imagine-image-2.0 (2K Low)',
-              subtitle: 'xAI Grok · Fast 2K low compute tier (~2-3¢)',
+              label: 'grok-imagine-image-2.0-low (2K Low Compute)',
+              subtitle: 'xAI Grok · Low compute tier (~2-3¢)',
             },
             {
               id: 'grok-imagine-image-quality',
               label: 'grok-imagine-image-quality (Ultra HD)',
-              subtitle: 'xAI Grok · Highest detail carving & spot ink (~7-8¢)',
+              subtitle: 'xAI Grok · High detail & texture (~7-8¢)',
             },
-          ].map((m, index) => {
-            const isSelected = (selectedModel || 'grok-imagine-image-2.0') === m.id;
+          ].map((item) => {
+            const isSelected = selectedModel === item.id;
             return (
-              <React.Fragment key={m.id}>
-                {index > 0 && <View style={styles.divider} />}
-                <Pressable
-                  onPress={() => setSelectedModel(m.id)}
-                  style={styles.modelRow}
-                >
-                  <View style={styles.listTextContainer}>
-                    <TypewriterText size="sm" bold={isSelected} color={isSelected ? colors.brickRed : colors.charcoal}>
-                      {m.label}
-                    </TypewriterText>
-                    <TypewriterText size="xs" color={colors.inkSecondary}>
-                      {m.subtitle}
-                    </TypewriterText>
-                  </View>
-                  <Ionicons
-                    name={isSelected ? 'radio-button-on' : 'radio-button-off'}
-                    size={20}
-                    color={isSelected ? colors.brickRed : colors.inkMuted}
-                  />
-                </Pressable>
-              </React.Fragment>
+              <Pressable
+                key={item.id}
+                onPress={() => setSelectedModel(item.id)}
+                style={[
+                  styles.modelOption,
+                  isSelected && styles.modelOptionSelected,
+                ]}
+              >
+                <View style={styles.modelRadioOuter}>
+                  {isSelected && <View style={styles.modelRadioInner} />}
+                </View>
+                <View style={styles.modelTextContainer}>
+                  <TypewriterText
+                    size="sm"
+                    bold={isSelected}
+                    color={isSelected ? colors.brickRed : colors.charcoal}
+                  >
+                    {item.label}
+                  </TypewriterText>
+                  <TypewriterText size="xs" color={colors.inkMuted} style={{ marginTop: 2 }}>
+                    {item.subtitle}
+                  </TypewriterText>
+                </View>
+              </Pressable>
             );
           })}
         </View>
 
-        {/* Purchase Operations */}
+        {/* Notebook Data Management */}
         <View style={styles.card}>
           <TypewriterText size="xs" bold color={colors.inkSecondary} letterSpacing={1.5}>
-            PURCHASE MANAGEMENT
+            NOTEBOOK DATA
           </TypewriterText>
 
-          <Pressable
-            onPress={handleRestorePurchases}
-            disabled={isRestoring}
-            style={styles.listItem}
-          >
-            <View style={styles.listTextContainer}>
-              <TypewriterText size="sm" color={colors.charcoal}>
-                Restore Purchases
-              </TypewriterText>
-              <TypewriterText size="xs" color={colors.inkSecondary}>
-                Re-sync credits from Google Play
-              </TypewriterText>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.inkSecondary} />
-          </Pressable>
+          <View style={styles.menuList}>
+            <Pressable style={styles.menuItem} onPress={handleRestorePurchases} disabled={isRestoring}>
+              <View style={styles.menuItemLeft}>
+                <Ionicons name="refresh-outline" size={20} color={colors.charcoal} />
+                <TypewriterText size="sm" color={colors.charcoal} style={styles.menuItemText}>
+                  {isRestoring ? 'Restoring Purchases...' : 'Restore Purchases'}
+                </TypewriterText>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.inkMuted} />
+            </Pressable>
+
+            <View style={styles.divider} />
+
+            <Pressable style={styles.menuItem} onPress={handleClearAllNotes}>
+              <View style={styles.menuItemLeft}>
+                <Ionicons name="trash-outline" size={20} color={colors.brickRed} />
+                <TypewriterText size="sm" color={colors.brickRed} style={styles.menuItemText}>
+                  Clear All Saved Notes
+                </TypewriterText>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.inkMuted} />
+            </Pressable>
+          </View>
         </View>
 
-        {/* Data & Privacy */}
+        {/* Legal & About */}
         <View style={styles.card}>
           <TypewriterText size="xs" bold color={colors.inkSecondary} letterSpacing={1.5}>
-            DATA & PRIVACY
+            LEGAL & PRIVACY
           </TypewriterText>
 
-          <Pressable onPress={handleOpenPrivacy} style={styles.listItem}>
-            <View style={styles.listTextContainer}>
-              <TypewriterText size="sm" color={colors.charcoal}>
-                Privacy Policy & Data Safety
-              </TypewriterText>
-              <TypewriterText size="xs" color={colors.inkSecondary}>
-                Learn how your photos are processed
-              </TypewriterText>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.inkSecondary} />
-          </Pressable>
-
-          <View style={styles.divider} />
-
-          <Pressable onPress={handleClearAllNotes} style={styles.listItem}>
-            <View style={styles.listTextContainer}>
-              <TypewriterText size="sm" color={colors.error}>
-                Delete Local Notes
-              </TypewriterText>
-              <TypewriterText size="xs" color={colors.inkSecondary}>
-                Remove all saved field notes from this device
-              </TypewriterText>
-            </View>
-            <Ionicons name="trash-outline" size={18} color={colors.error} />
-          </Pressable>
+          <View style={styles.menuList}>
+            <Pressable style={styles.menuItem} onPress={handleOpenPrivacy}>
+              <View style={styles.menuItemLeft}>
+                <Ionicons name="shield-checkmark-outline" size={20} color={colors.charcoal} />
+                <TypewriterText size="sm" color={colors.charcoal} style={styles.menuItemText}>
+                  Privacy & Data Principles
+                </TypewriterText>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.inkMuted} />
+            </Pressable>
+          </View>
         </View>
 
-        {/* App Info */}
-        <View style={styles.infoBox}>
-          <TypewriterText size="xs" color={colors.inkMuted} style={styles.infoText}>
-            FIELDS v1.0.0 · TRAVEL JOURNAL & STAMPS
+        {/* Installation Info */}
+        <View style={styles.footerInfo}>
+          <TypewriterText size="xs" color={colors.inkMuted} style={styles.footerText}>
+            Installation ID: {installationId ? installationId.slice(0, 16) + '...' : 'Loading...'}
           </TypewriterText>
-          <TypewriterText size="xs" color={colors.inkMuted} style={styles.infoText}>
-            Installation ID: {installationId.slice(0, 16)}…
+          <TypewriterText size="xs" color={colors.inkMuted} style={styles.footerText}>
+            FIELDS v1.0.0 · Travel Journal & Stamps
           </TypewriterText>
         </View>
       </ScrollView>
@@ -252,27 +281,27 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  topBar: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.paperBorder,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
   },
   backButton: {
     width: 44,
     height: 44,
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'center',
   },
   placeholder: {
     width: 44,
   },
   content: {
-    padding: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xxl,
   },
   card: {
     backgroundColor: colors.paperCard,
@@ -280,7 +309,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.paperBorder,
     padding: spacing.lg,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   balanceRow: {
     flexDirection: 'row',
@@ -289,15 +318,12 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   getCreditsBtn: {
-    minHeight: 36,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-    borderRadius: 8,
-    flexShrink: 0,
+    minHeight: 40,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
   },
   getCreditsText: {
-    fontSize: 13,
-    letterSpacing: 1,
+    fontSize: fontSizes.xs,
   },
   divider: {
     height: 1,
@@ -308,29 +334,73 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  listItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.sm,
-  },
-  modelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.sm,
-  },
-  listTextContainer: {
-    flex: 1,
-    paddingRight: spacing.sm,
-  },
-  infoBox: {
-    alignItems: 'center',
+  syncRow: {
     marginTop: spacing.md,
-    marginBottom: spacing.xxl,
   },
-  infoText: {
-    letterSpacing: 0.8,
+  syncBtn: {
+    minHeight: 38,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  syncBtnText: {
+    fontSize: fontSizes.xs,
+  },
+  modelOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    borderRadius: layout.borderRadius,
     marginBottom: spacing.xs,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  modelOptionSelected: {
+    backgroundColor: '#ECE3D4',
+    borderColor: colors.brickRed,
+  },
+  modelRadioOuter: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: colors.charcoal,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
+  },
+  modelRadioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.brickRed,
+  },
+  modelTextContainer: {
+    flex: 1,
+  },
+  menuList: {
+    marginTop: spacing.sm,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.sm,
+  },
+  menuItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  menuItemText: {
+    marginLeft: spacing.xs,
+  },
+  footerInfo: {
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
+    gap: 4,
+  },
+  footerText: {
+    textAlign: 'center',
   },
 });
