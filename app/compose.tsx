@@ -10,6 +10,7 @@ import {
   Platform,
   Dimensions,
   Keyboard,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -48,7 +49,9 @@ export default function ComposeScreen() {
 
   // Location search suggestions
   const [locationSuggestions, setLocationSuggestions] = useState<LocationSuggestion[]>([]);
+  const [isSearchingLocation, setIsSearchingLocation] = useState<boolean>(false);
   const searchDebounceRef = useRef<any>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
 
   // Preload rewarded ad if on ad step
   const currentEntitlement = getEntitlementType();
@@ -64,11 +67,20 @@ export default function ComposeScreen() {
       clearTimeout(searchDebounceRef.current);
     }
     if (text.trim().length >= 2) {
+      setIsSearchingLocation(true);
       searchDebounceRef.current = setTimeout(async () => {
-        const results = await searchLocationSuggestions(text);
-        setLocationSuggestions(results);
-      }, 250);
+        try {
+          const results = await searchLocationSuggestions(text);
+          setLocationSuggestions(results);
+          if (results.length > 0) {
+            scrollViewRef.current?.scrollTo({ y: 260, animated: true });
+          }
+        } finally {
+          setIsSearchingLocation(false);
+        }
+      }, 200);
     } else {
+      setIsSearchingLocation(false);
       setLocationSuggestions([]);
     }
   };
@@ -214,12 +226,10 @@ export default function ComposeScreen() {
     executeProceedToPressing(entitlement);
   };
 
-  const scrollViewRef = useRef<ScrollView>(null);
-
   const handleInputFocus = (offsetY: number) => {
     setTimeout(() => {
       scrollViewRef.current?.scrollTo({ y: offsetY, animated: true });
-    }, 100);
+    }, 150);
   };
 
   const getButtonTitle = () => {
@@ -241,6 +251,7 @@ export default function ComposeScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets={true}
         >
           {/* Top Bar Navigation */}
           <View style={styles.topBar}>
@@ -332,17 +343,22 @@ export default function ComposeScreen() {
           <View style={styles.tableBox}>
             {/* Row 1: PLACE / LOCATION */}
             <View style={styles.tableCellTop}>
-              <TypewriterText size="xs" bold color={colors.charcoal} letterSpacing={1.5} style={styles.cellHeader}>
-                PLACE / LOCATION
-              </TypewriterText>
+              <View style={styles.cellHeaderRow}>
+                <TypewriterText size="xs" bold color={colors.charcoal} letterSpacing={1.5} style={styles.cellHeader}>
+                  PLACE / LOCATION
+                </TypewriterText>
+                {isSearchingLocation && (
+                  <ActivityIndicator size="small" color={colors.brickRed} style={{ marginLeft: 8 }} />
+                )}
+              </View>
               <TextInput
                 value={place}
                 onChangeText={handleLocationChange}
-                placeholder="Location / Place"
+                placeholder="e.g. Huntington Beach or Kyoto"
                 placeholderTextColor={colors.inkMuted}
                 style={styles.cellInput}
                 autoCorrect={false}
-                onFocus={() => handleInputFocus(220)}
+                onFocus={() => handleInputFocus(260)}
               />
             </View>
 
@@ -350,7 +366,7 @@ export default function ComposeScreen() {
             {locationSuggestions.length > 0 && (
               <View style={styles.suggestionsCard}>
                 <View style={styles.suggestionsHeader}>
-                  <Ionicons name="sparkles" size={11} color={colors.brickRed} />
+                  <Ionicons name="sparkles" size={12} color={colors.brickRed} />
                   <TypewriterText size="xs" bold color={colors.inkSecondary} letterSpacing={1} style={{ marginLeft: 4 }}>
                     SUGGESTED LOCATIONS
                   </TypewriterText>
@@ -358,14 +374,20 @@ export default function ComposeScreen() {
                 {locationSuggestions.map((item, idx) => (
                   <Pressable
                     key={idx}
-                    style={[styles.suggestionRow, idx > 0 && styles.suggestionBorderTop]}
+                    style={({ pressed }) => [
+                      styles.suggestionRow,
+                      idx > 0 && styles.suggestionBorderTop,
+                      pressed && { backgroundColor: colors.paperDark },
+                    ]}
                     onPress={() => handleSelectLocation(item)}
                   >
-                    <Ionicons name="location-sharp" size={14} color={colors.brickRed} style={{ marginRight: 6 }} />
-                    <TypewriterText size="xs" bold color={colors.charcoal} style={{ flex: 1 }}>
-                      {item.formatted}
-                    </TypewriterText>
-                    <Ionicons name="arrow-forward" size={12} color={colors.inkMuted} />
+                    <Ionicons name="location-sharp" size={15} color={colors.brickRed} style={{ marginRight: 8 }} />
+                    <View style={{ flex: 1 }}>
+                      <TypewriterText size="sm" bold color={colors.charcoal}>
+                        {item.formatted}
+                      </TypewriterText>
+                    </View>
+                    <Ionicons name="arrow-forward" size={14} color={colors.inkMuted} />
                   </Pressable>
                 ))}
               </View>
@@ -384,7 +406,7 @@ export default function ComposeScreen() {
                   placeholderTextColor={colors.inkMuted}
                   style={styles.cellInput}
                   keyboardType="numeric"
-                  onFocus={() => handleInputFocus(280)}
+                  onFocus={() => handleInputFocus(320)}
                 />
               </View>
 
@@ -399,7 +421,7 @@ export default function ComposeScreen() {
                   placeholderTextColor={colors.inkMuted}
                   style={styles.cellInput}
                   keyboardType="numeric"
-                  onFocus={() => handleInputFocus(280)}
+                  onFocus={() => handleInputFocus(320)}
                 />
               </View>
             </View>
@@ -416,12 +438,13 @@ export default function ComposeScreen() {
                 placeholderTextColor={colors.inkMuted}
                 style={styles.cellInput}
                 autoCorrect={false}
-                onFocus={() => handleInputFocus(340)}
+                onFocus={() => handleInputFocus(380)}
               />
             </View>
           </View>
 
-          <View style={{ height: 180 }} />
+          {/* Extended Spacer to keep inputs well above keyboard */}
+          <View style={{ height: 260 }} />
         </ScrollView>
 
         {/* Bottom Bar with MAKE NOTE Action Button */}
@@ -522,6 +545,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1.5,
     borderBottomColor: colors.charcoal,
   },
+  cellHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
   tableRowMiddle: {
     flexDirection: 'row',
     borderBottomWidth: 1.5,
@@ -541,7 +569,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   cellHeader: {
-    marginBottom: 6,
+    marginBottom: 0,
   },
   cellInput: {
     fontFamily: fonts.mono,
@@ -553,21 +581,23 @@ const styles = StyleSheet.create({
   },
   // Location Suggestions Dropdown
   suggestionsCard: {
-    backgroundColor: '#FDFCFA',
+    backgroundColor: '#FAF6EF',
     borderBottomWidth: 1.5,
     borderBottomColor: colors.charcoal,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+    paddingVertical: spacing.sm,
   },
   suggestionsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 4,
+    paddingBottom: 6,
   },
   suggestionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    borderRadius: 4,
   },
   suggestionBorderTop: {
     borderTopWidth: 1,

@@ -4,6 +4,19 @@ export interface LocationSuggestion {
   subtext?: string;
 }
 
+async function fetchWithTimeout(url: string, timeoutMs = 4000, headers?: Record<string, string>): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { headers, signal: controller.signal });
+    clearTimeout(timer);
+    return res;
+  } catch (err) {
+    clearTimeout(timer);
+    throw err;
+  }
+}
+
 /**
  * Searches for location suggestions with standardized formatting.
  * Examples:
@@ -22,7 +35,7 @@ export async function searchLocationSuggestions(query: string): Promise<Location
   // 1. Open-Meteo Geocoding API (Fast, Free, High Coverage)
   try {
     const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cleanQuery)}&count=5&language=en&format=json`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
+    const res = await fetchWithTimeout(url, 3500);
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data.results)) {
@@ -33,9 +46,9 @@ export async function searchLocationSuggestions(query: string): Promise<Location
           if (item.country_code === 'US' && item.admin1) {
             parts.push(item.admin1);
           } else if (item.country) {
-            // For international: City, Country (or City, State, Country if distinct)
+            // For international: City, Country (or City, State if Canada)
             if (item.admin1 && item.admin1 !== item.name && item.admin1 !== item.country && item.country_code === 'CA') {
-              parts.push(item.admin1); // Canada provinces (e.g. Banff, Alberta)
+              parts.push(item.admin1);
             }
             parts.push(item.country);
           }
@@ -60,9 +73,8 @@ export async function searchLocationSuggestions(query: string): Promise<Location
   if (results.length < 4) {
     try {
       const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(cleanQuery)}&limit=5&lang=en`;
-      const res = await fetch(photonUrl, {
-        headers: { 'User-Agent': 'FieldsApp/1.0' },
-        signal: AbortSignal.timeout(3000),
+      const res = await fetchWithTimeout(photonUrl, 3500, {
+        'User-Agent': 'FieldsApp/1.0',
       });
       if (res.ok) {
         const data = await res.json();
