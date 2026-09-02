@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -6,7 +6,7 @@ import {
   Pressable,
   Alert,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { PaperContainer, TypewriterText, StampButton } from '../src/components';
 import { colors, fonts, fontSizes, layout, spacing } from '../src/theme';
@@ -21,6 +21,12 @@ export default function SettingsScreen() {
   const setSelectedModel = useAppStore((state) => state.setSelectedModel);
   const clearAllNotes = useAppStore((state) => state.clearAllNotes);
   const syncWithBackend = useAppStore((state) => state.syncWithBackend);
+
+  useFocusEffect(
+    useCallback(() => {
+      syncWithBackend();
+    }, [syncWithBackend])
+  );
 
   const [isRestoring, setIsRestoring] = useState(false);
 
