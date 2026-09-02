@@ -30,9 +30,17 @@ export function getApiBaseUrl(): string {
 
 const API_BASE_URL = getApiBaseUrl();
 
-export async function fetchUserEntitlements(installationId: string): Promise<UserEntitlementState> {
+export async function fetchUserEntitlements(
+  installationId: string,
+  deviceId?: string
+): Promise<UserEntitlementState> {
   try {
-    const response = await fetch(`${API_BASE_URL}/v1/me?installationId=${encodeURIComponent(installationId)}`, {
+    const query = new URLSearchParams({ installationId });
+    if (deviceId) {
+      query.append('deviceId', deviceId);
+    }
+
+    const response = await fetch(`${API_BASE_URL}/v1/me?${query.toString()}`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -102,7 +110,8 @@ export async function submitGenerateNote(request: GenerateNoteRequest): Promise<
 export async function syncPurchasedCredits(
   installationId: string,
   creditsToAdd: number = 20,
-  rcUserId?: string
+  rcUserId?: string,
+  deviceId?: string
 ): Promise<UserEntitlementState> {
   try {
     const response = await fetch(`${API_BASE_URL}/v1/credits/sync`, {
@@ -114,6 +123,7 @@ export async function syncPurchasedCredits(
       },
       body: JSON.stringify({
         installationId,
+        deviceId,
         rcUserId,
         packageId: 'notes_20',
         creditsToAdd,

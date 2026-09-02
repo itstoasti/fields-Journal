@@ -16,6 +16,7 @@ db.pragma('journal_mode = WAL');
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     installation_id TEXT PRIMARY KEY,
+    device_id TEXT,
     rc_user_id TEXT,
     free_used INTEGER NOT NULL DEFAULT 0,
     ad_used INTEGER NOT NULL DEFAULT 0,
@@ -35,8 +36,18 @@ db.exec(`
   );
 `);
 
+// Safe column migration for existing databases
+try {
+  db.exec(`ALTER TABLE users ADD COLUMN device_id TEXT;`);
+} catch {
+  // Column already exists
+}
+
+db.exec(`CREATE INDEX IF NOT EXISTS idx_users_device_id ON users (device_id);`);
+
 export interface UserRecord {
   installation_id: string;
+  device_id: string | null;
   rc_user_id: string | null;
   free_used: number;
   ad_used: number;
@@ -47,26 +58,79 @@ export interface UserRecord {
 
 export type EntitlementStatus = 'free' | 'ad' | 'credit' | 'paywall';
 
-export function getOrCreateUser(installationId: string, rcUserId?: string): UserRecord {
-  const existing = db.prepare('SELECT * FROM users WHERE installation_id = ?').get(installationId) as UserRecord | undefined;
+/**
+ * Resolves or creates a user record.
+ * Persistent Anti-Abuse:
+ * If a matching device_id exists, re-links installation_id to the persistent record
+ * so users cannot reset their 2 free notes by clearing app data or reinstalling.
+ */
+export function getOrCreateUser(
+  installationId: string,
+  rcUserId?: string,
+  deviceId?: string
+): UserRecord {
   const now = new Date().toISOString();
 
+  // 1. Check persistent hardware deviceId first
+  if (deviceId && deviceId.trim().length > 0) {
+    const existingByDevice = db
+      .prepare('SELECT * FROM users WHERE device_id = ? LIMIT 1')
+      .get(deviceId.trim()) as UserRecord | undefined;
+
+    if (existingByDevice) {
+      // Re-link new installationId to this persistent hardware device
+      if (existingByDevice.installation_id !== installationId) {
+        console.log(`[Anti-Abuse] Persistent device recognized (${deviceId}). Re-linking install ${installationId} -> original user with ${existingByDevice.free_used} free used.`);
+        db.prepare(
+          'UPDATE users SET installation_id = ?, rc_user_id = COALESCE(?, rc_user_id), updated_at = ? WHERE device_id = ?'
+        ).run(installationId, rcUserId || null, now, deviceId.trim());
+        existingByDevice.installation_id = installationId;
+      }
+      if (rcUserId && existingByDevice.rc_user_id !== rcUserId) {
+        existingByDevice.rc_user_id = rcUserId;
+      }
+      return existingByDevice;
+    }
+  }
+
+  // 2. Check by installationId
+  const existing = db
+    .prepare('SELECT * FROM users WHERE installation_id = ? LIMIT 1')
+    .get(installationId) as UserRecord | undefined;
+
   if (existing) {
+    let shouldUpdate = false;
+    let newDeviceId = existing.device_id;
+    let newRcUserId = existing.rc_user_id;
+
+    if (deviceId && !existing.device_id) {
+      newDeviceId = deviceId.trim();
+      shouldUpdate = true;
+    }
     if (rcUserId && existing.rc_user_id !== rcUserId) {
-      db.prepare('UPDATE users SET rc_user_id = ?, updated_at = ? WHERE installation_id = ?')
-        .run(rcUserId, now, installationId);
-      existing.rc_user_id = rcUserId;
+      newRcUserId = rcUserId;
+      shouldUpdate = true;
+    }
+
+    if (shouldUpdate) {
+      db.prepare(
+        'UPDATE users SET device_id = ?, rc_user_id = ?, updated_at = ? WHERE installation_id = ?'
+      ).run(newDeviceId, newRcUserId, now, installationId);
+      existing.device_id = newDeviceId;
+      existing.rc_user_id = newRcUserId;
     }
     return existing;
   }
 
+  // 3. Insert brand new user with hardware device_id
   db.prepare(`
-    INSERT INTO users (installation_id, rc_user_id, free_used, ad_used, credits, created_at, updated_at)
-    VALUES (?, ?, 0, 0, 0, ?, ?)
-  `).run(installationId, rcUserId || null, now, now);
+    INSERT INTO users (installation_id, device_id, rc_user_id, free_used, ad_used, credits, created_at, updated_at)
+    VALUES (?, ?, ?, 0, 0, 0, ?, ?)
+  `).run(installationId, deviceId ? deviceId.trim() : null, rcUserId || null, now, now);
 
   return {
     installation_id: installationId,
+    device_id: deviceId ? deviceId.trim() : null,
     rc_user_id: rcUserId || null,
     free_used: 0,
     ad_used: 0,
@@ -89,45 +153,56 @@ export function determineEntitlement(user: UserRecord): EntitlementStatus {
   return 'paywall';
 }
 
-export function consumeUserEntitlement(installationId: string, entitlement: 'free' | 'ad' | 'credit'): boolean {
-  const user = getOrCreateUser(installationId);
+export function consumeUserEntitlement(
+  installationId: string,
+  entitlement: 'free' | 'ad' | 'credit',
+  deviceId?: string
+): boolean {
+  const user = getOrCreateUser(installationId, undefined, deviceId);
   const now = new Date().toISOString();
+  const targetId = user.installation_id;
 
   if (entitlement === 'free') {
     if (user.free_used >= 2) return false;
     db.prepare('UPDATE users SET free_used = free_used + 1, updated_at = ? WHERE installation_id = ?')
-      .run(now, installationId);
+      .run(now, targetId);
     return true;
   }
 
   if (entitlement === 'ad') {
     if (user.ad_used !== 0) return false;
     db.prepare('UPDATE users SET ad_used = 1, updated_at = ? WHERE installation_id = ?')
-      .run(now, installationId);
+      .run(now, targetId);
     return true;
   }
 
   if (entitlement === 'credit') {
     if (user.credits <= 0) return false;
     db.prepare('UPDATE users SET credits = credits - 1, updated_at = ? WHERE installation_id = ?')
-      .run(now, installationId);
+      .run(now, targetId);
     return true;
   }
 
   return false;
 }
 
-export function addCreditsToUser(installationId: string, amount: number, rcUserId?: string): UserRecord {
-  const user = getOrCreateUser(installationId, rcUserId);
+export function addCreditsToUser(
+  installationId: string,
+  amount: number,
+  rcUserId?: string,
+  deviceId?: string
+): UserRecord {
+  const user = getOrCreateUser(installationId, rcUserId, deviceId);
   const now = new Date().toISOString();
+  const targetId = user.installation_id;
 
   db.prepare(`
     UPDATE users 
     SET credits = credits + ?, rc_user_id = COALESCE(?, rc_user_id), updated_at = ? 
     WHERE installation_id = ?
-  `).run(amount, rcUserId || null, now, installationId);
+  `).run(amount, rcUserId || null, now, targetId);
 
-  return getOrCreateUser(installationId);
+  return getOrCreateUser(targetId, undefined, deviceId);
 }
 
 export function logGenerationRecord(

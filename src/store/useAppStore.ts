@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
 import { Note, UserEntitlementState, EntitlementType } from '../types';
-import { getOrCreateInstallationId } from '../lib/installation';
+import { getInstallationAndDeviceInfo } from '../lib/installation';
 import { fetchUserEntitlements } from '../lib/api';
 import { initializePurchases } from '../lib/purchases';
 import { rewardedAdManager } from '../lib/ads';
@@ -50,6 +50,7 @@ async function removeStorageItem(key: string): Promise<void> {
 export interface AppState {
   isInitialized: boolean;
   installationId: string;
+  deviceId: string;
   notes: Note[];
   entitlements: UserEntitlementState;
   hasConsentedPrivacy: boolean;
@@ -71,6 +72,7 @@ export interface AppState {
 export const useAppStore = create<AppState>((set, get) => ({
   isInitialized: false,
   installationId: '',
+  deviceId: '',
   notes: [],
   entitlements: {
     freeUsed: 0,
@@ -83,7 +85,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   initApp: async () => {
     try {
-      const installationId = await getOrCreateInstallationId();
+      const { installationId, deviceId } = await getInstallationAndDeviceInfo();
       
       // Load privacy consent
       const consentStr = await getStorageItem(PRIVACY_CONSENT_KEY);
@@ -107,6 +109,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       // Populate local state immediately
       set({
         installationId,
+        deviceId,
         notes: loadedNotes,
         hasConsentedPrivacy,
         selectedModel,
@@ -115,8 +118,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       // Initialize purchases
       await initializePurchases(installationId);
 
-      // Fetch server entitlements
-      const serverEntitlements = await fetchUserEntitlements(installationId);
+      // Fetch server entitlements with persistent deviceId
+      const serverEntitlements = await fetchUserEntitlements(installationId, deviceId);
 
       set({
         isInitialized: true,
@@ -185,9 +188,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   syncWithBackend: async () => {
     const id = get().installationId;
+    const devId = get().deviceId;
     if (!id) return;
     try {
-      const serverEntitlements = await fetchUserEntitlements(id);
+      const serverEntitlements = await fetchUserEntitlements(id, devId);
       set({ entitlements: serverEntitlements });
       if (serverEntitlements.entitlement === 'ad') {
         rewardedAdManager.preloadAd();
@@ -198,15 +202,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   getNextNoteNumber: () => {
-    const count = get().notes.length + 1;
-    return count < 10 ? `0${count}` : `${count}`;
+    const currentNotes = get().notes;
+    const nextNum = currentNotes.length + 1;
+    return nextNum < 10 ? `0${nextNum}` : `${nextNum}`;
   },
 
   getEntitlementType: () => {
-    const { freeUsed, adUsed, credits } = get().entitlements;
-    if (freeUsed < 2) return 'free';
-    if (freeUsed >= 2 && !adUsed) return 'ad';
-    if (credits > 0) return 'credit';
-    return 'paywall';
+    return get().entitlements.entitlement;
   },
 }));

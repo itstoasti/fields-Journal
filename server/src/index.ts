@@ -1,10 +1,12 @@
-import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
+import { serve } from '@hono/node-server';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
+import dotenv from 'dotenv';
 import { Buffer } from 'node:buffer';
 import crypto from 'node:crypto';
-import dotenv from 'dotenv';
+import fs from 'node:fs';
+import path from 'node:path';
 
 import {
   getOrCreateUser,
@@ -24,78 +26,72 @@ const app = new Hono();
 app.use('*', logger());
 app.use('*', cors({
   origin: '*',
-  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'Authorization'],
+  allowHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  allowMethods: ['GET', 'POST', 'OPTIONS'],
 }));
 
-import fs from 'node:fs';
-import path from 'node:path';
-
-// Web Download Page & Health check
+// Root HTML dashboard
 app.get('/', (c) => {
   return c.html(`
     <!DOCTYPE html>
-    <html>
+    <html lang="en">
       <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Download Field Notes APK</title>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>FIELDS API Server</title>
         <style>
           body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: #F4EFE6;
-            color: #2B2A27;
+            color: #1C1917;
             display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
             min-height: 100vh;
             margin: 0;
-            padding: 24px;
+            padding: 20px;
             box-sizing: border-box;
-            text-align: center;
           }
           .card {
             background: #FFFFFF;
-            border: 1px solid #D8CFC4;
-            border-radius: 12px;
-            padding: 32px 24px;
-            max-width: 420px;
+            border: 1.5px solid #1C1917;
+            border-radius: 8px;
+            padding: 32px;
+            max-width: 480px;
             width: 100%;
-            box-shadow: 0 4px 16px rgba(43,42,39,0.06);
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(28, 25, 23, 0.08);
           }
           h1 {
             font-family: monospace;
-            font-size: 22px;
+            font-size: 24px;
             letter-spacing: 2px;
-            margin-bottom: 8px;
-            color: #8C2D19;
+            margin: 0 0 12px 0;
           }
           p {
+            color: #57534E;
             font-size: 14px;
-            color: #767064;
             line-height: 1.5;
-            margin-bottom: 24px;
+            margin: 0 0 24px 0;
           }
           .download-btn {
             display: inline-block;
-            background-color: #2B2A27;
+            background: #1C1917;
             color: #F4EFE6;
+            padding: 14px 24px;
+            border-radius: 6px;
             text-decoration: none;
             font-family: monospace;
-            font-size: 16px;
             font-weight: bold;
-            letter-spacing: 1.5px;
-            padding: 16px 28px;
-            border-radius: 6px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-            transition: background-color 0.2s;
+            font-size: 14px;
+            letter-spacing: 1px;
+            transition: opacity 0.2s ease;
           }
-          .download-btn:active {
-            background-color: #8C2D19;
+          .download-btn:hover {
+            opacity: 0.9;
           }
           .meta {
-            margin-top: 20px;
+            margin-top: 24px;
             font-size: 12px;
             color: #A39B8E;
             font-family: monospace;
@@ -104,44 +100,20 @@ app.get('/', (c) => {
       </head>
       <body>
         <div class="card">
-          <h1>FIELD NOTES</h1>
-          <p>Download the Standalone Development APK with full unredacted photo GPS and media access permissions.</p>
-          <a href="/apk" class="download-btn">DOWNLOAD APK (122 MB)</a>
-          <div class="meta">v1.0.0 · Android Standalone Build</div>
+          <h1>FIELDS</h1>
+          <p>Travel Journal & Rubber Stamp Backend Server</p>
+          <div class="meta">v1.0.0 · Active & Running</div>
         </div>
       </body>
     </html>
   `);
 });
 
-app.get('/apk', async (c) => {
-  const possiblePaths = [
-    path.resolve('../field-notes-debug.apk'),
-    path.resolve('./field-notes-debug.apk'),
-    path.resolve('../android/app/build/outputs/apk/debug/app-debug.apk')
-  ];
-
-  for (const p of possiblePaths) {
-    if (fs.existsSync(p)) {
-      const fileBuffer = fs.readFileSync(p);
-      return new Response(fileBuffer, {
-        headers: {
-          'Content-Type': 'application/vnd.android.package-archive',
-          'Content-Disposition': 'attachment; filename="field-notes-debug.apk"',
-          'Content-Length': fileBuffer.length.toString(),
-        },
-      });
-    }
-  }
-
-  return c.text('APK file not found on server.', 404);
-});
-
 // Health check
 app.get('/health', (c) => {
   return c.json({
     status: 'ok',
-    service: 'field-notes-api',
+    service: 'fields-api',
     timestamp: new Date().toISOString(),
   });
 });
@@ -151,17 +123,19 @@ app.get('/v1/me', (c) => {
   const authHeader = c.req.header('Authorization');
   const token = authHeader?.replace('Bearer ', '').trim();
   const queryId = c.req.query('installationId');
+  const deviceId = c.req.query('deviceId');
   const installationId = token || queryId;
 
   if (!installationId) {
     return c.json({ error: 'MISSING_INSTALLATION_ID', message: 'installationId is required' }, 400);
   }
 
-  const user = getOrCreateUser(installationId);
+  const user = getOrCreateUser(installationId, undefined, deviceId);
   const entitlement = determineEntitlement(user);
 
   return c.json({
     installationId: user.installation_id,
+    deviceId: user.device_id,
     rcUserId: user.rc_user_id,
     freeUsed: user.free_used,
     adUsed: Boolean(user.ad_used),
@@ -174,13 +148,13 @@ app.get('/v1/me', (c) => {
 app.post('/v1/credits/sync', async (c) => {
   try {
     const body = await c.req.json();
-    const { installationId, rcUserId, packageId = 'notes_20', creditsToAdd = 20 } = body;
+    const { installationId, deviceId, rcUserId, packageId = 'notes_20', creditsToAdd = 20 } = body;
 
     if (!installationId) {
       return c.json({ error: 'MISSING_INSTALLATION_ID', message: 'installationId is required' }, 400);
     }
 
-    const updatedUser = addCreditsToUser(installationId, Number(creditsToAdd) || 20, rcUserId);
+    const updatedUser = addCreditsToUser(installationId, Number(creditsToAdd) || 20, rcUserId, deviceId);
     const entitlement = determineEntitlement(updatedUser);
 
     return c.json({
@@ -199,6 +173,7 @@ app.post('/v1/credits/sync', async (c) => {
 app.post('/v1/notes', async (c) => {
   const noteId = `fn_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
   let installationId = '';
+  let deviceId: string | undefined;
   let entitlementClaim: 'free' | 'ad' | 'credit' = 'free';
 
   try {
@@ -215,6 +190,7 @@ app.post('/v1/notes', async (c) => {
     if (contentType.includes('multipart/form-data')) {
       const body = await c.req.parseBody();
       installationId = (body['installationId'] as string) || '';
+      deviceId = (body['deviceId'] as string) || undefined;
       rcUserId = (body['rcUserId'] as string) || undefined;
       entitlementClaim = (body['entitlement'] as any) || 'free';
       place = (body['place'] as string) || '';
@@ -243,6 +219,7 @@ app.post('/v1/notes', async (c) => {
       // JSON format with base64 image
       const body = await c.req.json();
       installationId = body.installationId || '';
+      deviceId = body.deviceId || undefined;
       rcUserId = body.rcUserId;
       entitlementClaim = body.entitlement || 'free';
       place = body.place || '';
@@ -268,8 +245,8 @@ app.post('/v1/notes', async (c) => {
       return c.json({ error: 'MISSING_INSTALLATION_ID', message: 'installationId is required' }, 400);
     }
 
-    // Step 1: Verify Entitlement in Database
-    const user = getOrCreateUser(installationId, rcUserId);
+    // Step 1: Verify Entitlement in Database with Persistent Anti-Abuse deviceId
+    const user = getOrCreateUser(installationId, rcUserId, deviceId);
     const validEntitlement = determineEntitlement(user);
 
     if (validEntitlement === 'paywall') {
@@ -280,6 +257,7 @@ app.post('/v1/notes', async (c) => {
           freeUsed: user.free_used,
           adUsed: Boolean(user.ad_used),
           credits: user.credits,
+          entitlement: 'paywall',
         },
       }, 402);
     }
@@ -299,7 +277,7 @@ app.post('/v1/notes', async (c) => {
       year,
     });
 
-    console.log(`[Notes] Generating note ${noteId} for ${installationId} under ${entitlementClaim} with model ${model || 'default'}...`);
+    console.log(`[Notes] Generating note ${noteId} for ${installationId} (dev: ${deviceId || 'none'}) under ${entitlementClaim} with model ${model || 'default'}...`);
 
     // Step 3: Execute Image generation (Gemini or Grok Imagine)
     const isGeminiModel = model?.toLowerCase().startsWith('gemini');
@@ -318,7 +296,7 @@ app.post('/v1/notes', async (c) => {
         });
 
     // Step 4: Decrement entitlement ONLY after successful image generation
-    const consumed = consumeUserEntitlement(installationId, entitlementClaim);
+    const consumed = consumeUserEntitlement(installationId, entitlementClaim, deviceId);
     if (!consumed) {
       console.warn(`[Notes] Warning: Failed to consume entitlement for ${installationId}`);
     }
@@ -326,7 +304,7 @@ app.post('/v1/notes', async (c) => {
     // Step 5: Log anonymous generation record
     logGenerationRecord(noteId, installationId, place, number, 'success', result.modelUsed);
 
-    const updatedUser = getOrCreateUser(installationId);
+    const updatedUser = getOrCreateUser(installationId, undefined, deviceId);
 
     return c.json({
       success: true,
@@ -342,23 +320,32 @@ app.post('/v1/notes', async (c) => {
       },
     });
   } catch (err: any) {
-    console.error(`[Notes] Error generating note ${noteId}:`, err);
-    if (installationId) {
-      logGenerationRecord(noteId, installationId, '', '', 'failed', err.message);
-    }
+    console.error(`[Notes] Generation error: ${err.message}`);
+    logGenerationRecord(noteId, installationId, '', '', 'failed', err.message);
+
+    const user = getOrCreateUser(installationId, undefined, deviceId);
 
     return c.json({
       error: 'GENERATION_FAILED',
       message: err.message || 'An error occurred during field note generation.',
+      userState: {
+        freeUsed: user.free_used,
+        adUsed: Boolean(user.ad_used),
+        credits: user.credits,
+        entitlement: determineEntitlement(user),
+      },
     }, 500);
   }
 });
 
-const port = Number(process.env.PORT) || 3001;
-console.log(`FIELD NOTES Backend Server running on http://0.0.0.0:${port}`);
+const PORT = Number(process.env.PORT) || 3001;
 
 serve({
   fetch: app.fetch,
-  port,
+  port: PORT,
   hostname: '0.0.0.0',
+}, () => {
+  console.log(`FIELDS Backend Server running on http://0.0.0.0:${PORT}`);
 });
+
+export default app;

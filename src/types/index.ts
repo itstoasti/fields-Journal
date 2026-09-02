@@ -36,6 +36,7 @@ export interface GenerateNoteRequest {
   year: string;
   entitlement: 'free' | 'ad' | 'credit';
   installationId: string;
+  deviceId?: string;
   rcUserId?: string;
   model?: string;
 }

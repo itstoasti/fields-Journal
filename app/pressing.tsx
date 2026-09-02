@@ -32,6 +32,7 @@ export default function PressingScreen() {
   }>();
 
   const installationId = useAppStore((state) => state.installationId);
+  const deviceId = useAppStore((state) => state.deviceId);
   const selectedModel = useAppStore((state) => state.selectedModel);
   const addNote = useAppStore((state) => state.addNote);
   const updateEntitlements = useAppStore((state) => state.updateEntitlements);
@@ -94,6 +95,7 @@ export default function PressingScreen() {
         year: params.year || new Date().getFullYear().toString(),
         entitlement: params.entitlement || 'free',
         installationId,
+        deviceId,
         model: selectedModel,
       });
 
