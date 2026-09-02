@@ -1,5 +1,4 @@
 import * as SecureStore from 'expo-secure-store';
-import * as Application from 'expo-application';
 import { Platform } from 'react-native';
 
 const INSTALLATION_KEY = 'fn_installation_id';
@@ -12,6 +11,20 @@ function generateRandomId(prefix = 'inst_'): string {
     result += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return result;
+}
+
+/**
+ * Safely accesses native expo-application module if compiled in APK.
+ */
+function getNativeApplication(): typeof import('expo-application') | null {
+  try {
+    // Dynamic require prevents crash if native module is not yet compiled into current APK
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const appModule = require('expo-application');
+    return appModule;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -43,25 +56,29 @@ export async function getOrCreateInstallationId(): Promise<string> {
 
 /**
  * Retrieves a hardware-persistent device ID that survives app uninstalls and data wipes.
- * - Android: Uses Application.getAndroidId()
+ * - Android: Uses Application.getAndroidId() if available in native build
  * - iOS: Uses iOS Keychain with keychainService (survives app deletion) or vendor ID
  */
 export async function getPersistentDeviceId(): Promise<string> {
   try {
-    if (Platform.OS === 'android') {
-      const androidId = Application.getAndroidId();
+    const app = getNativeApplication();
+
+    if (Platform.OS === 'android' && app && typeof app.getAndroidId === 'function') {
+      const androidId = app.getAndroidId();
       if (androidId && androidId.length > 0) {
         return `android_${androidId}`;
       }
     } else if (Platform.OS === 'ios') {
-      // Check iOS Keychain with device-scoped persistence
       const storedKey = await SecureStore.getItemAsync(PERSISTENT_DEVICE_KEY, {
         keychainService: 'com.fieldnotes.app.device.v1',
       });
       if (storedKey) {
         return storedKey;
       }
-      const vendorId = await Application.getIosIdForVendorAsync();
+      let vendorId: string | null = null;
+      if (app && typeof app.getIosIdForVendorAsync === 'function') {
+        vendorId = await app.getIosIdForVendorAsync();
+      }
       const deviceId = vendorId ? `ios_${vendorId}` : generateRandomId('ios_dev_');
       await SecureStore.setItemAsync(PERSISTENT_DEVICE_KEY, deviceId, {
         keychainService: 'com.fieldnotes.app.device.v1',
@@ -69,20 +86,28 @@ export async function getPersistentDeviceId(): Promise<string> {
       return deviceId;
     }
   } catch (err) {
-    console.warn('[Installation] Could not fetch native device ID, falling back:', err);
+    console.warn('[Installation] Native device ID check completed with fallback:', err);
   }
 
-  // Fallback / Web
-  if (typeof localStorage !== 'undefined') {
-    let devId = localStorage.getItem(PERSISTENT_DEVICE_KEY);
-    if (!devId) {
-      devId = generateRandomId('web_dev_');
-      localStorage.setItem(PERSISTENT_DEVICE_KEY, devId);
+  // Fallback persistent storage
+  try {
+    const stored = await SecureStore.getItemAsync(PERSISTENT_DEVICE_KEY);
+    if (stored) return stored;
+    const fallbackId = generateRandomId('dev_');
+    await SecureStore.setItemAsync(PERSISTENT_DEVICE_KEY, fallbackId);
+    return fallbackId;
+  } catch {
+    // Web fallback
+    if (typeof localStorage !== 'undefined') {
+      let devId = localStorage.getItem(PERSISTENT_DEVICE_KEY);
+      if (!devId) {
+        devId = generateRandomId('web_dev_');
+        localStorage.setItem(PERSISTENT_DEVICE_KEY, devId);
+      }
+      return devId;
     }
-    return devId;
+    return generateRandomId('dev_');
   }
-
-  return generateRandomId('dev_');
 }
 
 export async function getInstallationAndDeviceInfo(): Promise<{
