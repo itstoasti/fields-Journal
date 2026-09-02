@@ -272,7 +272,7 @@ export default function SettingsScreen() {
             Installation ID: {installationId ? installationId.slice(0, 16) + '...' : 'Loading...'}
           </TypewriterText>
           <TypewriterText size="xs" color={colors.inkMuted} style={styles.footerText}>
-            FIELDS v1.0.0 · Travel Journal & Stamps
+            FIELDS v1.0.0 · Travel Journal & Scrapbook
           </TypewriterText>
         </View>
       </ScrollView>

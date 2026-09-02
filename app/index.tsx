@@ -77,7 +77,7 @@ export default function HomeScreen() {
             FIELDS
           </TypewriterText>
           <TypewriterText size="xs" bold letterSpacing={2.5} color={colors.charcoal} style={styles.subtitleText}>
-            TRAVEL JOURNAL & STAMPS
+            TRAVEL JOURNAL & SCRAPBOOK
           </TypewriterText>
         </View>
 

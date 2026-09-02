@@ -3,7 +3,8 @@ import { View, Image, StyleSheet, Animated } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useAppStore } from '../src/store/useAppStore';
-import { colors } from '../src/theme';
+import { TypewriterText } from '../src/components';
+import { colors, spacing } from '../src/theme';
 
 export default function RootLayout() {
   const initApp = useAppStore((state) => state.initApp);
@@ -73,11 +74,22 @@ export default function RootLayout() {
             },
           ]}
         >
-          <Image
-            source={require('../assets/splash-clean.png')}
-            style={styles.splashLogo}
-            resizeMode="contain"
-          />
+          <View style={styles.splashContent}>
+            <Image
+              source={require('../assets/tag-transparent.png')}
+              style={styles.splashLogo}
+              resizeMode="contain"
+            />
+            <TypewriterText
+              size="xs"
+              bold
+              letterSpacing={2.5}
+              color={colors.inkSecondary}
+              style={styles.splashSubtitle}
+            >
+              TRAVEL JOURNAL & SCRAPBOOK
+            </TypewriterText>
+          </View>
         </Animated.View>
       )}
     </View>
@@ -96,8 +108,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 9999,
   },
+  splashContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   splashLogo: {
-    width: 250,
-    height: 250,
+    width: 240,
+    height: 240,
+  },
+  splashSubtitle: {
+    marginTop: spacing.md,
+    textAlign: 'center',
   },
 });
