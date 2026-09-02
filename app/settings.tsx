@@ -128,7 +128,7 @@ export default function SettingsScreen() {
             AI GENERATION MODEL
           </TypewriterText>
           <TypewriterText size="xs" color={colors.inkMuted} style={{ marginTop: 4, marginBottom: spacing.md }}>
-            Select the xAI Grok model for rendering travel stamps:
+            Select the AI model for rendering travel stamps:
           </TypewriterText>
 
           {[
@@ -145,12 +145,12 @@ export default function SettingsScreen() {
             {
               id: 'gemini-2.5-flash-image',
               label: 'Gemini 2.5 Flash Image (Nano Banana)',
-              subtitle: 'Google Gemini · Ultra-fast generative multimodal',
+              subtitle: 'Google Gemini · Ultra-fast multimodal synthesis (~3¢)',
             },
             {
               id: 'gemini-3.1-flash-image',
               label: 'Gemini 3.1 Flash Image (Nano Banana 2)',
-              subtitle: 'Google Gemini · Next-gen multimodal image synthesis',
+              subtitle: 'Google Gemini · Next-gen multimodal synthesis (~4¢)',
             },
           ].map((m, index) => {
             const isSelected = (selectedModel || 'grok-imagine-image-2.0') === m.id;
