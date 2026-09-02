@@ -48,7 +48,7 @@ export default function ComposeScreen() {
 
   // Location search suggestions
   const [locationSuggestions, setLocationSuggestions] = useState<LocationSuggestion[]>([]);
-  const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const searchDebounceRef = useRef<any>(null);
 
   // Preload rewarded ad if on ad step
   const currentEntitlement = getEntitlementType();
@@ -268,8 +268,6 @@ export default function ComposeScreen() {
                 <PhotoTape
                   uri={selectedPhotoUri}
                   aspectRatio={4 / 3}
-                  label={place ? place.toUpperCase() : 'TRAVEL RECORD'}
-                  tapeColor="paperDark"
                 />
               </View>
               <View style={styles.photoActionsRow}>
