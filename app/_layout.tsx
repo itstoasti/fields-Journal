@@ -25,7 +25,7 @@ export default function RootLayout() {
         }).start(() => {
           setShowSplash(false);
         });
-      }, 800);
+      }, 700);
       return () => clearTimeout(timer);
     }
   }, [isInitialized, splashFade]);
@@ -62,7 +62,7 @@ export default function RootLayout() {
         />
       </Stack>
 
-      {/* High-Resolution In-App Splash Brand Tag */}
+      {/* Seamless High-Resolution In-App Splash Brand Tag */}
       {showSplash && (
         <Animated.View
           pointerEvents="none"
@@ -73,13 +73,11 @@ export default function RootLayout() {
             },
           ]}
         >
-          <View style={styles.splashCard}>
-            <Image
-              source={require('../assets/icon.png')}
-              style={styles.splashLogo}
-              resizeMode="contain"
-            />
-          </View>
+          <Image
+            source={require('../assets/splash-clean.png')}
+            style={styles.splashLogo}
+            resizeMode="contain"
+          />
         </Animated.View>
       )}
     </View>
@@ -98,18 +96,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 9999,
   },
-  splashCard: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#2B2B2B',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 8,
-  },
   splashLogo: {
-    width: 220,
-    height: 220,
-    borderRadius: 28,
+    width: 250,
+    height: 250,
   },
 });
