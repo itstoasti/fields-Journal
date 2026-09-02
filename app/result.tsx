@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -7,14 +7,18 @@ import {
   Pressable,
   Animated,
   Modal,
+  FlatList,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { Ionicons } from '@expo/vector-icons';
 import { PaperContainer, TypewriterText, StampButton } from '../src/components';
-import { colors, fonts, fontSizes, layout, spacing } from '../src/theme';
+import { colors, layout, spacing } from '../src/theme';
 import { saveToDeviceGallery } from '../src/lib/image';
 import { useAppStore } from '../src/store/useAppStore';
+import { Note } from '../src/types';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -30,7 +34,68 @@ export default function ResultScreen() {
     fromLibrary?: string;
   }>();
 
+  const notes = useAppStore((state) => state.notes);
   const deleteNote = useAppStore((state) => state.deleteNote);
+
+  // Build the array of notes for swipeable horizontal carousel
+  const displayNotes: Note[] = useMemo(() => {
+    if (notes.length > 0) {
+      const exists = notes.some((n) => n.id === params.noteId);
+      if (!exists && params.posterUri) {
+        return [
+          {
+            id: params.noteId || 'temp',
+            posterUri: params.posterUri,
+            place: params.place || '',
+            number: params.number || '01',
+            year: params.year || '2026',
+            keywords: params.keywords ? (typeof params.keywords === 'string' ? JSON.parse(params.keywords) : params.keywords) : [],
+            sourceUri: '',
+            createdAt: new Date().toISOString(),
+            width: 1200,
+            height: 900,
+          },
+          ...notes,
+        ];
+      }
+      return notes;
+    }
+    if (params.posterUri) {
+      return [
+        {
+          id: params.noteId || 'temp',
+          posterUri: params.posterUri,
+          place: params.place || '',
+          number: params.number || '01',
+          year: params.year || '2026',
+          keywords: params.keywords ? (typeof params.keywords === 'string' ? JSON.parse(params.keywords) : params.keywords) : [],
+          sourceUri: '',
+          createdAt: new Date().toISOString(),
+          width: 1200,
+          height: 900,
+        },
+      ];
+    }
+    return [];
+  }, [notes, params.noteId, params.posterUri]);
+
+  // Initial index based on noteId
+  const initialIndex = useMemo(() => {
+    if (!params.noteId) return 0;
+    const idx = displayNotes.findIndex((n) => n.id === params.noteId);
+    return idx >= 0 ? idx : 0;
+  }, [params.noteId, displayNotes]);
+
+  const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  const flatListRef = useRef<FlatList<Note>>(null);
+
+  const activeNote = displayNotes[currentIndex] || {
+    id: params.noteId,
+    posterUri: params.posterUri,
+    place: params.place,
+    number: params.number,
+    year: params.year,
+  };
 
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
@@ -38,6 +103,15 @@ export default function ResultScreen() {
   const [toastMessage, setToastMessage] = useState('POSTER SAVED TO GALLERY');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const toastAnim = useRef(new Animated.Value(0)).current;
+
+  // Scroll to initial index on mount
+  useEffect(() => {
+    if (initialIndex > 0 && flatListRef.current) {
+      setTimeout(() => {
+        flatListRef.current?.scrollToIndex({ index: initialIndex, animated: false });
+      }, 50);
+    }
+  }, [initialIndex]);
 
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
@@ -59,10 +133,19 @@ export default function ResultScreen() {
     });
   };
 
+  const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const offsetX = e.nativeEvent.contentOffset.x;
+    const index = Math.round(offsetX / SCREEN_WIDTH);
+    if (index >= 0 && index < displayNotes.length && index !== currentIndex) {
+      setCurrentIndex(index);
+      setSavedSuccess(false);
+    }
+  };
+
   const handleSaveToGallery = async () => {
-    if (!params.posterUri) return;
+    if (!activeNote.posterUri) return;
     setIsSaving(true);
-    const result = await saveToDeviceGallery(params.posterUri);
+    const result = await saveToDeviceGallery(activeNote.posterUri);
     setIsSaving(false);
 
     if (result.success) {
@@ -74,16 +157,16 @@ export default function ResultScreen() {
   };
 
   const handleShare = async () => {
-    if (!params.posterUri) return;
+    if (!activeNote.posterUri) return;
     try {
       const isAvailable = await Sharing.isAvailableAsync();
       if (!isAvailable) {
         triggerToast('SHARING NOT AVAILABLE');
         return;
       }
-      await Sharing.shareAsync(params.posterUri, {
+      await Sharing.shareAsync(activeNote.posterUri, {
         mimeType: 'image/jpeg',
-        dialogTitle: `Field Note — ${params.place || 'Record'}`,
+        dialogTitle: `Field Note — ${activeNote.place || 'Record'}`,
       });
     } catch (error: any) {
       console.warn('[Share] Share error:', error);
@@ -100,10 +183,15 @@ export default function ResultScreen() {
 
   const handleConfirmDelete = async () => {
     setShowDeleteModal(false);
-    if (params.noteId) {
-      await deleteNote(params.noteId);
+    if (activeNote.id) {
+      await deleteNote(activeNote.id);
     }
-    router.replace('/');
+    if (displayNotes.length <= 1) {
+      router.replace('/');
+    } else {
+      const nextIdx = Math.max(0, currentIndex - 1);
+      setCurrentIndex(nextIdx);
+    }
   };
 
   return (
@@ -122,37 +210,68 @@ export default function ResultScreen() {
 
         <View style={styles.titleBox}>
           <TypewriterText size="sm" bold letterSpacing={2}>
-            {params.place ? params.place.toUpperCase() : 'FIELD NOTE'}
+            {activeNote.place ? activeNote.place.toUpperCase() : 'FIELD NOTE'}
           </TypewriterText>
           <TypewriterText size="xs" color={colors.inkSecondary}>
-            NO. {params.number || '01'} · {params.year || '2026'}
+            NO. {activeNote.number || '01'} · {activeNote.year || '2026'}
+            {displayNotes.length > 1 ? `  (${currentIndex + 1}/${displayNotes.length})` : ''}
           </TypewriterText>
         </View>
 
-        {params.fromLibrary === 'true' ? (
-          <Pressable
-            onPress={() => setShowDeleteModal(true)}
-            style={styles.deleteButton}
-            hitSlop={14}
-            accessibilityRole="button"
-            accessibilityLabel="Delete note"
-          >
-            <Ionicons name="trash-outline" size={22} color={colors.oxblood} />
-          </Pressable>
-        ) : (
-          <View style={styles.placeholder} />
-        )}
+        <Pressable
+          onPress={() => setShowDeleteModal(true)}
+          style={styles.deleteButton}
+          hitSlop={14}
+          accessibilityRole="button"
+          accessibilityLabel="Delete note"
+        >
+          <Ionicons name="trash-outline" size={22} color={colors.oxblood} />
+        </Pressable>
       </View>
 
-      {/* Main 4:3 Poster Display */}
+      {/* Main Horizontal Swipeable FlatList */}
       <View style={styles.posterWrapper}>
-        <View style={styles.posterCard}>
-          <Image
-            source={{ uri: params.posterUri }}
-            style={styles.posterImage}
-            resizeMode="contain"
-          />
-        </View>
+        <FlatList
+          ref={flatListRef}
+          data={displayNotes}
+          keyExtractor={(item) => item.id}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onMomentumScrollEnd={handleScroll}
+          initialScrollIndex={initialIndex > 0 && initialIndex < displayNotes.length ? initialIndex : undefined}
+          getItemLayout={(_data, index) => ({
+            length: SCREEN_WIDTH,
+            offset: SCREEN_WIDTH * index,
+            index,
+          })}
+          renderItem={({ item }) => (
+            <View style={styles.pageContainer}>
+              <View style={styles.posterCard}>
+                <Image
+                  source={{ uri: item.posterUri }}
+                  style={styles.posterImage}
+                  resizeMode="contain"
+                />
+              </View>
+            </View>
+          )}
+        />
+
+        {/* Swipe Page Indicators */}
+        {displayNotes.length > 1 && (
+          <View style={styles.paginationDots}>
+            {displayNotes.map((_, idx) => (
+              <View
+                key={idx}
+                style={[
+                  styles.dot,
+                  idx === currentIndex ? styles.activeDot : styles.inactiveDot,
+                ]}
+              />
+            ))}
+          </View>
+        )}
 
         {/* Custom Branded Paper Toast */}
         {showToast && (
@@ -283,14 +402,16 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'center',
   },
-  placeholder: {
-    width: 44,
-  },
   posterWrapper: {
     flex: 1,
-    paddingHorizontal: spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  pageContainer: {
+    width: SCREEN_WIDTH,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
   },
   posterCard: {
     width: '100%',
@@ -307,6 +428,26 @@ const styles = StyleSheet.create({
   posterImage: {
     width: '100%',
     height: '100%',
+  },
+  paginationDots: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  dot: {
+    height: 6,
+    borderRadius: 3,
+  },
+  activeDot: {
+    width: 16,
+    backgroundColor: colors.brickRed,
+  },
+  inactiveDot: {
+    width: 6,
+    backgroundColor: colors.paperBorder,
   },
   toastContainer: {
     position: 'absolute',
