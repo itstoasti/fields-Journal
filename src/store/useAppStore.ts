@@ -87,6 +87,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   initApp: async () => {
     try {
       const { installationId, deviceId } = await getInstallationAndDeviceInfo();
+      console.log(`[Store] Initializing app for install=${installationId}, device=${deviceId}`);
       
       // Load privacy consent
       const consentStr = await getStorageItem(PRIVACY_CONSENT_KEY);
@@ -118,6 +119,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (savedEntitlements) {
         try {
           initialEntitlements = JSON.parse(savedEntitlements);
+          console.log('[Store] Loaded cached entitlements from storage:', initialEntitlements);
         } catch {}
       }
 
@@ -137,6 +139,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       // Fetch authoritative server entitlements with persistent deviceId
       try {
         const serverEntitlements = await fetchUserEntitlements(installationId, deviceId);
+        console.log('[Store] Received live server entitlements:', serverEntitlements);
         set({
           isInitialized: true,
           entitlements: serverEntitlements,
@@ -199,6 +202,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
 
     merged.entitlement = type;
+    console.log('[Store] updateEntitlements -> new state:', merged);
     set({ entitlements: merged });
 
     // Persist immediately
@@ -214,7 +218,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     const devId = get().deviceId;
     if (!id) return;
     try {
+      console.log(`[Store] syncWithBackend for install=${id}, dev=${devId}`);
       const serverEntitlements = await fetchUserEntitlements(id, devId);
+      console.log('[Store] syncWithBackend response:', serverEntitlements);
       set({ entitlements: serverEntitlements });
       await setStorageItem(ENTITLEMENTS_KEY, JSON.stringify(serverEntitlements));
       if (serverEntitlements.entitlement === 'ad') {

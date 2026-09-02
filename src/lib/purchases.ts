@@ -1,1 +1,1 @@
-export * from './purchases.web';
+export * from './purchases.native';
