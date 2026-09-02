@@ -15,6 +15,7 @@ import {
 } from './db.js';
 import { buildGrokPrompt } from './prompt.js';
 import { generateFieldNoteImage } from './grok.js';
+import { generateGeminiImage } from './gemini.js';
 
 dotenv.config();
 
@@ -300,13 +301,21 @@ app.post('/v1/notes', async (c) => {
 
     console.log(`[Notes] Generating note ${noteId} for ${installationId} under ${entitlementClaim} with model ${model || 'default'}...`);
 
-    // Step 3: Execute Grok Image generation (xAI Imagine)
-    const result = await generateFieldNoteImage({
-      imageBuffer,
-      mimeType,
-      prompt,
-      model,
-    });
+    // Step 3: Execute Image generation (Gemini or Grok Imagine)
+    const isGeminiModel = model?.toLowerCase().startsWith('gemini');
+    const result = isGeminiModel
+      ? await generateGeminiImage({
+          imageBuffer,
+          mimeType,
+          prompt,
+          model,
+        })
+      : await generateFieldNoteImage({
+          imageBuffer,
+          mimeType,
+          prompt,
+          model,
+        });
 
     // Step 4: Decrement entitlement ONLY after successful image generation
     const consumed = consumeUserEntitlement(installationId, entitlementClaim);

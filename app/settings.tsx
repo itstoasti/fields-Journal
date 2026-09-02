@@ -135,12 +135,22 @@ export default function SettingsScreen() {
             {
               id: 'grok-imagine-image-2.0',
               label: 'grok-imagine-image-2.0 (High Quality)',
-              subtitle: 'Default · 2K resolution with standard quality (~5-6¢)',
+              subtitle: 'xAI Grok · 2K resolution standard quality (~5-6¢)',
             },
             {
               id: 'grok-imagine-image-2.0-low',
               label: 'grok-imagine-image-2.0 (2K Low)',
-              subtitle: 'Fast 2K resolution with low compute tier (~2-3¢)',
+              subtitle: 'xAI Grok · Fast 2K low compute tier (~2-3¢)',
+            },
+            {
+              id: 'gemini-2.5-flash-image',
+              label: 'Gemini 2.5 Flash Image (Nano Banana)',
+              subtitle: 'Google Gemini · Ultra-fast generative multimodal',
+            },
+            {
+              id: 'gemini-3.1-flash-image',
+              label: 'Gemini 3.1 Flash Image (Nano Banana 2)',
+              subtitle: 'Google Gemini · Next-gen multimodal image synthesis',
             },
           ].map((m, index) => {
             const isSelected = (selectedModel || 'grok-imagine-image-2.0') === m.id;
