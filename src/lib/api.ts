@@ -15,7 +15,7 @@ export function getApiBaseUrl(): string {
 
   if (hostUri) {
     const host = hostUri.split(':')[0];
-    if (host) {
+    if (host && host.length > 0) {
       return `http://${host}:3001`;
     }
   }
@@ -28,54 +28,48 @@ export function getApiBaseUrl(): string {
   return 'http://127.0.0.1:3001';
 }
 
-const API_BASE_URL = getApiBaseUrl();
-
 export async function fetchUserEntitlements(
   installationId: string,
   deviceId?: string
 ): Promise<UserEntitlementState> {
-  try {
-    const query = new URLSearchParams({ installationId });
-    if (deviceId) {
-      query.append('deviceId', deviceId);
-    }
-
-    const response = await fetch(`${API_BASE_URL}/v1/me?${query.toString()}`, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${installationId}`,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch entitlements: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return {
-      freeUsed: data.freeUsed ?? 0,
-      adUsed: Boolean(data.adUsed),
-      credits: data.credits ?? 0,
-      entitlement: data.entitlement ?? 'free',
-    };
-  } catch (error) {
-    console.warn('[API] Could not reach backend for me, using local fallback state:', error);
-    return {
-      freeUsed: 0,
-      adUsed: false,
-      credits: 0,
-      entitlement: 'free',
-    };
+  const baseUrl = getApiBaseUrl();
+  const query = new URLSearchParams({ installationId });
+  if (deviceId) {
+    query.append('deviceId', deviceId);
   }
+
+  console.log(`[API] Fetching entitlements from: ${baseUrl}/v1/me?${query.toString()}`);
+
+  const response = await fetch(`${baseUrl}/v1/me?${query.toString()}`, {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json',
+      'Authorization': `Bearer ${installationId}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch entitlements: ${response.status}`);
+  }
+
+  const data = await response.json();
+  console.log(`[API] Received entitlements from server:`, data);
+
+  return {
+    freeUsed: data.freeUsed ?? 0,
+    adUsed: Boolean(data.adUsed),
+    credits: data.credits ?? 0,
+    entitlement: data.entitlement ?? 'free',
+  };
 }
 
 export async function submitGenerateNote(request: GenerateNoteRequest): Promise<GenerateNoteResponse> {
+  const baseUrl = getApiBaseUrl();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 75000); // 75s client timeout
 
   try {
-    const response = await fetch(`${API_BASE_URL}/v1/notes`, {
+    const response = await fetch(`${baseUrl}/v1/notes`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -113,8 +107,9 @@ export async function syncPurchasedCredits(
   rcUserId?: string,
   deviceId?: string
 ): Promise<UserEntitlementState> {
+  const baseUrl = getApiBaseUrl();
   try {
-    const response = await fetch(`${API_BASE_URL}/v1/credits/sync`, {
+    const response = await fetch(`${baseUrl}/v1/credits/sync`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

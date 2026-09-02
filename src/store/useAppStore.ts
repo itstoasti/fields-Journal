@@ -135,19 +135,20 @@ export const useAppStore = create<AppState>((set, get) => ({
       await initializePurchases(installationId);
 
       // Fetch authoritative server entitlements with persistent deviceId
-      const serverEntitlements = await fetchUserEntitlements(installationId, deviceId);
+      try {
+        const serverEntitlements = await fetchUserEntitlements(installationId, deviceId);
+        set({
+          isInitialized: true,
+          entitlements: serverEntitlements,
+        });
+        await setStorageItem(ENTITLEMENTS_KEY, JSON.stringify(serverEntitlements));
 
-      set({
-        isInitialized: true,
-        entitlements: serverEntitlements,
-      });
-
-      // Persist to local storage
-      await setStorageItem(ENTITLEMENTS_KEY, JSON.stringify(serverEntitlements));
-
-      // Preload ad if on ad step
-      if (serverEntitlements.entitlement === 'ad' || serverEntitlements.freeUsed >= 2) {
-        rewardedAdManager.preloadAd();
+        if (serverEntitlements.entitlement === 'ad' || serverEntitlements.freeUsed >= 2) {
+          rewardedAdManager.preloadAd();
+        }
+      } catch (networkErr) {
+        console.warn('[Store] Could not fetch server entitlements on launch, keeping cached state:', networkErr);
+        set({ isInitialized: true });
       }
     } catch (error) {
       console.warn('[Store] Error during app initialization:', error);
@@ -220,7 +221,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         rewardedAdManager.preloadAd();
       }
     } catch (e) {
-      console.warn('[Store] syncWithBackend failed:', e);
+      console.warn('[Store] syncWithBackend failed, preserving current state:', e);
     }
   },
 
