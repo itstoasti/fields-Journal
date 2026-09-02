@@ -133,22 +133,27 @@ export default function SettingsScreen() {
 
           {[
             {
-              id: 'grok-imagine-image-2.0',
-              label: 'grok-imagine-image-2.0 (High Quality)',
-              subtitle: 'Default · 2K resolution standard quality (~5-6¢)',
+              id: 'grok-imagine-image-2.0-1k-low',
+              label: 'grok-imagine-image-2.0 (1K Low)',
+              subtitle: 'Good fast test · ~$0.05 ($0.01 in + $0.04 out)',
             },
             {
-              id: 'grok-imagine-image-2.0-low',
+              id: 'grok-imagine-image-2.0-2k-low',
               label: 'grok-imagine-image-2.0 (2K Low)',
-              subtitle: 'Fast 2K resolution low compute tier (~2-3¢)',
+              subtitle: 'Better print/zoom · ~$0.07 ($0.01 in + $0.06 out)',
+            },
+            {
+              id: 'grok-imagine-image-2.0-2k-medium',
+              label: 'grok-imagine-image-2.0 (2K Medium)',
+              subtitle: 'Default finished quality · ~$0.09 ($0.01 in + $0.08 out)',
             },
             {
               id: 'grok-imagine-image-quality',
-              label: 'grok-imagine-image-quality (Ultra Quality)',
-              subtitle: 'Studio-grade maximum texture & detail (~7-8¢)',
+              label: 'grok-imagine-image-quality (2K Studio)',
+              subtitle: 'Highest stamp & type fidelity · ~$0.08 ($0.01 in + $0.07 out)',
             },
           ].map((m, index) => {
-            const isSelected = (selectedModel || 'grok-imagine-image-2.0') === m.id;
+            const isSelected = (selectedModel || 'grok-imagine-image-2.0-2k-medium') === m.id;
             return (
               <React.Fragment key={m.id}>
                 {index > 0 && <View style={styles.divider} />}

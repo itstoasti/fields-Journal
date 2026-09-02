@@ -14,7 +14,7 @@ export interface GrokGenerationResult {
   modelUsed: string;
 }
 
-const DEFAULT_MODEL = 'grok-imagine-image-2.0';
+const DEFAULT_MODEL = 'grok-imagine-image-2.0-2k-medium';
 const TIMEOUT_MS = 60000;
 
 export async function generateFieldNoteImage(options: GrokGenerationOptions): Promise<GrokGenerationResult> {
@@ -37,20 +37,22 @@ async function executeXaiCall(
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-  // Resolve model and quality
+  // Parse exact model, resolution, and quality tier
   const isQualityModel = requestedModel.toLowerCase().includes('quality');
-  const isLowQuality = requestedModel.toLowerCase().includes('low') || options.quality === 'low';
+  const is1k = requestedModel.toLowerCase().includes('1k');
+  const isLow = requestedModel.toLowerCase().includes('low') || options.quality === 'low';
 
   const actualModel = isQualityModel
     ? 'grok-imagine-image-quality'
     : 'grok-imagine-image-2.0';
 
-  const quality = isLowQuality ? 'low' : 'standard';
+  const resolution = is1k ? '1k' : '2k';
+  const quality = isLow ? 'low' : 'medium';
 
   try {
     const base64Url = `data:${options.mimeType || 'image/jpeg'};base64,${options.imageBuffer.toString('base64')}`;
 
-    console.log(`[Grok] Sending image edit request to xAI: model=${actualModel}, quality=${quality}...`);
+    console.log(`[Grok] Sending image edit request to xAI: model=${actualModel}, resolution=${resolution}, quality=${quality}...`);
 
     const response = await fetch('https://api.x.ai/v1/images/edits', {
       method: 'POST',
@@ -65,6 +67,7 @@ async function executeXaiCall(
         prompt: options.prompt,
         model: actualModel,
         aspect_ratio: '4:3',
+        resolution,
         quality,
         response_format: 'b64_json',
       }),
@@ -88,12 +91,12 @@ async function executeXaiCall(
     if (imageObj.b64_json) {
       return {
         imageBase64: imageObj.b64_json,
-        modelUsed: isLowQuality ? 'grok-imagine-image-2.0 (2K Low)' : 'grok-imagine-image-2.0',
+        modelUsed: `${actualModel} (${resolution} ${quality})`,
       };
     } else if (imageObj.url) {
       return {
         imageUrl: imageObj.url,
-        modelUsed: isLowQuality ? 'grok-imagine-image-2.0 (2K Low)' : 'grok-imagine-image-2.0',
+        modelUsed: `${actualModel} (${resolution} ${quality})`,
       };
     } else {
       throw new Error('No image URL or b64_json found in xAI response');
