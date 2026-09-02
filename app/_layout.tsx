@@ -8,28 +8,26 @@ import { colors, spacing } from '../src/theme';
 
 export default function RootLayout() {
   const initApp = useAppStore((state) => state.initApp);
-  const isInitialized = useAppStore((state) => state.isInitialized);
   const [splashFade] = useState(new Animated.Value(1));
   const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
+    // Run background app initialization
     initApp();
-  }, [initApp]);
 
-  useEffect(() => {
-    if (isInitialized) {
-      const timer = setTimeout(() => {
-        Animated.timing(splashFade, {
-          toValue: 0,
-          duration: 400,
-          useNativeDriver: true,
-        }).start(() => {
-          setShowSplash(false);
-        });
-      }, 700);
-      return () => clearTimeout(timer);
-    }
-  }, [isInitialized, splashFade]);
+    // Guaranteed splash dismissal after 1.0s max, never blocks user UI
+    const timer = setTimeout(() => {
+      Animated.timing(splashFade, {
+        toValue: 0,
+        duration: 350,
+        useNativeDriver: true,
+      }).start(() => {
+        setShowSplash(false);
+      });
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [initApp, splashFade]);
 
   return (
     <View style={styles.root}>

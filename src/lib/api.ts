@@ -38,29 +38,36 @@ export async function fetchUserEntitlements(
     query.append('deviceId', deviceId);
   }
 
-  console.log(`[API] Fetching entitlements from: ${baseUrl}/v1/me?${query.toString()}`);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 3500); // 3.5s network timeout
 
-  const response = await fetch(`${baseUrl}/v1/me?${query.toString()}`, {
-    method: 'GET',
-    headers: {
-      'Accept': 'application/json',
-      'Authorization': `Bearer ${installationId}`,
-    },
-  });
+  try {
+    const response = await fetch(`${baseUrl}/v1/me?${query.toString()}`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${installationId}`,
+      },
+      signal: controller.signal,
+    });
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch entitlements: ${response.status}`);
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch entitlements: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return {
+      freeUsed: data.freeUsed ?? 0,
+      adUsed: Boolean(data.adUsed),
+      credits: data.credits ?? 0,
+      entitlement: data.entitlement ?? 'free',
+    };
+  } catch (error) {
+    clearTimeout(timeoutId);
+    throw error;
   }
-
-  const data = await response.json();
-  console.log(`[API] Received entitlements from server:`, data);
-
-  return {
-    freeUsed: data.freeUsed ?? 0,
-    adUsed: Boolean(data.adUsed),
-    credits: data.credits ?? 0,
-    entitlement: data.entitlement ?? 'free',
-  };
 }
 
 export async function submitGenerateNote(request: GenerateNoteRequest): Promise<GenerateNoteResponse> {
@@ -108,6 +115,9 @@ export async function syncPurchasedCredits(
   deviceId?: string
 ): Promise<UserEntitlementState> {
   const baseUrl = getApiBaseUrl();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
+
   try {
     const response = await fetch(`${baseUrl}/v1/credits/sync`, {
       method: 'POST',
@@ -123,7 +133,10 @@ export async function syncPurchasedCredits(
         packageId: 'notes_20',
         creditsToAdd,
       }),
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       throw new Error(`Sync failed with status: ${response.status}`);
@@ -137,6 +150,7 @@ export async function syncPurchasedCredits(
       entitlement: data.entitlement,
     };
   } catch (error) {
+    clearTimeout(timeoutId);
     console.warn('[API] syncPurchasedCredits failed:', error);
     throw error;
   }
