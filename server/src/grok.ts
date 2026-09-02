@@ -37,12 +37,12 @@ async function executeXaiCall(
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-  // Resolve model and quality
+  // Resolve model and quality: xAI expects one of 'low', 'medium', 'high', 'auto'
   const isUltraQuality = requestedModel === 'grok-imagine-image-quality';
   const isLowQuality = requestedModel.toLowerCase().includes('low') || options.quality === 'low';
 
   const actualModel = isUltraQuality ? 'grok-imagine-image-quality' : 'grok-imagine-image-2.0';
-  const quality = isUltraQuality ? 'high' : isLowQuality ? 'low' : 'standard';
+  const quality = isUltraQuality ? 'high' : isLowQuality ? 'low' : 'auto';
 
   try {
     const base64Url = `data:${options.mimeType || 'image/jpeg'};base64,${options.imageBuffer.toString('base64')}`;
