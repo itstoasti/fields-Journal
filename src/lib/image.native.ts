@@ -57,6 +57,53 @@ export async function preparePhotoForGeneration(sourceUri: string): Promise<Proc
 }
 
 /**
+ * Fast lightweight thumbnail generator for Vision AI (512px, compress: 0.7).
+ */
+export async function preparePhotoForVision(sourceUri: string): Promise<ProcessedImage> {
+  try {
+    const manipResult = await ImageManipulator.manipulateAsync(
+      sourceUri,
+      [
+        {
+          resize: {
+            width: 512,
+          },
+        },
+      ],
+      {
+        compress: 0.7,
+        format: ImageManipulator.SaveFormat.JPEG,
+        base64: true,
+      }
+    );
+
+    return {
+      uri: manipResult.uri,
+      width: manipResult.width,
+      height: manipResult.height,
+      base64: manipResult.base64,
+    };
+  } catch (error) {
+    console.warn('[Image] Thumbnail creation failed, trying original without resize:', error);
+    const fallback = await ImageManipulator.manipulateAsync(
+      sourceUri,
+      [],
+      {
+        compress: 0.7,
+        format: ImageManipulator.SaveFormat.JPEG,
+        base64: true,
+      }
+    );
+    return {
+      uri: fallback.uri,
+      width: fallback.width,
+      height: fallback.height,
+      base64: fallback.base64,
+    };
+  }
+}
+
+/**
  * Base64 to Uint8Array decoder for writing binary files.
  */
 function base64ToUint8Array(base64Str: string): Uint8Array {

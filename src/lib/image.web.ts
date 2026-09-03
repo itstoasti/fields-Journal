@@ -14,6 +14,15 @@ export async function preparePhotoForGeneration(sourceUri: string): Promise<Proc
   };
 }
 
+export async function preparePhotoForVision(sourceUri: string): Promise<ProcessedImage> {
+  return {
+    uri: sourceUri,
+    width: 512,
+    height: 512,
+    base64: '',
+  };
+}
+
 export async function savePosterLocally(
   noteId: string,
   imageBase64OrUri: string

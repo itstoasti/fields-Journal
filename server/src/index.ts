@@ -18,6 +18,7 @@ import {
 import { buildGrokPrompt } from './prompt.js';
 import { generateFieldNoteImage } from './grok.js';
 import { generateGeminiImage } from './gemini.js';
+import { suggestMemoryKeywords } from './keywords.js';
 
 dotenv.config();
 
@@ -334,6 +335,64 @@ app.post('/v1/notes', async (c) => {
         credits: user.credits,
         entitlement: determineEntitlement(user),
       },
+    }, 500);
+  }
+});
+
+/**
+ * POST /v1/keywords/suggest
+ * Analyzes photo + location to generate 3 evocative, sensory memory keywords
+ */
+app.post('/v1/keywords/suggest', async (c) => {
+  try {
+    const contentType = c.req.header('Content-Type') || '';
+    let imageBuffer: Buffer | null = null;
+    let mimeType = 'image/jpeg';
+    let location = '';
+
+    if (contentType.includes('multipart/form-data')) {
+      const body = await c.req.parseBody();
+      location = (body.location as string) || '';
+
+      const photoFile = body.photo;
+      if (photoFile && typeof photoFile === 'object' && 'arrayBuffer' in photoFile) {
+        const ab = await (photoFile as any).arrayBuffer();
+        imageBuffer = Buffer.from(ab);
+        mimeType = (photoFile as any).type || 'image/jpeg';
+      }
+    } else {
+      const body = await c.req.json();
+      location = body.location || '';
+      if (body.imageBase64) {
+        imageBuffer = Buffer.from(body.imageBase64.replace(/^data:image\/\w+;base64,/, ''), 'base64');
+        mimeType = body.mimeType || 'image/jpeg';
+      }
+    }
+
+    if (!imageBuffer) {
+      return c.json({ error: 'MISSING_IMAGE', message: 'Image is required for keyword suggestion' }, 400);
+    }
+
+    console.log(`[Keywords] Suggesting keywords for location: "${location || 'unknown'}"...`);
+    const result = await suggestMemoryKeywords({
+      imageBuffer,
+      mimeType,
+      location,
+    });
+
+    console.log(`[Keywords] Generated keywords: [${result.keywords.join(', ')}] via ${result.source}`);
+
+    return c.json({
+      success: true,
+      keywords: result.keywords,
+      formatted: result.raw,
+      source: result.source,
+    });
+  } catch (err: any) {
+    console.error(`[Keywords] Error suggesting keywords: ${err.message}`);
+    return c.json({
+      error: 'KEYWORD_SUGGESTION_FAILED',
+      message: err.message || 'Failed to suggest keywords',
     }, 500);
   }
 });

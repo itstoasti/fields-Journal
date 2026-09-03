@@ -26,6 +26,8 @@ import { rewardedAdManager } from '../src/lib/ads';
 import { pickImageFromLibrary, pickImageFromCamera } from '../src/lib/picker';
 import { extractPhotoMetadata } from '../src/lib/metadata';
 import { searchLocationSuggestions, LocationSuggestion } from '../src/lib/locationSearch';
+import { preparePhotoForVision } from '../src/lib/image';
+import { suggestKeywordsFromImage } from '../src/lib/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -124,6 +126,35 @@ export default function ComposeScreen() {
     Keyboard.dismiss();
   };
 
+  // AI Keyword Suggestion state
+  const [isDetectingKeywords, setIsDetectingKeywords] = useState<boolean>(false);
+
+  const handleAutoDetectKeywords = async (photoOverride?: string, placeOverride?: string) => {
+    const photoToUse = photoOverride || selectedPhotoUri;
+    if (!photoToUse) {
+      Alert.alert('Select Photo', 'Please select a photo first to suggest keywords.');
+      return;
+    }
+
+    try {
+      setIsDetectingKeywords(true);
+      const thumbnail = await preparePhotoForVision(photoToUse);
+      if (!thumbnail.base64) {
+        throw new Error('Could not process thumbnail for keyword detection.');
+      }
+
+      const placeToUse = placeOverride !== undefined ? placeOverride : place;
+      const res = await suggestKeywordsFromImage(thumbnail.base64, placeToUse);
+      if (res.keywords && res.keywords.length > 0) {
+        setKeywordsText(res.formatted || res.keywords.join(', '));
+      }
+    } catch (err: any) {
+      console.warn('[Compose] Keyword detection failed:', err);
+    } finally {
+      setIsDetectingKeywords(false);
+    }
+  };
+
   const applyExtractedMetadata = async (result: {
     uri?: string;
     exif?: Record<string, any>;
@@ -147,6 +178,9 @@ export default function ComposeScreen() {
       }
       if (meta.keywords && meta.keywords.length > 0) {
         setKeywordsText(meta.keywords.join(' · '));
+      } else if (result.uri) {
+        // Automatically suggest 3 memory keywords with Gemini Flash Vision
+        handleAutoDetectKeywords(result.uri, meta.place);
       }
 
       if (meta.place || meta.year) {
@@ -470,13 +504,36 @@ export default function ComposeScreen() {
 
             {/* Row 3: THREE MEMORY KEYWORDS */}
             <View style={styles.tableCellBottom}>
-              <TypewriterText size="xs" bold color={colors.charcoal} letterSpacing={1.5} style={styles.cellHeader}>
-                THREE MEMORY KEYWORDS
-              </TypewriterText>
+              <View style={styles.keywordsHeaderRow}>
+                <TypewriterText size="xs" bold color={colors.charcoal} letterSpacing={1.5} style={styles.cellHeader}>
+                  THREE MEMORY KEYWORDS
+                </TypewriterText>
+                {selectedPhotoUri ? (
+                  <Pressable
+                    onPress={() => handleAutoDetectKeywords()}
+                    disabled={isDetectingKeywords}
+                    style={styles.magicDetectButton}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Auto-detect memory keywords"
+                  >
+                    {isDetectingKeywords ? (
+                      <ActivityIndicator size="small" color={colors.charcoal} />
+                    ) : (
+                      <View style={styles.magicDetectInner}>
+                        <Ionicons name="sparkles" size={11} color={colors.charcoal} />
+                        <TypewriterText size="xs" bold color={colors.charcoal} letterSpacing={1} style={styles.magicDetectText}>
+                          {keywordsText ? 'REROLL' : 'SUGGEST'}
+                        </TypewriterText>
+                      </View>
+                    )}
+                  </Pressable>
+                ) : null}
+              </View>
               <TextInput
                 value={keywordsText}
                 onChangeText={setKeywordsText}
-                placeholder="Three memory keywords"
+                placeholder="Three memory keywords (e.g. ocean, sunset, breeze)"
                 placeholderTextColor={colors.inkMuted}
                 style={styles.cellInput}
                 autoCorrect={false}
@@ -608,6 +665,29 @@ const styles = StyleSheet.create({
   },
   tableCellBottom: {
     padding: spacing.md,
+  },
+  keywordsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  magicDetectButton: {
+    paddingVertical: 3,
+    paddingHorizontal: 7,
+    backgroundColor: colors.paperDark,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: colors.paperBorder,
+  },
+  magicDetectInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  magicDetectText: {
+    fontSize: 9,
+    includeFontPadding: false,
   },
   cellHeader: {
     marginBottom: 0,

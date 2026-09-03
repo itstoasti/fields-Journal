@@ -155,3 +155,49 @@ export async function syncPurchasedCredits(
     throw error;
   }
 }
+
+export interface KeywordSuggestionResponse {
+  success: boolean;
+  keywords: string[];
+  formatted: string;
+  source: string;
+}
+
+export async function suggestKeywordsFromImage(
+  imageBase64: string,
+  location?: string
+): Promise<KeywordSuggestionResponse> {
+  const baseUrl = getApiBaseUrl();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s timeout
+
+  try {
+    const response = await fetch(`${baseUrl}/v1/keywords/suggest`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        imageBase64,
+        mimeType: 'image/jpeg',
+        location: location || '',
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`Keywords API failed with status ${response.status}`);
+    }
+
+    const data: KeywordSuggestionResponse = await response.json();
+    return data;
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    console.warn('[API] suggestKeywordsFromImage failed:', error);
+    throw error;
+  }
+}
+
