@@ -7,6 +7,9 @@ export interface ParsedExif {
   latitude?: number;
   longitude?: number;
   dateTime?: string;
+  dateTimeOriginal?: string;
+  dateTimeDigitized?: string;
+  dateTimeModified?: string;
 }
 
 export function parseJpegBinaryExif(buffer: ArrayBuffer): ParsedExif {
@@ -52,6 +55,9 @@ export function parseJpegBinaryExif(buffer: ArrayBuffer): ParsedExif {
   try {
     const tiffStart = app1Pos + 10;
     parseTiffHeader(view, tiffStart, result);
+    // Prioritize original photo capture date over modification date
+    result.dateTime = result.dateTimeOriginal || result.dateTimeDigitized || result.dateTimeModified;
+    console.log(`[ExifReader] ✅ Selected authoritative date: ${result.dateTime} (original: ${result.dateTimeOriginal}, digitized: ${result.dateTimeDigitized}, modified: ${result.dateTimeModified})`);
   } catch (e) {
     console.warn('[ExifReader] Error parsing TIFF header:', e);
   }
@@ -108,11 +114,11 @@ function parseIfd(
     const tag = view.getUint16(entryOffset, littleEndian);
     const valueOffset = entryOffset + 8;
 
-    // DateTime (0x0132)
-    if (tag === 0x0132 && !result.dateTime) {
+    // DateTime (0x0132) - File modification timestamp
+    if (tag === 0x0132) {
       const strCount = view.getUint32(entryOffset + 4, littleEndian);
-      result.dateTime = readStringValue(view, tiffStart, valueOffset, strCount, littleEndian);
-      console.log(`[ExifReader] Found IFD0 DateTime: ${result.dateTime}`);
+      result.dateTimeModified = readStringValue(view, tiffStart, valueOffset, strCount, littleEndian);
+      console.log(`[ExifReader] Found IFD0 DateTime (modified): ${result.dateTimeModified}`);
     }
     // Exif Sub-IFD pointer (0x8769)
     else if (tag === 0x8769) {
@@ -156,11 +162,17 @@ function parseExifSubIfd(
     const tag = view.getUint16(entryOffset, littleEndian);
     const valueOffset = entryOffset + 8;
 
-    // DateTimeOriginal (0x9003) or DateTimeDigitized (0x9004)
-    if ((tag === 0x9003 || tag === 0x9004) && !result.dateTime) {
+    // DateTimeOriginal (0x9003) - True Camera Shutter Capture Time
+    if (tag === 0x9003) {
       const strCount = view.getUint32(entryOffset + 4, littleEndian);
-      result.dateTime = readStringValue(view, tiffStart, valueOffset, strCount, littleEndian);
-      console.log(`[ExifReader] Found DateTimeOriginal (0x${tag.toString(16)}): ${result.dateTime}`);
+      result.dateTimeOriginal = readStringValue(view, tiffStart, valueOffset, strCount, littleEndian);
+      console.log(`[ExifReader] Found DateTimeOriginal (0x9003): ${result.dateTimeOriginal}`);
+    }
+    // DateTimeDigitized (0x9004)
+    else if (tag === 0x9004) {
+      const strCount = view.getUint32(entryOffset + 4, littleEndian);
+      result.dateTimeDigitized = readStringValue(view, tiffStart, valueOffset, strCount, littleEndian);
+      console.log(`[ExifReader] Found DateTimeDigitized (0x9004): ${result.dateTimeDigitized}`);
     }
     // Nested GPS IFD pointer (0x8825)
     else if (tag === 0x8825) {

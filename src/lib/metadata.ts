@@ -230,6 +230,7 @@ function extractDateFromExif(exif: Record<string, any>): { year?: string; month?
  */
 export async function extractPhotoMetadata(options: {
   uri?: string;
+  fileName?: string;
   exif?: Record<string, any>;
   location?: { latitude: number; longitude: number };
   creationTime?: number;
@@ -237,7 +238,7 @@ export async function extractPhotoMetadata(options: {
   const { exif = {}, location, creationTime } = options;
   const result: PhotoExtractedMetadata = {};
 
-  console.log('[Metadata] Input - location:', location, 'creationTime:', creationTime);
+  console.log('[Metadata] Input - location:', location, 'creationTime:', creationTime, 'fileName:', options.fileName);
 
   // === Date ===
   let dateInfo: { year?: string; month?: number; hour?: number } = {};
@@ -250,6 +251,23 @@ export async function extractPhotoMetadata(options: {
   if (!dateInfo.year && exif) {
     dateInfo = extractDateFromExif(exif);
     console.log('[Metadata] Date from EXIF fallback:', dateInfo);
+  }
+
+  // === Fallback: Filename / URI Regex ===
+  if (!dateInfo.year) {
+    const targetString = `${options.fileName || ''} ${options.uri || ''}`;
+    const ymdMatch = targetString.match(/(?:19\d\d|20\d\d)[-_]?(?:0[1-9]|1[0-2])[-_]?(?:0[1-9]|[12]\d|3[01])/);
+    if (ymdMatch) {
+      const yr = ymdMatch[0].slice(0, 4);
+      dateInfo.year = yr;
+      console.log('[Metadata] Date from filename YYYYMMDD pattern:', yr);
+    } else {
+      const yearMatch = targetString.match(/\b(19[7-9]\d|20[0-2]\d)\b/);
+      if (yearMatch) {
+        dateInfo.year = yearMatch[1];
+        console.log('[Metadata] Date from filename 4-digit year pattern:', yearMatch[1]);
+      }
+    }
   }
 
   if (dateInfo.year) {

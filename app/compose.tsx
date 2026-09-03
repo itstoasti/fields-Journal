@@ -51,7 +51,7 @@ export default function ComposeScreen() {
   );
   const [place, setPlace] = useState<string>('');
   const [noteNumber, setNoteNumber] = useState<string>(getNextNoteNumber());
-  const [year, setYear] = useState<string>(new Date().getFullYear().toString());
+  const [year, setYear] = useState<string>('');
   const [keywordsText, setKeywordsText] = useState<string>('');
   const [isAdLoading, setIsAdLoading] = useState<boolean>(false);
   const [autoDetectedNotice, setAutoDetectedNotice] = useState<string | null>(null);
@@ -157,6 +157,7 @@ export default function ComposeScreen() {
 
   const applyExtractedMetadata = async (result: {
     uri?: string;
+    fileName?: string;
     exif?: Record<string, any>;
     location?: { latitude: number; longitude: number };
     creationTime?: number;
@@ -165,6 +166,7 @@ export default function ComposeScreen() {
     try {
       const meta = await extractPhotoMetadata({
         uri: result.uri,
+        fileName: result.fileName,
         exif: result.exif,
         location: result.location,
         creationTime: result.creationTime,
@@ -182,7 +184,11 @@ export default function ComposeScreen() {
 
       if (meta.place || meta.year) {
         setAutoDetectedNotice(
-          meta.place ? `Auto-detected: ${meta.place}` : `Auto-detected year: ${meta.year}`
+          meta.place && meta.year
+            ? `Auto-detected: ${meta.place} (${meta.year})`
+            : meta.place
+            ? `Auto-detected: ${meta.place}`
+            : `Auto-detected year: ${meta.year}`
         );
         setTimeout(() => setAutoDetectedNotice(null), 4000);
       }
@@ -224,7 +230,7 @@ export default function ComposeScreen() {
     ];
   };
 
-  const executeProceedToPressing = (entitlementType: 'free' | 'ad' | 'credit') => {
+  const executeProceedToPressing = (entitlementType: 'free' | 'ad' | 'credit', yearOverride?: string) => {
     if (!selectedPhotoUri) return;
     const [k1, k2, k3] = parseKeywords();
 
@@ -237,18 +243,13 @@ export default function ComposeScreen() {
         keyword1: k1,
         keyword2: k2,
         keyword3: k3,
-        year: year.trim() || new Date().getFullYear().toString(),
+        year: (yearOverride || year).trim() || new Date().getFullYear().toString(),
         entitlement: entitlementType,
       },
     });
   };
 
-  const handlePressAction = async () => {
-    if (!selectedPhotoUri) {
-      Alert.alert('Photo Required', 'Please select a photo from your library or camera first.');
-      return;
-    }
-
+  const proceedWithEntitlement = (confirmedYear: string) => {
     // Step 1: Check First-run Privacy Consent
     if (!hasConsentedPrivacy) {
       router.push('/modal/privacy-consent');
@@ -269,7 +270,7 @@ export default function ComposeScreen() {
       rewardedAdManager.showAd({
         onEarnedReward: () => {
           setIsAdLoading(false);
-          executeProceedToPressing('ad');
+          executeProceedToPressing('ad', confirmedYear);
         },
         onAdClosed: () => {
           setIsAdLoading(false);
@@ -287,7 +288,36 @@ export default function ComposeScreen() {
     }
 
     // Step 4: Notes 1-2 Free or Credit
-    executeProceedToPressing(entitlement);
+    executeProceedToPressing(entitlement, confirmedYear);
+  };
+
+  const handlePressAction = async () => {
+    if (!selectedPhotoUri) {
+      Alert.alert('Photo Required', 'Please select a photo from your library or camera first.');
+      return;
+    }
+
+    // Safeguard: If photo has no detected year, confirm with user before spending a credit
+    if (!year.trim()) {
+      const currentYearStr = new Date().getFullYear().toString();
+      Alert.alert(
+        'Confirm Year',
+        `No capture date was detected on this photo. Would you like to use ${currentYearStr} or enter the year it was taken?`,
+        [
+          { text: 'Enter Year', style: 'cancel', onPress: () => handleInputFocus('year') },
+          {
+            text: `Use ${currentYearStr}`,
+            onPress: () => {
+              setYear(currentYearStr);
+              proceedWithEntitlement(currentYearStr);
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    proceedWithEntitlement(year.trim());
   };
 
   const handleInputFocus = (target: 'place' | 'number' | 'year' | 'keywords') => {

@@ -1,6 +1,7 @@
 export interface PickResult {
   canceled: boolean;
   uri?: string;
+  fileName?: string;
   width?: number;
   height?: number;
   exif?: Record<string, any>;

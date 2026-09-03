@@ -5,6 +5,7 @@ import { parseJpegBinaryExif } from './exifReader';
 export interface PickResult {
   canceled: boolean;
   uri?: string;
+  fileName?: string;
   width?: number;
   height?: number;
   exif?: Record<string, any>;
@@ -197,6 +198,7 @@ export async function pickImageFromLibrary(): Promise<PickResult> {
     return {
       canceled: false,
       uri: asset.uri,
+      fileName: asset.fileName || undefined,
       width: asset.width,
       height: asset.height,
       exif,
