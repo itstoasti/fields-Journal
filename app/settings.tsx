@@ -166,23 +166,77 @@ export default function SettingsScreen() {
             AI GENERATION MODEL
           </TypewriterText>
           <TypewriterText size="xs" color={colors.inkMuted} style={{ marginTop: 4, marginBottom: spacing.md }}>
-            Select the xAI Grok model for rendering travel stamps:
+            Select the model used for rendering travel note posters and carved stamps:
+          </TypewriterText>
+
+          <TypewriterText size="xs" bold color={colors.brickRed} letterSpacing={1} style={{ marginBottom: spacing.xs }}>
+            GOOGLE GEMINI IMAGE MODELS
+          </TypewriterText>
+
+          {[
+            {
+              id: 'gemini-3.1-flash-image',
+              label: 'Gemini 3.1 Flash Image (Balanced)',
+              subtitle: 'Google · Fast, rich stamp detail (~3¢)',
+            },
+            {
+              id: 'gemini-3.1-flash-lite-image',
+              label: 'Gemini 3.1 Flash-Lite Image (Lowest Cost)',
+              subtitle: 'Google · Ultra economical stamp tier (~1.5¢)',
+            },
+            {
+              id: 'gemini-3-pro-image',
+              label: 'Gemini 3 Pro Image (Flagship Detail)',
+              subtitle: 'Google · High-precision stamp carving (~5-6¢)',
+            },
+          ].map((item) => {
+            const isSelected = selectedModel === item.id;
+            return (
+              <Pressable
+                key={item.id}
+                onPress={() => setSelectedModel(item.id)}
+                style={[
+                  styles.modelOption,
+                  isSelected && styles.modelOptionSelected,
+                ]}
+              >
+                <View style={styles.modelRadioOuter}>
+                  {isSelected && <View style={styles.modelRadioInner} />}
+                </View>
+                <View style={styles.modelTextContainer}>
+                  <TypewriterText
+                    size="sm"
+                    bold={isSelected}
+                    color={isSelected ? colors.brickRed : colors.charcoal}
+                  >
+                    {item.label}
+                  </TypewriterText>
+                  <TypewriterText size="xs" color={colors.inkMuted} style={{ marginTop: 2 }}>
+                    {item.subtitle}
+                  </TypewriterText>
+                </View>
+              </Pressable>
+            );
+          })}
+
+          <TypewriterText size="xs" bold color={colors.charcoal} letterSpacing={1} style={{ marginTop: spacing.md, marginBottom: spacing.xs }}>
+            xAI GROK IMAGINE MODELS
           </TypewriterText>
 
           {[
             {
               id: 'grok-imagine-image-2.0',
-              label: 'grok-imagine-image-2.0 (High Quality)',
+              label: 'Grok Imagine 2.0 (High Quality)',
               subtitle: 'xAI Grok · 2K standard quality (~5-6¢)',
             },
             {
               id: 'grok-imagine-image-2.0-low',
-              label: 'grok-imagine-image-2.0-low (2K Low Compute)',
+              label: 'Grok Imagine 2.0 (Low Compute)',
               subtitle: 'xAI Grok · Low compute tier (~2-3¢)',
             },
             {
               id: 'grok-imagine-image-quality',
-              label: 'grok-imagine-image-quality (Ultra HD)',
+              label: 'Grok Imagine (Ultra HD)',
               subtitle: 'xAI Grok · High detail & texture (~7-8¢)',
             },
           ].map((item) => {

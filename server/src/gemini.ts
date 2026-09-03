@@ -10,7 +10,7 @@ export async function generateGeminiImage(options: GrokGenerationOptions): Promi
     throw new Error('No GEMINI_API_KEY configured on server.');
   }
 
-  const model = options.model || 'gemini-2.5-flash-image';
+  const model = options.model || 'gemini-3.1-flash-image';
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
@@ -46,6 +46,9 @@ export async function generateGeminiImage(options: GrokGenerationOptions): Promi
         ],
         generationConfig: {
           responseModalities: ['IMAGE'],
+          imageConfig: {
+            aspectRatio: '4:3',
+          },
         },
       }),
       signal: controller.signal,
