@@ -178,9 +178,6 @@ export default function ComposeScreen() {
       }
       if (meta.keywords && meta.keywords.length > 0) {
         setKeywordsText(meta.keywords.join(' · '));
-      } else if (result.uri) {
-        // Automatically suggest 3 memory keywords with Gemini Flash Vision
-        handleAutoDetectKeywords(result.uri, meta.place);
       }
 
       if (meta.place || meta.year) {

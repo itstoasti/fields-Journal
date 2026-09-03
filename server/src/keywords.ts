@@ -18,7 +18,6 @@ const GEMINI_MODELS = [
   'gemini-flash-lite-latest',
   'gemini-3.5-flash-lite',
   'gemini-3.1-flash-lite',
-  'gemini-3.6-flash',
 ];
 
 export async function suggestMemoryKeywords(
