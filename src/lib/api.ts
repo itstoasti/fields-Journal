@@ -7,26 +7,14 @@ export function getApiBaseUrl(): string {
     return process.env.EXPO_PUBLIC_API_URL;
   }
 
-  // Check Expo Constants for dev server host IP (e.g. "192.168.1.168:8081")
-  const hostUri =
-    Constants.expoConfig?.hostUri ||
-    (Constants as any).manifest?.debuggerHost ||
-    (Constants as any).manifest2?.extra?.expoGo?.debuggerHost;
-
-  if (hostUri) {
-    const host = hostUri.split(':')[0];
-    if (host && host.length > 0) {
-      return `http://${host}:3001`;
-    }
-  }
-
-  // Fallback to local machine IP on LAN
-  if (Platform.OS === 'android' || Platform.OS === 'ios') {
-    return 'http://192.168.1.168:3001';
-  }
-
-  return 'http://127.0.0.1:3001';
+  // Active secure dev tunnel: directly reachable by physical devices over cellular, Wi-Fi, or Expo tunnel
+  return 'https://borough-nag-crestless.ngrok-free.dev';
 }
+
+const COMMON_HEADERS = {
+  'Accept': 'application/json',
+  'ngrok-skip-browser-warning': 'true',
+};
 
 export async function fetchUserEntitlements(
   installationId: string,
@@ -39,13 +27,13 @@ export async function fetchUserEntitlements(
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 3500); // 3.5s network timeout
+  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
   try {
     const response = await fetch(`${baseUrl}/v1/me?${query.toString()}`, {
       method: 'GET',
       headers: {
-        'Accept': 'application/json',
+        ...COMMON_HEADERS,
         'Authorization': `Bearer ${installationId}`,
       },
       signal: controller.signal,
@@ -73,14 +61,14 @@ export async function fetchUserEntitlements(
 export async function submitGenerateNote(request: GenerateNoteRequest): Promise<GenerateNoteResponse> {
   const baseUrl = getApiBaseUrl();
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 75000); // 75s client timeout
+  const timeoutId = setTimeout(() => controller.abort(), 90000); // 90s client timeout
 
   try {
     const response = await fetch(`${baseUrl}/v1/notes`, {
       method: 'POST',
       headers: {
+        ...COMMON_HEADERS,
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
         'Authorization': `Bearer ${request.installationId}`,
       },
       body: JSON.stringify(request),
@@ -116,14 +104,14 @@ export async function syncPurchasedCredits(
 ): Promise<UserEntitlementState> {
   const baseUrl = getApiBaseUrl();
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 5000);
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
 
   try {
     const response = await fetch(`${baseUrl}/v1/credits/sync`, {
       method: 'POST',
       headers: {
+        ...COMMON_HEADERS,
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
         'Authorization': `Bearer ${installationId}`,
       },
       body: JSON.stringify({
@@ -169,14 +157,14 @@ export async function suggestKeywordsFromImage(
 ): Promise<KeywordSuggestionResponse> {
   const baseUrl = getApiBaseUrl();
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s timeout
+  const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout
 
   try {
     const response = await fetch(`${baseUrl}/v1/keywords/suggest`, {
       method: 'POST',
       headers: {
+        ...COMMON_HEADERS,
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
       },
       body: JSON.stringify({
         imageBase64,
@@ -200,4 +188,3 @@ export async function suggestKeywordsFromImage(
     throw error;
   }
 }
-
