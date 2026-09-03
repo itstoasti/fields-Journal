@@ -13,8 +13,13 @@ export interface KeywordSuggestionResult {
   source: string;
 }
 
-const TIMEOUT_MS = 15000;
-const GEMINI_MODELS = ['gemini-3.6-flash', 'gemini-3.8-flash', 'gemini-flash-latest'];
+const TIMEOUT_MS = 8000;
+const GEMINI_MODELS = [
+  'gemini-flash-lite-latest',
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite',
+  'gemini-3.6-flash',
+];
 
 export async function suggestMemoryKeywords(
   options: KeywordSuggestionOptions
