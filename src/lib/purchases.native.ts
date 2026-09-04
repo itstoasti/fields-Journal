@@ -38,12 +38,49 @@ export function isExpoGoClient(): boolean {
   }
 }
 
+/**
+ * Checks if the native binary compiled on the physical device or simulator
+ * has the compatible RNPurchases native module and method signatures.
+ * 
+ * In react-native-purchases 10.x, 'overridePreferredLocale' was introduced to RNPurchases
+ * and RNPurchases.setupPurchases takes 14 arguments instead of 10.
+ * In existing dev-client builds (compiled before upgrading to 10.x), passing 14 arguments
+ * causes a fatal Java bridge crash: com.facebook.react.bridge.NativeArgumentsParseException.
+ * 
+ * In such environments, or in Expo Go, this returns false so the app falls back
+ * safely to simulation mode until a new native build is compiled.
+ */
+export function isRevenueCatNativeSupported(): boolean {
+  if (Platform.OS === 'web') return false;
+  if (isExpoGoClient()) return false;
+
+  const rnp = NativeModules?.RNPurchases;
+  if (!rnp) return false;
+
+  // Verify that the compiled native binary is compatible with react-native-purchases 10.x.
+  if (typeof rnp.overridePreferredLocale !== 'function') {
+    return false;
+  }
+
+  return true;
+}
+
+// Intercept outdated native setupPurchases to prevent fatal bridge crashes if invoked
+if (
+  NativeModules?.RNPurchases &&
+  typeof NativeModules.RNPurchases.overridePreferredLocale !== 'function'
+) {
+  try {
+    NativeModules.RNPurchases.setupPurchases = () => {};
+  } catch {}
+}
+
 // Safe dynamic imports for React Native Purchases & PurchasesUI
 let Purchases: any = null;
 let RevenueCatUI: any = null;
 let LOG_LEVEL: any = null;
 
-if (!isExpoGoClient() && Platform.OS !== 'web') {
+if (isRevenueCatNativeSupported()) {
   try {
     const rcModule = require('react-native-purchases');
     Purchases = rcModule.default || rcModule;
@@ -58,6 +95,10 @@ if (!isExpoGoClient() && Platform.OS !== 'web') {
   } catch (err) {
     console.warn('[Purchases Native] PurchasesUI module load error:', err);
   }
+} else {
+  console.log(
+    '[Purchases Native] Running in simulation mode (Expo Go or dev client with earlier native binary detected).'
+  );
 }
 
 export const REVENUECAT_API_KEY =
@@ -105,8 +146,8 @@ export async function initializePurchases(
 
   if (isPurchasesConfigured) return;
 
-  if (isExpoGoClient() || !Purchases) {
-    console.log('[Purchases] Expo Go / non-native client detected: RevenueCat simulation enabled');
+  if (!isRevenueCatNativeSupported() || !Purchases) {
+    console.log('[Purchases] Non-native environment or dev client with earlier native binary: RevenueCat simulation enabled');
     isPurchasesConfigured = true;
     return;
   }
@@ -169,7 +210,7 @@ export async function initializePurchases(
  * Retrieves the current customer info from RevenueCat
  */
 export async function getCustomerInfo(): Promise<any | null> {
-  if (isExpoGoClient() || !Purchases) return null;
+  if (!isRevenueCatNativeSupported() || !Purchases) return null;
   try {
     return await Purchases.getCustomerInfo();
   } catch (err) {
@@ -182,7 +223,7 @@ export async function getCustomerInfo(): Promise<any | null> {
  * Fetches all available offerings and subscription packages from RevenueCat
  */
 export async function getOfferings(): Promise<any | null> {
-  if (isExpoGoClient() || !Purchases) {
+  if (!isRevenueCatNativeSupported() || !Purchases) {
     console.log('[Purchases] Simulated offerings returned');
     return null;
   }
@@ -204,8 +245,8 @@ export async function purchasePackage(packageToBuy: any): Promise<{
   customerInfo?: any;
   error?: string;
 }> {
-  if (isExpoGoClient() || !Purchases) {
-    console.log('[Purchases] Simulated package purchase in Expo Go');
+  if (!isRevenueCatNativeSupported() || !Purchases) {
+    console.log('[Purchases] Simulated package purchase in development mode');
     if (onCustomerInfoCallback) {
       onCustomerInfoCallback(
         { entitlements: { active: { [ENTITLEMENT_PRO]: { isActive: true } } } },
@@ -244,8 +285,8 @@ export async function restorePurchases(): Promise<{
   customerInfo?: any;
   error?: string;
 }> {
-  if (isExpoGoClient() || !Purchases) {
-    console.log('[Purchases] Simulated restore purchases in Expo Go');
+  if (!isRevenueCatNativeSupported() || !Purchases) {
+    console.log('[Purchases] Simulated restore purchases');
     return { success: true, isPro: false };
   }
 
@@ -277,11 +318,16 @@ export async function presentRevenueCatPaywall(): Promise<{
   result: string;
   isPro: boolean;
 }> {
-  if (isExpoGoClient() || !RevenueCatUI || typeof RevenueCatUI.presentPaywall !== 'function') {
-    console.log('[Purchases] Presenting development simulated paywall in Expo Go');
+  if (
+    !isRevenueCatNativeSupported() ||
+    !RevenueCatUI ||
+    typeof RevenueCatUI.presentPaywall !== 'function' ||
+    !NativeModules?.RNPaywalls
+  ) {
+    console.log('[Purchases] Presenting development simulated paywall');
     return new Promise((resolve) => {
       Alert.alert(
-        'Fields Pro (Expo Go Mode)',
+        'Fields Pro (Dev Mode)',
         'In a production store build, this displays the native animated RevenueCat Paywall.\n\nWould you like to simulate activating Fields Pro for testing?',
         [
           {
@@ -335,7 +381,12 @@ export async function presentRevenueCatPaywallIfNeeded(): Promise<{
   result: string;
   isPro: boolean;
 }> {
-  if (isExpoGoClient() || !RevenueCatUI || typeof RevenueCatUI.presentPaywallIfNeeded !== 'function') {
+  if (
+    !isRevenueCatNativeSupported() ||
+    !RevenueCatUI ||
+    typeof RevenueCatUI.presentPaywallIfNeeded !== 'function' ||
+    !NativeModules?.RNPaywalls
+  ) {
     return presentRevenueCatPaywall();
   }
 
@@ -367,7 +418,12 @@ export async function presentRevenueCatPaywallIfNeeded(): Promise<{
  * Allows users to manage active subscriptions, view billing history, change tiers, or restore purchases.
  */
 export async function presentCustomerCenter(): Promise<void> {
-  if (isExpoGoClient() || !RevenueCatUI || typeof RevenueCatUI.presentCustomerCenter !== 'function') {
+  if (
+    !isRevenueCatNativeSupported() ||
+    !RevenueCatUI ||
+    typeof RevenueCatUI.presentCustomerCenter !== 'function' ||
+    !NativeModules?.RNCustomerCenter
+  ) {
     Alert.alert(
       'Manage Subscription',
       'In a production build, this opens the RevenueCat Customer Center.\n\nSubscribers can also manage or cancel their subscription directly in their Google Play Store or Apple App Store account settings.'
@@ -390,8 +446,8 @@ export async function presentCustomerCenter(): Promise<void> {
  * Backward compatibility: Buy 20 Note Credits consumable package
  */
 export async function buyNotes20Package(): Promise<{ success: boolean; error?: string }> {
-  if (isExpoGoClient() || !Purchases) {
-    console.log('[Purchases] Expo Go simulated 20 note credits purchase');
+  if (!isRevenueCatNativeSupported() || !Purchases) {
+    console.log('[Purchases] Simulated 20 note credits purchase');
     return { success: true };
   }
 

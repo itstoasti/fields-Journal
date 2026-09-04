@@ -11,6 +11,14 @@ export const PRODUCT_YEARLY = process.env.EXPO_PUBLIC_RC_PRODUCT_YEARLY || 'year
 export const PRODUCT_MONTHLY = process.env.EXPO_PUBLIC_RC_PRODUCT_MONTHLY || 'monthly';
 export const PRODUCT_NOTES_20 = process.env.EXPO_PUBLIC_RC_PRODUCT_NOTES_20 || 'notes_20';
 
+export function isExpoGoClient(): boolean {
+  return true;
+}
+
+export function isRevenueCatNativeSupported(): boolean {
+  return false;
+}
+
 let onCustomerInfoCallback: ((info: any, isPro: boolean) => void) | null = null;
 let mockIsPro = false;
 
