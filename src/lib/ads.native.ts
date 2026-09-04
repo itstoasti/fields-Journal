@@ -1,14 +1,47 @@
 import Constants, { ExecutionEnvironment } from 'expo-constants';
+import { NativeModules, Platform } from 'react-native';
 
-const isExpoGo =
-  Constants.executionEnvironment === ExecutionEnvironment.StoreClient ||
-  Constants.appOwnership === 'expo';
+export function isExpoGoClient(): boolean {
+  if (Platform.OS === 'web') return true;
+
+  try {
+    const execEnv = String(
+      (Constants as any)?.executionEnvironment ||
+      (Constants as any)?.default?.executionEnvironment ||
+      ''
+    );
+
+    if (
+      execEnv === 'storeClient' ||
+      (Constants as any)?.appOwnership === 'expo' ||
+      (Constants as any)?.default?.appOwnership === 'expo'
+    ) {
+      return true;
+    }
+
+    if (Boolean((globalThis as any)?.expo?.modules?.ExpoGo)) {
+      return true;
+    }
+
+    const hasAdsModule = Boolean(
+      NativeModules?.RNGoogleMobileAdsModule ||
+      NativeModules?.ReactNativeGoogleMobileAds
+    );
+    if (!hasAdsModule) {
+      return true;
+    }
+
+    return false;
+  } catch {
+    return true;
+  }
+}
 
 let RewardedAd: any = null;
 let RewardedAdEventType: any = null;
 let AdEventType: any = null;
 
-if (!isExpoGo) {
+if (!isExpoGoClient() && Platform.OS !== 'web') {
   try {
     const adsModule = require('react-native-google-mobile-ads');
     RewardedAd = adsModule.RewardedAd;
@@ -36,7 +69,7 @@ class RewardedAdController {
   private earnedReward: boolean = false;
 
   public async preloadAd(): Promise<void> {
-    if (isExpoGo || !RewardedAd) {
+    if (isExpoGoClient() || !RewardedAd) {
       console.log('[AdMob] Expo Go detected: Rewarded ads simulated');
       this.isAdLoaded = true;
       return;
@@ -85,7 +118,7 @@ class RewardedAdController {
   }
 
   public async showAd(callbacks: ShowAdCallbacks): Promise<void> {
-    if (isExpoGo || !RewardedAd) {
+    if (isExpoGoClient() || !RewardedAd) {
       console.log('[AdMob] Expo Go detected: Simulating rewarded ad view & reward');
       setTimeout(() => {
         callbacks.onEarnedReward();

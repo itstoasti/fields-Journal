@@ -1,16 +1,49 @@
 import Constants, { ExecutionEnvironment } from 'expo-constants';
-import { Alert, Platform } from 'react-native';
+import { Alert, Platform, NativeModules } from 'react-native';
 
-const isExpoGo =
-  Constants.executionEnvironment === ExecutionEnvironment.StoreClient ||
-  Constants.appOwnership === 'expo';
+/**
+ * Robust runtime detection of Expo Go / environments without native compiled modules.
+ * In Expo Go, native binaries (RNPurchases, RNPaywalls, etc.) are NOT linked into the APK/IPA.
+ */
+export function isExpoGoClient(): boolean {
+  if (Platform.OS === 'web') return true;
+
+  try {
+    const execEnv = String(
+      (Constants as any)?.executionEnvironment ||
+      (Constants as any)?.default?.executionEnvironment ||
+      ''
+    );
+
+    if (
+      execEnv === 'storeClient' ||
+      (Constants as any)?.appOwnership === 'expo' ||
+      (Constants as any)?.default?.appOwnership === 'expo'
+    ) {
+      return true;
+    }
+
+    if (Boolean((globalThis as any)?.expo?.modules?.ExpoGo)) {
+      return true;
+    }
+
+    // If RNPurchases native module is absent, we are in Expo Go or an unlinked mock environment
+    if (!NativeModules?.RNPurchases) {
+      return true;
+    }
+
+    return false;
+  } catch {
+    return true;
+  }
+}
 
 // Safe dynamic imports for React Native Purchases & PurchasesUI
 let Purchases: any = null;
 let RevenueCatUI: any = null;
 let LOG_LEVEL: any = null;
 
-if (!isExpoGo && Platform.OS !== 'web') {
+if (!isExpoGoClient() && Platform.OS !== 'web') {
   try {
     const rcModule = require('react-native-purchases');
     Purchases = rcModule.default || rcModule;
@@ -72,15 +105,17 @@ export async function initializePurchases(
 
   if (isPurchasesConfigured) return;
 
-  if (isExpoGo || !Purchases) {
-    console.log('[Purchases] Running in simulated mode (Expo Go / Mock Native)');
+  if (isExpoGoClient() || !Purchases) {
+    console.log('[Purchases] Expo Go / non-native client detected: RevenueCat simulation enabled');
     isPurchasesConfigured = true;
     return;
   }
 
   try {
     if (__DEV__ && LOG_LEVEL?.DEBUG) {
-      await Purchases.setLogLevel(LOG_LEVEL.DEBUG);
+      try {
+        await Purchases.setLogLevel(LOG_LEVEL.DEBUG);
+      } catch {}
     }
 
     await Purchases.configure({
@@ -89,28 +124,44 @@ export async function initializePurchases(
     });
 
     isPurchasesConfigured = true;
-    console.log(`[Purchases] RevenueCat configured for user=${appUserId} with API Key=${REVENUECAT_API_KEY.slice(0, 10)}...`);
+    console.log(`[Purchases] RevenueCat configured for user=${appUserId}`);
 
     // Register active customer info update listener
     if (!customerInfoListenerSubscribed) {
-      Purchases.addCustomerInfoUpdateListener((customerInfo: any) => {
-        const isPro = checkProEntitlement(customerInfo);
-        console.log('[Purchases] CustomerInfo updated. Active Pro entitlement:', isPro);
-        if (onCustomerInfoCallback) {
-          onCustomerInfoCallback(customerInfo, isPro);
-        }
-      });
-      customerInfoListenerSubscribed = true;
+      try {
+        Purchases.addCustomerInfoUpdateListener((customerInfo: any) => {
+          try {
+            const isPro = checkProEntitlement(customerInfo);
+            console.log('[Purchases] CustomerInfo updated. Active Pro entitlement:', isPro);
+            if (onCustomerInfoCallback) {
+              onCustomerInfoCallback(customerInfo, isPro);
+            }
+          } catch (listenerErr) {
+            console.warn('[Purchases] Listener callback warning:', listenerErr);
+          }
+        });
+        customerInfoListenerSubscribed = true;
+      } catch (subErr) {
+        console.warn('[Purchases] Could not attach listener:', subErr);
+      }
     }
 
-    // Initial check of customer info on boot
-    const info = await Purchases.getCustomerInfo();
-    const isPro = checkProEntitlement(info);
-    if (onCustomerInfoCallback) {
-      onCustomerInfoCallback(info, isPro);
+    // Safe initial check of customer info on boot
+    try {
+      const isConfigured = await Purchases.isConfigured?.();
+      if (isConfigured !== false) {
+        const info = await Purchases.getCustomerInfo();
+        const isPro = checkProEntitlement(info);
+        if (onCustomerInfoCallback && info) {
+          onCustomerInfoCallback(info, isPro);
+        }
+      }
+    } catch (infoErr) {
+      console.warn('[Purchases] Initial customer info check warning:', infoErr);
     }
   } catch (error) {
-    console.warn('[Purchases] RevenueCat initialization failed:', error);
+    console.warn('[Purchases] RevenueCat initialization failed, continuing in simulation mode:', error);
+    isPurchasesConfigured = true;
   }
 }
 
@@ -118,7 +169,7 @@ export async function initializePurchases(
  * Retrieves the current customer info from RevenueCat
  */
 export async function getCustomerInfo(): Promise<any | null> {
-  if (isExpoGo || !Purchases) return null;
+  if (isExpoGoClient() || !Purchases) return null;
   try {
     return await Purchases.getCustomerInfo();
   } catch (err) {
@@ -131,7 +182,7 @@ export async function getCustomerInfo(): Promise<any | null> {
  * Fetches all available offerings and subscription packages from RevenueCat
  */
 export async function getOfferings(): Promise<any | null> {
-  if (isExpoGo || !Purchases) {
+  if (isExpoGoClient() || !Purchases) {
     console.log('[Purchases] Simulated offerings returned');
     return null;
   }
@@ -153,8 +204,14 @@ export async function purchasePackage(packageToBuy: any): Promise<{
   customerInfo?: any;
   error?: string;
 }> {
-  if (isExpoGo || !Purchases) {
-    console.log('[Purchases] Simulated package purchase in development');
+  if (isExpoGoClient() || !Purchases) {
+    console.log('[Purchases] Simulated package purchase in Expo Go');
+    if (onCustomerInfoCallback) {
+      onCustomerInfoCallback(
+        { entitlements: { active: { [ENTITLEMENT_PRO]: { isActive: true } } } },
+        true
+      );
+    }
     return { success: true, isPro: true };
   }
 
@@ -187,8 +244,8 @@ export async function restorePurchases(): Promise<{
   customerInfo?: any;
   error?: string;
 }> {
-  if (isExpoGo || !Purchases) {
-    console.log('[Purchases] Simulated restore purchases');
+  if (isExpoGoClient() || !Purchases) {
+    console.log('[Purchases] Simulated restore purchases in Expo Go');
     return { success: true, isPro: false };
   }
 
@@ -220,9 +277,33 @@ export async function presentRevenueCatPaywall(): Promise<{
   result: string;
   isPro: boolean;
 }> {
-  if (!RevenueCatUI || typeof RevenueCatUI.presentPaywall !== 'function') {
-    console.log('[Purchases] RevenueCatUI not available in this environment');
-    return { result: 'UNAVAILABLE', isPro: false };
+  if (isExpoGoClient() || !RevenueCatUI || typeof RevenueCatUI.presentPaywall !== 'function') {
+    console.log('[Purchases] Presenting development simulated paywall in Expo Go');
+    return new Promise((resolve) => {
+      Alert.alert(
+        'Fields Pro (Expo Go Mode)',
+        'In a production store build, this displays the native animated RevenueCat Paywall.\n\nWould you like to simulate activating Fields Pro for testing?',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: () => resolve({ result: 'CANCELLED', isPro: false }),
+          },
+          {
+            text: 'Simulate Pro',
+            onPress: () => {
+              if (onCustomerInfoCallback) {
+                onCustomerInfoCallback(
+                  { entitlements: { active: { [ENTITLEMENT_PRO]: { isActive: true } } } },
+                  true
+                );
+              }
+              resolve({ result: 'PURCHASED', isPro: true });
+            },
+          },
+        ]
+      );
+    });
   }
 
   try {
@@ -254,8 +335,8 @@ export async function presentRevenueCatPaywallIfNeeded(): Promise<{
   result: string;
   isPro: boolean;
 }> {
-  if (!RevenueCatUI || typeof RevenueCatUI.presentPaywallIfNeeded !== 'function') {
-    return { result: 'UNAVAILABLE', isPro: false };
+  if (isExpoGoClient() || !RevenueCatUI || typeof RevenueCatUI.presentPaywallIfNeeded !== 'function') {
+    return presentRevenueCatPaywall();
   }
 
   try {
@@ -286,10 +367,10 @@ export async function presentRevenueCatPaywallIfNeeded(): Promise<{
  * Allows users to manage active subscriptions, view billing history, change tiers, or restore purchases.
  */
 export async function presentCustomerCenter(): Promise<void> {
-  if (!RevenueCatUI || typeof RevenueCatUI.presentCustomerCenter !== 'function') {
+  if (isExpoGoClient() || !RevenueCatUI || typeof RevenueCatUI.presentCustomerCenter !== 'function') {
     Alert.alert(
       'Manage Subscription',
-      'You can manage or cancel your active subscription in your Google Play Store or Apple App Store account settings.'
+      'In a production build, this opens the RevenueCat Customer Center.\n\nSubscribers can also manage or cancel their subscription directly in their Google Play Store or Apple App Store account settings.'
     );
     return;
   }
@@ -309,7 +390,8 @@ export async function presentCustomerCenter(): Promise<void> {
  * Backward compatibility: Buy 20 Note Credits consumable package
  */
 export async function buyNotes20Package(): Promise<{ success: boolean; error?: string }> {
-  if (isExpoGo || !Purchases) {
+  if (isExpoGoClient() || !Purchases) {
+    console.log('[Purchases] Expo Go simulated 20 note credits purchase');
     return { success: true };
   }
 
