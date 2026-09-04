@@ -1,1 +1,1 @@
-export * from './ads.web';
+export * from './ads.native';
