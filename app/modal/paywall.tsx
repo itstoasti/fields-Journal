@@ -11,7 +11,11 @@ import { useRouter } from 'expo-router';
 import { PaperContainer, TypewriterText, StampButton } from '../../src/components';
 import { colors, fonts, fontSizes, layout, spacing } from '../../src/theme';
 import { useAppStore } from '../../src/store/useAppStore';
-import { buyNotes20Package } from '../../src/lib/purchases';
+import {
+  buyNotes20Package,
+  presentRevenueCatPaywall,
+  restorePurchases,
+} from '../../src/lib/purchases';
 import { syncPurchasedCredits, getApiBaseUrl } from '../../src/lib/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -19,11 +23,29 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 export default function PaywallModal() {
   const router = useRouter();
   const installationId = useAppStore((state) => state.installationId);
+  const entitlements = useAppStore((state) => state.entitlements);
   const updateEntitlements = useAppStore((state) => state.updateEntitlements);
 
   const [isPurchasing, setIsPurchasing] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
 
-  const handlePurchase = async () => {
+  // Present Native RevenueCat UI Paywall
+  const handleOpenProPaywall = async () => {
+    try {
+      const { result, isPro } = await presentRevenueCatPaywall();
+      if (isPro) {
+        updateEntitlements({ isPro: true, entitlement: 'pro' });
+        Alert.alert('Welcome to Pro', 'Thank you for subscribing to Fields Pro! You now have unlimited travel notes.', [
+          { text: 'Start Creating', onPress: () => router.back() },
+        ]);
+      }
+    } catch (err: any) {
+      console.warn('[Paywall] Pro paywall presentation error:', err);
+    }
+  };
+
+  // Consumable 20 Notes Pack
+  const handlePurchase20 = async () => {
     setIsPurchasing(true);
     try {
       const result = await buyNotes20Package();
@@ -45,6 +67,27 @@ export default function PaywallModal() {
     }
   };
 
+  const handleRestore = async () => {
+    setIsRestoring(true);
+    try {
+      const result = await restorePurchases();
+      if (result.isPro) {
+        updateEntitlements({ isPro: true, entitlement: 'pro' });
+        Alert.alert('Purchases Restored', 'Your Fields Pro subscription has been verified and restored.', [
+          { text: 'OK', onPress: () => router.back() },
+        ]);
+      } else if (result.success) {
+        Alert.alert('Purchases Restored', 'Purchases checked. No active Pro subscription found.');
+      } else {
+        Alert.alert('Restore Purchases', result.error || 'Could not restore purchases.');
+      }
+    } catch (e: any) {
+      Alert.alert('Restore Purchases', e.message || 'Restore failed.');
+    } finally {
+      setIsRestoring(false);
+    }
+  };
+
   const handleDismiss = () => {
     router.back();
   };
@@ -59,40 +102,56 @@ export default function PaywallModal() {
 
         <View style={styles.header}>
           <TypewriterText size="xl" bold color={colors.charcoal} letterSpacing={2}>
-            Get more notes
+            EXPAND YOUR JOURNAL
           </TypewriterText>
           <TypewriterText size="sm" color={colors.inkSecondary} style={styles.subtitle}>
-            20 field notes. No ads.
+            Subscribe for unlimited notes or buy credits as you go
           </TypewriterText>
         </View>
 
         <View style={styles.detailsBox}>
           <TypewriterText size="xs" color={colors.inkSecondary} style={styles.bulletPoint}>
-            • 20 high-fidelity rubber stamp generations
+            • Unlimited rubber stamp generations with Fields Pro
           </TypewriterText>
           <TypewriterText size="xs" color={colors.inkSecondary} style={styles.bulletPoint}>
-            • No advertisements, ever
+            • Flexible Monthly, Yearly, or Lifetime options
           </TypewriterText>
           <TypewriterText size="xs" color={colors.inkSecondary} style={styles.bulletPoint}>
-            • Credits never expire
+            • Zero ads, high-resolution vintage exports
           </TypewriterText>
         </View>
 
         <View style={styles.buttonsContainer}>
           <StampButton
-            title="Buy 20 notes — $2.99"
-            onPress={handlePurchase}
+            title="UPGRADE TO FIELDS PRO"
+            onPress={handleOpenProPaywall}
             variant="primary"
+            style={styles.proButton}
+          />
+
+          <StampButton
+            title="Buy 20 Notes Pack — $2.99"
+            onPress={handlePurchase20}
+            variant="secondary"
             loading={isPurchasing}
             style={styles.buyButton}
           />
 
-          <StampButton
-            title="Not now"
-            onPress={handleDismiss}
-            variant="ghost"
-            style={styles.cancelButton}
-          />
+          <View style={styles.restoreRow}>
+            <Pressable onPress={handleRestore} disabled={isRestoring} hitSlop={8}>
+              <TypewriterText size="xs" color={colors.inkSecondary} style={styles.restoreText}>
+                {isRestoring ? 'Restoring...' : 'Restore Purchases'}
+              </TypewriterText>
+            </Pressable>
+            <TypewriterText size="xs" color={colors.inkMuted}>
+              ·
+            </TypewriterText>
+            <Pressable onPress={handleDismiss} hitSlop={8}>
+              <TypewriterText size="xs" color={colors.inkMuted}>
+                Not now
+              </TypewriterText>
+            </Pressable>
+          </View>
         </View>
 
         {/* Store Compliant Legal Links */}
@@ -150,11 +209,12 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   subtitle: {
     marginTop: spacing.xs,
-    letterSpacing: 1,
+    letterSpacing: 0.5,
+    textAlign: 'center',
   },
   detailsBox: {
     backgroundColor: colors.paper,
@@ -162,20 +222,30 @@ const styles = StyleSheet.create({
     borderColor: colors.paperBorder,
     borderRadius: layout.borderRadius,
     padding: spacing.md,
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
   },
   bulletPoint: {
     marginBottom: spacing.xs,
     lineHeight: 18,
   },
   buttonsContainer: {
-    gap: spacing.xs,
+    gap: spacing.sm,
   },
-  buyButton: {
+  proButton: {
     minHeight: 52,
   },
-  cancelButton: {
-    minHeight: 44,
+  buyButton: {
+    minHeight: 46,
+  },
+  restoreRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  restoreText: {
+    textDecorationLine: 'underline',
   },
   legalFooter: {
     flexDirection: 'row',

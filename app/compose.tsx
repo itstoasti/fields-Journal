@@ -230,7 +230,7 @@ export default function ComposeScreen() {
     ];
   };
 
-  const executeProceedToPressing = (entitlementType: 'free' | 'ad' | 'credit', yearOverride?: string) => {
+  const executeProceedToPressing = (entitlementType: 'free' | 'ad' | 'credit' | 'pro', yearOverride?: string) => {
     if (!selectedPhotoUri) return;
     const [k1, k2, k3] = parseKeywords();
 
@@ -258,13 +258,19 @@ export default function ComposeScreen() {
 
     const entitlement = getEntitlementType();
 
-    // Step 2: Handle Paywall
+    // Step 2: Handle Pro subscribers (unlimited access, bypass ads and paywalls)
+    if (entitlement === 'pro') {
+      executeProceedToPressing('pro', confirmedYear);
+      return;
+    }
+
+    // Step 3: Handle Paywall
     if (entitlement === 'paywall') {
       router.push('/modal/paywall');
       return;
     }
 
-    // Step 3: Handle Note 3 Rewarded Video Ad Gate
+    // Step 4: Handle Note 3 Rewarded Video Ad Gate
     if (entitlement === 'ad') {
       setIsAdLoading(true);
       rewardedAdManager.showAd({
@@ -287,7 +293,7 @@ export default function ComposeScreen() {
       return;
     }
 
-    // Step 4: Notes 1-2 Free or Credit
+    // Step 5: Notes 1-2 Free or Credit
     executeProceedToPressing(entitlement, confirmedYear);
   };
 
@@ -334,6 +340,7 @@ export default function ComposeScreen() {
 
   const getButtonTitle = () => {
     const ent = getEntitlementType();
+    if (ent === 'pro') return 'MAKE NOTE (PRO)';
     if (ent === 'free') return 'MAKE NOTE (FREE)';
     if (ent === 'ad') return 'WATCH AD TO MAKE NOTE';
     if (ent === 'credit') return 'MAKE NOTE (1 CREDIT)';

@@ -133,13 +133,31 @@ export const useAppStore = create<AppState>((set, get) => ({
         entitlements: initialEntitlements,
       });
 
-      // Initialize purchases
-      await initializePurchases(installationId);
+      // Initialize purchases with customer info listener
+      await initializePurchases(installationId, (_customerInfo, isPro) => {
+        console.log('[Store] RevenueCat listener update -> isPro:', isPro);
+        const current = get().entitlements;
+        const updated: UserEntitlementState = {
+          ...current,
+          isPro,
+          entitlement: isPro ? 'pro' : (current.entitlement === 'pro' ? 'paywall' : current.entitlement),
+        };
+        set({ entitlements: updated });
+        setStorageItem(ENTITLEMENTS_KEY, JSON.stringify(updated));
+      });
 
       // Fetch authoritative server entitlements with persistent deviceId
       try {
         const serverEntitlements = await fetchUserEntitlements(installationId, deviceId);
         console.log('[Store] Received live server entitlements:', serverEntitlements);
+        
+        // Preserve active RevenueCat Pro state if already verified
+        const currentIsPro = Boolean(get().entitlements.isPro);
+        if (currentIsPro) {
+          serverEntitlements.isPro = true;
+          serverEntitlements.entitlement = 'pro';
+        }
+
         set({
           isInitialized: true,
           entitlements: serverEntitlements,
@@ -193,7 +211,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     
     // Recompute entitlement status
     let type: EntitlementType = 'paywall';
-    if (merged.freeUsed < 2) {
+    if (merged.isPro) {
+      type = 'pro';
+    } else if (merged.freeUsed < 2) {
       type = 'free';
     } else if (merged.freeUsed >= 2 && !merged.adUsed) {
       type = 'ad';
@@ -221,6 +241,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       console.log(`[Store] syncWithBackend for install=${id}, dev=${devId}`);
       const serverEntitlements = await fetchUserEntitlements(id, devId);
       console.log('[Store] syncWithBackend response:', serverEntitlements);
+
+      // Preserve active RevenueCat Pro state if already verified
+      const currentIsPro = Boolean(get().entitlements.isPro);
+      if (currentIsPro) {
+        serverEntitlements.isPro = true;
+        serverEntitlements.entitlement = 'pro';
+      }
+
       set({ entitlements: serverEntitlements });
       await setStorageItem(ENTITLEMENTS_KEY, JSON.stringify(serverEntitlements));
       if (serverEntitlements.entitlement === 'ad') {
@@ -238,6 +266,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   getEntitlementType: () => {
-    return get().entitlements.entitlement;
+    const entitlements = get().entitlements;
+    if (entitlements.isPro) return 'pro';
+    return entitlements.entitlement;
   },
 }));

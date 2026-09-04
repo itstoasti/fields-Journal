@@ -13,7 +13,7 @@ export interface UserRecord {
   updated_at: string;
 }
 
-export type EntitlementStatus = 'free' | 'ad' | 'credit' | 'paywall';
+export type EntitlementStatus = 'free' | 'ad' | 'credit' | 'paywall' | 'pro';
 
 // 1. Resolve connection config (Turso cloud or local SQLite file)
 const isTurso = Boolean(process.env.TURSO_DATABASE_URL);
@@ -195,9 +195,14 @@ export function determineEntitlement(user: UserRecord): EntitlementStatus {
 
 export async function consumeUserEntitlement(
   installationId: string,
-  entitlement: 'free' | 'ad' | 'credit',
+  entitlement: 'free' | 'ad' | 'credit' | 'pro',
   deviceId?: string
 ): Promise<boolean> {
+  if (entitlement === 'pro') {
+    // Pro subscribers have active subscription; no quota or credits deducted
+    return true;
+  }
+
   const user = await getOrCreateUser(installationId, undefined, deviceId);
   const now = new Date().toISOString();
   const targetId = user.installation_id;

@@ -12,7 +12,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { PaperContainer, TypewriterText, StampButton } from '../src/components';
 import { colors, fontSizes, layout, spacing } from '../src/theme';
 import { useAppStore } from '../src/store/useAppStore';
-import { restorePurchases } from '../src/lib/purchases';
+import {
+  restorePurchases,
+  presentRevenueCatPaywall,
+  presentCustomerCenter,
+} from '../src/lib/purchases';
 import { getApiBaseUrl } from '../src/lib/api';
 
 export default function SettingsScreen() {
@@ -49,16 +53,41 @@ export default function SettingsScreen() {
     }
   };
 
+  const handleOpenSubscriptionPaywall = async () => {
+    try {
+      const { isPro } = await presentRevenueCatPaywall();
+      if (isPro) {
+        useAppStore.getState().updateEntitlements({ isPro: true, entitlement: 'pro' });
+        Alert.alert('Fields Pro', 'You are now subscribed to Fields Pro! Enjoy unlimited travel notes.');
+      }
+    } catch (e: any) {
+      console.warn('[Settings] Pro paywall error:', e);
+    }
+  };
+
+  const handleOpenCustomerCenter = async () => {
+    await presentCustomerCenter();
+  };
+
   const handleRestorePurchases = async () => {
     setIsRestoring(true);
-    const result = await restorePurchases();
-    await syncWithBackend();
-    setIsRestoring(false);
-
-    if (result.success) {
-      Alert.alert('Purchases Restored', 'Your purchases have been verified and restored.');
-    } else {
-      Alert.alert('Restore Purchases', result.error || 'No previous purchases found.');
+    try {
+      const result = await restorePurchases();
+      if (result.isPro) {
+        useAppStore.getState().updateEntitlements({ isPro: true, entitlement: 'pro' });
+      }
+      await syncWithBackend();
+      if (result.isPro) {
+        Alert.alert('Purchases Restored', 'Your Fields Pro subscription has been verified and restored.');
+      } else if (result.success) {
+        Alert.alert('Purchases Restored', 'Purchases checked. Restored any active entitlements.');
+      } else {
+        Alert.alert('Restore Purchases', result.error || 'No previous purchases found.');
+      }
+    } catch (err: any) {
+      Alert.alert('Restore Purchases', err.message || 'Error restoring purchases.');
+    } finally {
+      setIsRestoring(false);
     }
   };
 
@@ -128,6 +157,61 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Membership & Subscription Card */}
+        <View style={styles.card}>
+          <View style={styles.membershipHeader}>
+            <TypewriterText size="xs" bold color={colors.inkSecondary} letterSpacing={1.5}>
+              MEMBERSHIP & SUBSCRIPTION
+            </TypewriterText>
+            <View
+              style={[
+                styles.statusBadge,
+                entitlements.isPro ? styles.statusBadgePro : styles.statusBadgeFree,
+              ]}
+            >
+              <TypewriterText
+                size="xs"
+                bold
+                color={entitlements.isPro ? colors.brickRed : colors.inkMuted}
+              >
+                {entitlements.isPro ? 'PRO ACTIVE' : 'FREE TIER'}
+              </TypewriterText>
+            </View>
+          </View>
+
+          <TypewriterText size="sm" bold color={colors.charcoal} style={{ marginTop: spacing.xs }}>
+            {entitlements.isPro
+              ? 'Fields Pro: Unlimited Journal Notes'
+              : 'Upgrade to Fields Pro for Unlimited Notes'}
+          </TypewriterText>
+
+          <TypewriterText
+            size="xs"
+            color={colors.inkSecondary}
+            style={{ marginTop: 4, marginBottom: spacing.md }}
+          >
+            {entitlements.isPro
+              ? 'Includes unlimited AI stamp carving, ad-free experience, and high-res exports.'
+              : 'Choose Monthly, Yearly, or Lifetime options with flexible cancellation.'}
+          </TypewriterText>
+
+          {entitlements.isPro ? (
+            <StampButton
+              title="Manage Subscription"
+              onPress={handleOpenCustomerCenter}
+              variant="secondary"
+              style={styles.manageSubBtn}
+            />
+          ) : (
+            <StampButton
+              title="Upgrade to Fields Pro"
+              onPress={handleOpenSubscriptionPaywall}
+              variant="primary"
+              style={styles.upgradeBtn}
+            />
+          )}
+        </View>
+
         {/* Entitlements / Credits Card */}
         <View style={styles.card}>
           <TypewriterText size="xs" bold color={colors.inkSecondary} letterSpacing={1.5}>
@@ -404,6 +488,34 @@ const styles = StyleSheet.create({
     borderColor: colors.paperBorder,
     padding: spacing.lg,
     marginBottom: spacing.md,
+  },
+  membershipHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.xs,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  statusBadgePro: {
+    backgroundColor: '#F7EBE8',
+    borderColor: colors.brickRed,
+  },
+  statusBadgeFree: {
+    backgroundColor: colors.paper,
+    borderColor: colors.paperBorder,
+  },
+  upgradeBtn: {
+    marginTop: spacing.xs,
+    minHeight: 44,
+  },
+  manageSubBtn: {
+    marginTop: spacing.xs,
+    minHeight: 40,
   },
   balanceRow: {
     flexDirection: 'row',

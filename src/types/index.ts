@@ -1,10 +1,11 @@
-export type EntitlementType = 'free' | 'ad' | 'credit' | 'paywall';
+export type EntitlementType = 'free' | 'ad' | 'credit' | 'paywall' | 'pro';
 
 export interface UserEntitlementState {
   freeUsed: number;       // 0, 1, 2
   adUsed: boolean;        // true if note 3 rewarded ad was completed and used
   credits: number;        // purchased balance from notes_20
   entitlement: EntitlementType;
+  isPro?: boolean;        // true if user has active fields_travel_journal_scrapebook_pro subscription/entitlement
 }
 
 export interface Note {
@@ -34,7 +35,7 @@ export interface GenerateNoteRequest {
   number: string;
   keywords: string[];
   year: string;
-  entitlement: 'free' | 'ad' | 'credit';
+  entitlement: 'free' | 'ad' | 'credit' | 'pro';
   installationId: string;
   deviceId?: string;
   rcUserId?: string;

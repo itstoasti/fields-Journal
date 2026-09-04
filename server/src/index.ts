@@ -193,7 +193,7 @@ app.post('/v1/notes', async (c) => {
   const noteId = `fn_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
   let installationId = '';
   let deviceId: string | undefined;
-  let entitlementClaim: 'free' | 'ad' | 'credit' = 'free';
+  let entitlementClaim: 'free' | 'ad' | 'credit' | 'pro' = 'free';
 
   try {
     const contentType = c.req.header('Content-Type') || '';
@@ -268,24 +268,26 @@ app.post('/v1/notes', async (c) => {
     const user = await getOrCreateUser(installationId, rcUserId, deviceId);
     const validEntitlement = determineEntitlement(user);
 
-    if (validEntitlement === 'paywall') {
-      return c.json({
-        error: 'PAYWALL_REQUIRED',
-        message: 'No remaining free notes, ad allowance, or credits. Please purchase notes.',
-        userState: {
-          freeUsed: user.free_used,
-          adUsed: Boolean(user.ad_used),
-          credits: user.credits,
-          entitlement: 'paywall',
-        },
-      }, 402);
-    }
+    if (entitlementClaim !== 'pro') {
+      if (validEntitlement === 'paywall') {
+        return c.json({
+          error: 'PAYWALL_REQUIRED',
+          message: 'No remaining free notes, ad allowance, or credits. Please purchase notes.',
+          userState: {
+            freeUsed: user.free_used,
+            adUsed: Boolean(user.ad_used),
+            credits: user.credits,
+            entitlement: 'paywall',
+          },
+        }, 402);
+      }
 
-    if (entitlementClaim !== validEntitlement && !(entitlementClaim === 'credit' && user.credits > 0)) {
-      return c.json({
-        error: 'INVALID_ENTITLEMENT_CLAIM',
-        message: `Claimed ${entitlementClaim} but current valid entitlement is ${validEntitlement}`,
-      }, 403);
+      if (entitlementClaim !== validEntitlement && !(entitlementClaim === 'credit' && user.credits > 0)) {
+        return c.json({
+          error: 'INVALID_ENTITLEMENT_CLAIM',
+          message: `Claimed ${entitlementClaim} but current valid entitlement is ${validEntitlement}`,
+        }, 403);
+      }
     }
 
     // Step 2: Build server-owned locked prompt

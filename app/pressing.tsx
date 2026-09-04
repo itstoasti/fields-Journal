@@ -28,7 +28,7 @@ export default function PressingScreen() {
     keyword2: string;
     keyword3: string;
     year: string;
-    entitlement: 'free' | 'ad' | 'credit';
+    entitlement: 'free' | 'ad' | 'credit' | 'pro';
   }>();
 
   const installationId = useAppStore((state) => state.installationId);
