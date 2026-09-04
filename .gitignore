@@ -29,6 +29,12 @@ server/*.db
 server/*.db-journal
 server/*.db-wal
 server/*.db-shm
+data/*.db-shm
+data/*.db-wal
+
+# Ensure static web assets are tracked
+!server/public/
+!server/public/**
 
 # macOS
 .DS_Store

@@ -2,12 +2,20 @@
   "version": 2,
   "rewrites": [
     {
+      "source": "/",
+      "destination": "/public/index.html"
+    },
+    {
       "source": "/privacy",
       "destination": "/public/privacy.html"
     },
     {
       "source": "/terms",
       "destination": "/public/terms.html"
+    },
+    {
+      "source": "/assets/(.*)",
+      "destination": "/public/assets/$1"
     },
     {
       "source": "/(.*)",

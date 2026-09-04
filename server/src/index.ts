@@ -31,83 +31,49 @@ app.use('*', cors({
   allowMethods: ['GET', 'POST', 'OPTIONS'],
 }));
 
-// Root HTML dashboard
+// Helper to resolve public files whether server is run from repo root or server/ dir
+function findPublicFile(...subpaths: string[]): string | null {
+  const candidates = [
+    path.resolve(process.cwd(), 'server', 'public', ...subpaths),
+    path.resolve(process.cwd(), 'public', ...subpaths),
+    path.resolve(process.cwd(), '..', 'public', ...subpaths),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return null;
+}
+
+// Public Landing Page
 app.get('/', (c) => {
-  return c.html(`
-    <!DOCTYPE html>
-    <html lang="en">
-      <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>FIELDS API Server</title>
-        <style>
-          body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #F4EFE6;
-            color: #1C1917;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-            padding: 20px;
-            box-sizing: border-box;
-          }
-          .card {
-            background: #FFFFFF;
-            border: 1.5px solid #1C1917;
-            border-radius: 8px;
-            padding: 32px;
-            max-width: 480px;
-            width: 100%;
-            text-align: center;
-            box-shadow: 0 4px 12px rgba(28, 25, 23, 0.08);
-          }
-          h1 {
-            font-family: monospace;
-            font-size: 24px;
-            letter-spacing: 2px;
-            margin: 0 0 12px 0;
-          }
-          p {
-            color: #57534E;
-            font-size: 14px;
-            line-height: 1.5;
-            margin: 0 0 24px 0;
-          }
-          .download-btn {
-            display: inline-block;
-            background: #1C1917;
-            color: #F4EFE6;
-            padding: 14px 24px;
-            border-radius: 6px;
-            text-decoration: none;
-            font-family: monospace;
-            font-weight: bold;
-            font-size: 14px;
-            letter-spacing: 1px;
-            transition: opacity 0.2s ease;
-          }
-          .download-btn:hover {
-            opacity: 0.9;
-          }
-          .meta {
-            margin-top: 24px;
-            font-size: 12px;
-            color: #A39B8E;
-            font-family: monospace;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="card">
-          <h1>FIELDS</h1>
-          <p>Travel Journal & Rubber Stamp Backend Server</p>
-          <div class="meta">v1.0.0 · Active & Running</div>
-        </div>
-      </body>
-    </html>
-  `);
+  const filePath = findPublicFile('index.html');
+  if (filePath) {
+    return c.html(fs.readFileSync(filePath, 'utf-8'));
+  }
+  return c.text('FIELDS Website', 200);
+});
+
+// Static Assets (/assets/:filename)
+app.get('/assets/:filename', (c) => {
+  const filename = c.req.param('filename');
+  const filePath = findPublicFile('assets', filename);
+  if (filePath) {
+    const ext = path.extname(filename).toLowerCase();
+    const mimeMap: Record<string, string> = {
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.svg': 'image/svg+xml',
+      '.webp': 'image/webp',
+    };
+    const contentType = mimeMap[ext] || 'application/octet-stream';
+    const fileBuf = fs.readFileSync(filePath);
+    return c.body(fileBuf, 200, {
+      'Content-Type': contentType,
+      'Cache-Control': 'public, max-age=86400',
+    });
+  }
+  return c.text('Asset not found', 404);
 });
 
 // Health check
@@ -121,16 +87,16 @@ app.get('/health', (c) => {
 
 // Public Privacy Policy & Terms of Service for Store Compliance
 app.get('/privacy', (c) => {
-  const filePath = path.resolve(process.cwd(), 'public', 'privacy.html');
-  if (fs.existsSync(filePath)) {
+  const filePath = findPublicFile('privacy.html');
+  if (filePath) {
     return c.html(fs.readFileSync(filePath, 'utf-8'));
   }
   return c.text('Privacy Policy not found', 404);
 });
 
 app.get('/terms', (c) => {
-  const filePath = path.resolve(process.cwd(), 'public', 'terms.html');
-  if (fs.existsSync(filePath)) {
+  const filePath = findPublicFile('terms.html');
+  if (filePath) {
     return c.html(fs.readFileSync(filePath, 'utf-8'));
   }
   return c.text('Terms of Service not found', 404);
