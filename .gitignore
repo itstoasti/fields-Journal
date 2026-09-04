@@ -35,6 +35,8 @@ data/*.db-wal
 # Ensure static web assets are tracked
 !server/public/
 !server/public/**
+!public/
+!public/**
 
 # macOS
 .DS_Store
