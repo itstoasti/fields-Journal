@@ -54,25 +54,24 @@ export function isRevenueCatNativeSupported(): boolean {
   if (Platform.OS === 'web') return false;
   if (isExpoGoClient()) return false;
 
+  // In development mode (expo-dev-client running with Metro), the installed APK binary on the device
+  // was compiled with RevenueCat 9.x and does not match the 10.x JS signatures.
+  // Running in simulation mode in __DEV__ completely avoids the fatal NativeArgumentsParseException crash,
+  // allowing immediate testing of camera, Gemini/Grok models, and note pressing without requiring an APK rebuild.
+  const forceNative = process.env.EXPO_PUBLIC_FORCE_NATIVE_RC === 'true';
+  if (__DEV__ && !forceNative) {
+    return false;
+  }
+
   const rnp = NativeModules?.RNPurchases;
   if (!rnp) return false;
 
-  // Verify that the compiled native binary is compatible with react-native-purchases 10.x.
+  // In production builds, verify the compiled native module has 10.x signatures
   if (typeof rnp.overridePreferredLocale !== 'function') {
     return false;
   }
 
   return true;
-}
-
-// Intercept outdated native setupPurchases to prevent fatal bridge crashes if invoked
-if (
-  NativeModules?.RNPurchases &&
-  typeof NativeModules.RNPurchases.overridePreferredLocale !== 'function'
-) {
-  try {
-    NativeModules.RNPurchases.setupPurchases = () => {};
-  } catch {}
 }
 
 // Safe dynamic imports for React Native Purchases & PurchasesUI
