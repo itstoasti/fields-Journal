@@ -119,8 +119,26 @@ app.get('/health', (c) => {
   });
 });
 
+// Public Privacy Policy & Terms of Service for Store Compliance
+app.get('/privacy', (c) => {
+  const filePath = path.resolve(process.cwd(), 'public', 'privacy.html');
+  if (fs.existsSync(filePath)) {
+    return c.html(fs.readFileSync(filePath, 'utf-8'));
+  }
+  return c.text('Privacy Policy not found', 404);
+});
+
+app.get('/terms', (c) => {
+  const filePath = path.resolve(process.cwd(), 'public', 'terms.html');
+  if (fs.existsSync(filePath)) {
+    return c.html(fs.readFileSync(filePath, 'utf-8'));
+  }
+  return c.text('Terms of Service not found', 404);
+});
+
 // User profile & entitlements
-app.get('/v1/me', (c) => {
+// User profile & entitlements
+app.get('/v1/me', async (c) => {
   const authHeader = c.req.header('Authorization');
   const token = authHeader?.replace('Bearer ', '').trim();
   const queryId = c.req.query('installationId');
@@ -131,7 +149,7 @@ app.get('/v1/me', (c) => {
     return c.json({ error: 'MISSING_INSTALLATION_ID', message: 'installationId is required' }, 400);
   }
 
-  const user = getOrCreateUser(installationId, undefined, deviceId);
+  const user = await getOrCreateUser(installationId, undefined, deviceId);
   const entitlement = determineEntitlement(user);
 
   return c.json({
@@ -155,7 +173,7 @@ app.post('/v1/credits/sync', async (c) => {
       return c.json({ error: 'MISSING_INSTALLATION_ID', message: 'installationId is required' }, 400);
     }
 
-    const updatedUser = addCreditsToUser(installationId, Number(creditsToAdd) || 20, rcUserId, deviceId);
+    const updatedUser = await addCreditsToUser(installationId, Number(creditsToAdd) || 20, rcUserId, deviceId);
     const entitlement = determineEntitlement(updatedUser);
 
     return c.json({
@@ -247,7 +265,7 @@ app.post('/v1/notes', async (c) => {
     }
 
     // Step 1: Verify Entitlement in Database with Persistent Anti-Abuse deviceId
-    const user = getOrCreateUser(installationId, rcUserId, deviceId);
+    const user = await getOrCreateUser(installationId, rcUserId, deviceId);
     const validEntitlement = determineEntitlement(user);
 
     if (validEntitlement === 'paywall') {
@@ -297,15 +315,15 @@ app.post('/v1/notes', async (c) => {
         });
 
     // Step 4: Decrement entitlement ONLY after successful image generation
-    const consumed = consumeUserEntitlement(installationId, entitlementClaim, deviceId);
+    const consumed = await consumeUserEntitlement(installationId, entitlementClaim, deviceId);
     if (!consumed) {
       console.warn(`[Notes] Warning: Failed to consume entitlement for ${installationId}`);
     }
 
     // Step 5: Log anonymous generation record
-    logGenerationRecord(noteId, installationId, place, number, 'success', result.modelUsed);
+    await logGenerationRecord(noteId, installationId, place, number, 'success', result.modelUsed);
 
-    const updatedUser = getOrCreateUser(installationId, undefined, deviceId);
+    const updatedUser = await getOrCreateUser(installationId, undefined, deviceId);
 
     return c.json({
       success: true,
@@ -322,9 +340,9 @@ app.post('/v1/notes', async (c) => {
     });
   } catch (err: any) {
     console.error(`[Notes] Generation error: ${err.message}`);
-    logGenerationRecord(noteId, installationId, '', '', 'failed', err.message);
+    await logGenerationRecord(noteId, installationId, '', '', 'failed', err.message);
 
-    const user = getOrCreateUser(installationId, undefined, deviceId);
+    const user = await getOrCreateUser(installationId, undefined, deviceId);
 
     return c.json({
       error: 'GENERATION_FAILED',
@@ -399,12 +417,14 @@ app.post('/v1/keywords/suggest', async (c) => {
 
 const PORT = Number(process.env.PORT) || 3001;
 
-serve({
-  fetch: app.fetch,
-  port: PORT,
-  hostname: '0.0.0.0',
-}, () => {
-  console.log(`FIELDS Backend Server running on http://0.0.0.0:${PORT}`);
-});
+if (!process.env.VERCEL) {
+  serve({
+    fetch: app.fetch,
+    port: PORT,
+    hostname: '0.0.0.0',
+  }, () => {
+    console.log(`FIELDS Backend Server running on http://0.0.0.0:${PORT}`);
+  });
+}
 
 export default app;

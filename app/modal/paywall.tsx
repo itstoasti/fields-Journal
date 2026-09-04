@@ -5,13 +5,14 @@ import {
   Pressable,
   Alert,
   Dimensions,
+  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { PaperContainer, TypewriterText, StampButton } from '../../src/components';
 import { colors, fonts, fontSizes, layout, spacing } from '../../src/theme';
 import { useAppStore } from '../../src/store/useAppStore';
 import { buyNotes20Package } from '../../src/lib/purchases';
-import { syncPurchasedCredits } from '../../src/lib/api';
+import { syncPurchasedCredits, getApiBaseUrl } from '../../src/lib/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -93,6 +94,23 @@ export default function PaywallModal() {
             style={styles.cancelButton}
           />
         </View>
+
+        {/* Store Compliant Legal Links */}
+        <View style={styles.legalFooter}>
+          <Pressable onPress={() => Linking.openURL(`${getApiBaseUrl()}/terms`)}>
+            <TypewriterText size="xs" color={colors.inkMuted} style={styles.legalLink}>
+              Terms of Use
+            </TypewriterText>
+          </Pressable>
+          <TypewriterText size="xs" color={colors.inkMuted} style={{ marginHorizontal: 8 }}>
+            ·
+          </TypewriterText>
+          <Pressable onPress={() => Linking.openURL(`${getApiBaseUrl()}/privacy`)}>
+            <TypewriterText size="xs" color={colors.inkMuted} style={styles.legalLink}>
+              Privacy Policy
+            </TypewriterText>
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -158,5 +176,14 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     minHeight: 44,
+  },
+  legalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: spacing.md,
+  },
+  legalLink: {
+    textDecorationLine: 'underline',
   },
 });

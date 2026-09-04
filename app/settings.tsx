@@ -5,6 +5,7 @@ import {
   ScrollView,
   Pressable,
   Alert,
+  Linking,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +13,7 @@ import { PaperContainer, TypewriterText, StampButton } from '../src/components';
 import { colors, fontSizes, layout, spacing } from '../src/theme';
 import { useAppStore } from '../src/store/useAppStore';
 import { restorePurchases } from '../src/lib/purchases';
+import { getApiBaseUrl } from '../src/lib/api';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -80,6 +82,20 @@ export default function SettingsScreen() {
 
   const handleOpenPrivacy = () => {
     router.push('/privacy');
+  };
+
+  const handleOpenWebPrivacy = () => {
+    const baseUrl = getApiBaseUrl();
+    Linking.openURL(`${baseUrl}/privacy`).catch(() => {
+      Alert.alert('Notice', 'Unable to open Privacy Policy web page.');
+    });
+  };
+
+  const handleOpenWebTerms = () => {
+    const baseUrl = getApiBaseUrl();
+    Linking.openURL(`${baseUrl}/terms`).catch(() => {
+      Alert.alert('Notice', 'Unable to open Terms of Service web page.');
+    });
   };
 
   const handleOpenPaywall = () => {
@@ -316,6 +332,30 @@ export default function SettingsScreen() {
                 </TypewriterText>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.inkMuted} />
+            </Pressable>
+
+            <View style={styles.divider} />
+
+            <Pressable style={styles.menuItem} onPress={handleOpenWebPrivacy}>
+              <View style={styles.menuItemLeft}>
+                <Ionicons name="globe-outline" size={20} color={colors.charcoal} />
+                <TypewriterText size="sm" color={colors.charcoal} style={styles.menuItemText}>
+                  Official Privacy Policy (Web)
+                </TypewriterText>
+              </View>
+              <Ionicons name="open-outline" size={16} color={colors.inkMuted} />
+            </Pressable>
+
+            <View style={styles.divider} />
+
+            <Pressable style={styles.menuItem} onPress={handleOpenWebTerms}>
+              <View style={styles.menuItemLeft}>
+                <Ionicons name="document-text-outline" size={20} color={colors.charcoal} />
+                <TypewriterText size="sm" color={colors.charcoal} style={styles.menuItemText}>
+                  Terms of Service & EULA (Web)
+                </TypewriterText>
+              </View>
+              <Ionicons name="open-outline" size={16} color={colors.inkMuted} />
             </Pressable>
           </View>
         </View>
