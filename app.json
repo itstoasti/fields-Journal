@@ -25,6 +25,7 @@
     },
     "android": {
       "package": "com.fieldnotes.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F4EFE6"
