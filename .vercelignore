@@ -1,0 +1,11 @@
+node_modules
+.expo
+android
+ios
+*.apk
+*.zip
+field-notes-debug.*
+data
+server/node_modules
+server/data
+web-dist
