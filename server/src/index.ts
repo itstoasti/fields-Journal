@@ -53,6 +53,29 @@ app.get('/', (c) => {
   return c.text('FIELDS Website', 200);
 });
 
+// Favicon Routes
+app.get('/favicon.ico', (c) => {
+  const filePath = findPublicFile('favicon.ico');
+  if (filePath) {
+    return c.body(fs.readFileSync(filePath), 200, {
+      'Content-Type': 'image/x-icon',
+      'Cache-Control': 'public, max-age=86400',
+    });
+  }
+  return c.text('Not found', 404);
+});
+
+app.get('/favicon.png', (c) => {
+  const filePath = findPublicFile('favicon.png');
+  if (filePath) {
+    return c.body(fs.readFileSync(filePath), 200, {
+      'Content-Type': 'image/png',
+      'Cache-Control': 'public, max-age=86400',
+    });
+  }
+  return c.text('Not found', 404);
+});
+
 // Static Assets (/assets/:filename)
 app.get('/assets/:filename', (c) => {
   const filename = c.req.param('filename');
