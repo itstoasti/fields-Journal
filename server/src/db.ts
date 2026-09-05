@@ -1,6 +1,11 @@
 import { createClient, Client } from '@libsql/client';
 import path from 'node:path';
 import fs from 'node:fs';
+import dotenv from 'dotenv';
+
+// Ensure environment variables are loaded immediately on module load
+dotenv.config({ path: path.resolve(process.cwd(), 'server', '.env') });
+dotenv.config();
 
 export interface UserRecord {
   installation_id: string;
