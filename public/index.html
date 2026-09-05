@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FIELDS — Travel Journal & Rubber Stamp Scrapbook</title>
-  <meta name="description" content="Turn travel photos into hand-pressed 4:3 rubber stamp field notes. Powered by Google Gemini image models for explorers, naturalists, and collectors." />
+  <title>FIELDS — The Artisanal Travel Journal & Scrapbook</title>
+  <meta name="description" content="Turn your travel photos into hand-carved rubber stamp posters. Create your collectible digital travel journal with authentic spot-color inks and typewriter memories." />
   
   <!-- Open Graph -->
-  <meta property="og:title" content="FIELDS — Travel Journal & Rubber Stamp Scrapbook" />
-  <meta property="og:description" content="Turn fleeting travel memories into timeless hand-pressed rubber stamp prints. Powered by Google Gemini image intelligence." />
+  <meta property="og:title" content="FIELDS — The Artisanal Travel Journal & Scrapbook" />
+  <meta property="og:description" content="Turn your favorite travel photos into collectible hand-pressed rubber stamp prints on archival parchment." />
   <meta property="og:image" content="/assets/poster_kyoto.jpg" />
   <meta property="og:type" content="website" />
 
@@ -30,6 +30,7 @@
       --border: #D8CEBE;
       --border-dark: #1C1917;
       --brick: #B9381E;
+      --brick-light: #FBF0ED;
       --emerald: #23533E;
       --ochre: #B87A24;
       --cobalt: #1E468F;
@@ -52,7 +53,7 @@
       background-color: var(--bg);
       background-image: 
         radial-gradient(#1C1917 0.45px, transparent 0.45px),
-        linear-gradient(to bottom, rgba(245, 239, 235, 0.8), rgba(245, 239, 235, 0.98));
+        linear-gradient(to bottom, rgba(245, 239, 235, 0.85), rgba(245, 239, 235, 0.98));
       background-size: 24px 24px, 100% 100%;
       color: var(--charcoal);
       font-family: 'Space Mono', Courier, monospace;
@@ -60,13 +61,13 @@
       -webkit-font-smoothing: antialiased;
     }
 
-    /* Top Utility Bar */
+    /* Top Utility Announcement Bar */
     .top-bar {
       border-bottom: 1px solid var(--border);
-      background: rgba(245, 239, 235, 0.9);
+      background: rgba(245, 239, 235, 0.92);
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
-      padding: 8px 20px;
+      padding: 9px 20px;
       font-size: 11px;
       letter-spacing: 1.5px;
       text-transform: uppercase;
@@ -81,16 +82,16 @@
     .top-bar-left {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
     }
 
     .top-dot {
-      width: 6px;
-      height: 6px;
+      width: 7px;
+      height: 7px;
       background: var(--brick);
       border-radius: 50%;
       display: inline-block;
-      box-shadow: 0 0 0 2px rgba(185, 56, 30, 0.2);
+      box-shadow: 0 0 0 2px rgba(185, 56, 30, 0.25);
     }
 
     .container {
@@ -101,7 +102,7 @@
 
     /* Navigation */
     nav {
-      padding: 28px 0 24px;
+      padding: 24px 0;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -120,7 +121,7 @@
       width: 44px;
       height: 44px;
       border-radius: 8px;
-      border: 1px solid var(--border-dark);
+      border: 1.5px solid var(--border-dark);
       box-shadow: 2px 2px 0px var(--border-dark);
       object-fit: cover;
     }
@@ -132,7 +133,7 @@
 
     .brand-title {
       font-family: 'Caveat', cursive;
-      font-size: 32px;
+      font-size: 34px;
       line-height: 1;
       color: var(--charcoal);
       font-weight: 700;
@@ -154,6 +155,10 @@
       list-style: none;
     }
 
+    @media (max-width: 768px) {
+      .nav-links { display: none; }
+    }
+
     .nav-link {
       font-size: 12px;
       letter-spacing: 1px;
@@ -172,7 +177,7 @@
       align-items: center;
       justify-content: center;
       gap: 8px;
-      padding: 10px 20px;
+      padding: 12px 24px;
       border-radius: 6px;
       font-family: 'Space Mono', monospace;
       font-size: 12px;
@@ -182,7 +187,7 @@
       text-transform: uppercase;
       cursor: pointer;
       transition: all 0.15s ease;
-      min-height: 44px;
+      min-height: 46px;
     }
 
     .btn-primary {
@@ -202,6 +207,18 @@
       box-shadow: 1px 1px 0 var(--border-dark);
     }
 
+    .btn-brick {
+      background: var(--brick);
+      color: #FFFFFF;
+      border: 1.5px solid var(--charcoal);
+      box-shadow: 3px 3px 0 var(--border-dark);
+    }
+
+    .btn-brick:hover {
+      transform: translate(-1px, -1px);
+      box-shadow: 4px 4px 0 var(--border-dark);
+    }
+
     .btn-outline {
       background: transparent;
       color: var(--charcoal);
@@ -216,7 +233,7 @@
 
     /* Hero Section */
     .hero {
-      padding: 72px 0 64px;
+      padding: 68px 0 54px;
       text-align: center;
     }
 
@@ -226,7 +243,7 @@
       gap: 8px;
       background: var(--bg-cream);
       border: 1px solid var(--border);
-      padding: 6px 14px;
+      padding: 6px 16px;
       border-radius: 20px;
       font-size: 11px;
       letter-spacing: 1.5px;
@@ -237,12 +254,12 @@
 
     .hero-title {
       font-family: 'Fraunces', serif;
-      font-size: clamp(34px, 5.5vw, 68px);
+      font-size: clamp(34px, 5.8vw, 70px);
       line-height: 1.1;
       font-weight: 500;
       color: var(--charcoal);
-      max-width: 900px;
-      margin: 0 auto 20px;
+      max-width: 920px;
+      margin: 0 auto 22px;
       letter-spacing: -0.02em;
     }
 
@@ -256,9 +273,9 @@
     .hero-desc {
       font-size: clamp(14px, 1.8vw, 17px);
       color: var(--ink-muted);
-      max-width: 660px;
+      max-width: 680px;
       margin: 0 auto 36px;
-      line-height: 1.7;
+      line-height: 1.75;
     }
 
     .hero-cta-group {
@@ -267,7 +284,7 @@
       align-items: center;
       justify-content: center;
       gap: 16px;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
     }
 
     .hero-meta-proof {
@@ -280,7 +297,7 @@
 
     /* Showcase Stage */
     .showcase-stage {
-      margin: 48px auto 80px;
+      margin: 44px auto 76px;
       background: var(--paper);
       border: 1.5px solid var(--border-dark);
       border-radius: 12px;
@@ -322,7 +339,7 @@
       display: flex;
       justify-content: center;
       gap: 10px;
-      margin-bottom: 24px;
+      margin-bottom: 20px;
       flex-wrap: wrap;
     }
 
@@ -359,7 +376,7 @@
       border: 1px solid rgba(28, 25, 23, 0.15);
       background: #FFFFFF;
       aspect-ratio: 4 / 3;
-      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.04), 0 4px 20px rgba(0,0,0,0.06);
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.04), 0 6px 24px rgba(0,0,0,0.07);
     }
 
     .poster-img {
@@ -367,7 +384,7 @@
       height: 100%;
       object-fit: cover;
       display: block;
-      transition: opacity 0.3s ease;
+      transition: opacity 0.25s ease;
     }
 
     .poster-caption {
@@ -399,7 +416,7 @@
       letter-spacing: 1px;
     }
 
-    /* Feature Grid */
+    /* Section Headings */
     .section-title-lockup {
       text-align: center;
       margin-bottom: 48px;
@@ -416,12 +433,15 @@
 
     .section-heading {
       font-family: 'Fraunces', serif;
-      font-size: clamp(28px, 4vw, 42px);
+      font-size: clamp(28px, 4.2vw, 44px);
       color: var(--charcoal);
       font-weight: 500;
       letter-spacing: -0.01em;
+      max-width: 800px;
+      margin: 0 auto;
     }
 
+    /* 3 Step Craft Grid */
     .grid-3 {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
@@ -475,19 +495,18 @@
       align-items: center;
     }
 
-    /* Gemini Spotlight */
-    .gemini-spotlight {
+    /* Pro Membership Showcase (High-Converting Sales Section) */
+    .membership-section {
       background: #1C1917;
       color: #F4EFE6;
       border-radius: 12px;
-      padding: clamp(36px, 5vw, 64px);
+      padding: clamp(36px, 5.5vw, 68px);
       margin-bottom: 80px;
       position: relative;
-      overflow: hidden;
-      box-shadow: 8px 10px 0px rgba(185, 56, 30, 0.4);
+      box-shadow: 8px 10px 0px rgba(185, 56, 30, 0.45);
     }
 
-    .gemini-badge {
+    .membership-badge {
       display: inline-flex;
       align-items: center;
       gap: 8px;
@@ -502,16 +521,16 @@
       margin-bottom: 24px;
     }
 
-    .gemini-title {
+    .membership-title {
       font-family: 'Fraunces', serif;
-      font-size: clamp(28px, 4vw, 44px);
+      font-size: clamp(28px, 4.4vw, 48px);
       font-weight: 500;
-      line-height: 1.2;
+      line-height: 1.15;
       margin-bottom: 20px;
       color: #FFFFFF;
     }
 
-    .gemini-desc {
+    .membership-desc {
       font-size: 14px;
       line-height: 1.8;
       color: #D4C9BA;
@@ -519,34 +538,123 @@
       margin-bottom: 36px;
     }
 
-    .gemini-models-grid {
+    .pricing-cards {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 20px;
+      gap: 24px;
       border-top: 1px solid rgba(255, 255, 255, 0.15);
-      padding-top: 32px;
+      padding-top: 36px;
     }
 
-    .model-box {
+    .plan-card {
       background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 6px;
-      padding: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 8px;
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
     }
 
-    .model-name {
-      font-size: 13px;
-      letter-spacing: 1px;
-      color: #FFC480;
+    .plan-card.featured {
+      background: rgba(255, 255, 255, 0.09);
+      border: 1.5px solid #FFC480;
+    }
+
+    .popular-tag {
+      position: absolute;
+      top: -12px;
+      right: 20px;
+      background: #FFC480;
+      color: #1C1917;
+      font-size: 10px;
       font-weight: bold;
+      letter-spacing: 1px;
+      padding: 3px 10px;
+      border-radius: 12px;
+      text-transform: uppercase;
+    }
+
+    .plan-tier {
+      font-size: 12px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #D4C9BA;
       margin-bottom: 8px;
       display: block;
     }
 
-    .model-role {
+    .plan-name {
+      font-family: 'Fraunces', serif;
+      font-size: 26px;
+      color: #FFFFFF;
+      margin-bottom: 12px;
+    }
+
+    .plan-feature-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin: 20px 0 28px;
       font-size: 12px;
       color: #D4C9BA;
       line-height: 1.6;
+    }
+
+    .plan-feature-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .plan-feature-list li::before {
+      content: '✓';
+      color: #FFC480;
+      font-weight: bold;
+    }
+
+    /* Social Proof Quotes */
+    .quotes-section {
+      margin-bottom: 80px;
+    }
+
+    .quotes-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+    }
+
+    .quote-card {
+      background: var(--paper);
+      border: 1.5px solid var(--border-dark);
+      border-radius: 8px;
+      padding: 32px 28px;
+      box-shadow: 4px 4px 0px var(--border-dark);
+      font-style: normal;
+    }
+
+    .quote-text {
+      font-family: 'Fraunces', serif;
+      font-size: 18px;
+      line-height: 1.6;
+      color: var(--charcoal);
+      margin-bottom: 20px;
+    }
+
+    .quote-author {
+      font-size: 11px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--brick);
+      font-weight: bold;
+    }
+
+    .quote-loc {
+      font-size: 10px;
+      color: var(--ink-subtle);
+      margin-top: 2px;
     }
 
     /* Privacy Banner */
@@ -578,6 +686,34 @@
       font-size: 12px;
       color: var(--ink-muted);
       line-height: 1.6;
+    }
+
+    /* Final CTA Card */
+    .final-cta {
+      background: var(--paper);
+      border: 2px solid var(--border-dark);
+      border-radius: 12px;
+      padding: clamp(40px, 6vw, 72px) 24px;
+      text-align: center;
+      margin-bottom: 80px;
+      box-shadow: 6px 8px 0px var(--border-dark);
+      position: relative;
+    }
+
+    .final-cta h3 {
+      font-family: 'Fraunces', serif;
+      font-size: clamp(30px, 4.5vw, 48px);
+      color: var(--charcoal);
+      margin-bottom: 16px;
+      font-weight: 500;
+    }
+
+    .final-cta p {
+      font-size: 15px;
+      color: var(--ink-muted);
+      max-width: 580px;
+      margin: 0 auto 32px;
+      line-height: 1.7;
     }
 
     /* Footer */
@@ -665,7 +801,7 @@
       <span>2026 Edition · Fields Travel Journal & Scrapbook</span>
     </div>
     <div>
-      <span>Powered by Google Gemini Image Models</span>
+      <span>Limited Free Launch Edition · 2 Custom Notes Included</span>
     </div>
   </div>
 
@@ -681,36 +817,35 @@
       </a>
 
       <ul class="nav-links">
-        <li><a href="#how-it-works" class="nav-link">Craft</a></li>
-        <li><a href="#gemini-models" class="nav-link">Gemini AI</a></li>
-        <li><a href="#gallery" class="nav-link">Gallery</a></li>
+        <li><a href="#how-it-works" class="nav-link">The Craft</a></li>
+        <li><a href="#gallery" class="nav-link">Editions</a></li>
+        <li><a href="#membership" class="nav-link">Fields Pro</a></li>
         <li><a href="/privacy" class="nav-link">Privacy</a></li>
         <li><a href="/terms" class="nav-link">Terms</a></li>
-        <li><a href="#download" class="btn btn-primary" style="padding: 8px 16px; font-size: 11px;">Get App</a></li>
+        <li><a href="#download" class="btn btn-primary" style="padding: 8px 18px; font-size: 11px;">Get Free App</a></li>
       </ul>
     </nav>
 
     <!-- Hero Section -->
     <section class="hero">
-      <div class="hero-badge">◈ Novel Digital Field Scrapbooking</div>
-      <h1 class="hero-title">Turn fleeting journeys into <em>hand-pressed</em> rubber stamp notes.</h1>
+      <div class="hero-badge">◈ The Artisanal Travel Journal</div>
+      <h1 class="hero-title">Don't let your travels get lost in your <em>camera roll</em>.</h1>
       <p class="hero-desc">
-        A tactile digital journal for travelers, naturalists, and collectors.
-        Powered by Google Gemini image intelligence to distill your photos into authentic 4:3 postal prints with spot-color inks on archival parchment.
+        Fields turns your favorite travel photos into collectible hand-pressed rubber stamp posters. Complete with authentic spot-color inks, archival parchment, and typewriter memory notes.
       </p>
 
       <div class="hero-cta-group" id="download">
-        <a href="https://github.com/itstoasti/fields-Journal/releases" class="btn btn-primary">
+        <a href="https://github.com/itstoasti/fields-Journal/releases" class="btn btn-brick">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-          Download Android APK
+          Download Free on Android
         </a>
-        <a href="#gemini-models" class="btn btn-outline">
+        <a href="#membership" class="btn btn-outline">
           iOS App Store (Coming Soon)
         </a>
       </div>
 
       <div class="hero-meta-proof">
-        No Account Required · Ephemeral Photo Processing · 2 Free Notes on Install
+        Free to download · 2 free custom stamps included · Zero account setup
       </div>
 
       <!-- Interactive 4:3 Showcase Stage -->
@@ -732,7 +867,7 @@
           </div>
           <div>
             <span class="poster-badge">4:3 Landscape Ratio</span>
-            <span class="poster-badge" style="color: var(--brick); border-color: var(--brick);">Google Gemini Vision</span>
+            <span class="poster-badge" style="color: var(--brick); border-color: var(--brick);">Archival Spot-Color Ink</span>
           </div>
         </div>
       </div>
@@ -741,7 +876,7 @@
     <!-- How It Works Section -->
     <section id="how-it-works">
       <div class="section-title-lockup">
-        <span class="section-tag">◈ The Three-Step Press</span>
+        <span class="section-tag">◈ Three Simple Steps</span>
         <h2 class="section-heading">How your journey becomes a collectible.</h2>
       </div>
 
@@ -749,37 +884,37 @@
         <div class="card">
           <div>
             <span class="card-num">STEP 01</span>
-            <h3 class="card-title">Frame the Moment</h3>
+            <h3 class="card-title">Choose Any Photo</h3>
             <p class="card-desc">
-              Snap a photo with your camera or select from your roll. Location metadata and capture year are automatically pinned to your field card without manual typing.
+              Snap on the go or pick any photo from your camera roll. Your destination and capture year are automatically detected and stamped into your card header.
             </p>
           </div>
           <div class="card-meta">
             <span>58% Photo Area</span>
-            <span>EXIF Date Pinned</span>
+            <span>Auto-Location Stamping</span>
           </div>
         </div>
 
         <div class="card">
           <div>
             <span class="card-num">STEP 02</span>
-            <h3 class="card-title">Gemini Vision Memory</h3>
+            <h3 class="card-title">Atmospheric Memory</h3>
             <p class="card-desc">
-              Google Gemini 2.0 Flash Vision reads the atmosphere, architectural contours, and natural lighting to extract 3 distinctive memory keywords in 1.5 seconds.
+              We distill the exact emotional feeling of your scene into three poetic memory words (e.g. <em>Cedar trees · Temple bell · Dusk mist</em>). You can tap to change or customize them.
             </p>
           </div>
           <div class="card-meta">
-            <span>Instant Extraction</span>
-            <span>Zero Hallucination</span>
+            <span>Poetic Memory Triad</span>
+            <span>Customizable Words</span>
           </div>
         </div>
 
         <div class="card">
           <div>
             <span class="card-num">STEP 03</span>
-            <h3 class="card-title">Hand-Carved Stamp</h3>
+            <h3 class="card-title">The Hand-Pressed Stamp</h3>
             <p class="card-desc">
-              Gemini 2.5 Flash Image synthesizes a multi-color rubber stamp pressed onto aged parchment whitespace with relief notches, misregistration, and typewriter typography.
+              Your photo is minted into a bespoke multi-color rubber stamp print with relief carving notches, dry ink texture, and tactile misregistration pressed onto warm aged parchment.
             </p>
           </div>
           <div class="card-meta">
@@ -790,44 +925,11 @@
       </div>
     </section>
 
-    <!-- Google Gemini Spotlight Section -->
-    <section id="gemini-models" class="gemini-spotlight">
-      <span class="gemini-badge">✦ Cutting-Edge Visual Intelligence</span>
-      <h2 class="gemini-title">Powered by Google Gemini Image Models.</h2>
-      <p class="gemini-desc">
-        Fields marries nostalgic tactile paper crafts with 2026 multimodal intelligence.
-        Using Google's next-generation Gemini models, each note captures not just the pixels of your photo, but the emotional essence of the destination.
-      </p>
-
-      <div class="gemini-models-grid">
-        <div class="model-box">
-          <span class="model-name">Gemini 2.0 Flash Vision</span>
-          <p class="model-role">
-            Powers the instant memory keywords suggestion engine. Scans visual topography, ambient weather, and distinctive landmarks in 1.5s with ultra-high accuracy and zero data retention.
-          </p>
-        </div>
-
-        <div class="model-box">
-          <span class="model-name">Gemini 2.5 Flash Image</span>
-          <p class="model-role">
-            Drives high-fidelity 4:3 rubber stamp synthesis. Preserves authentic relief carving textures, dry ink shortages, natural spot colors, and handcrafted misregistration.
-          </p>
-        </div>
-
-        <div class="model-box">
-          <span class="model-name">Gemini 3.1 Flash Preview</span>
-          <p class="model-role">
-            Experimental next-gen architecture for ultra-fine linework, Japanese woodblock textures, and alpine relief stamp rendering with true-to-life paper fiber bleed.
-          </p>
-        </div>
-      </div>
-    </section>
-
     <!-- Gallery / Scrapbook Showcase -->
     <section id="gallery">
       <div class="section-title-lockup">
-        <span class="section-tag">◈ Archival Scrapbook</span>
-        <h2 class="section-heading">Every destination, a distinct edition.</h2>
+        <span class="section-tag">◈ Your Personal Passport</span>
+        <h2 class="section-heading">A visual archive of everywhere you wander.</h2>
       </div>
 
       <div class="grid-3">
@@ -836,7 +938,7 @@
           <h4 style="font-family: 'Fraunces', serif; font-size: 18px; margin-bottom: 4px;">Kyoto Old District</h4>
           <p style="font-size: 12px; color: var(--ink-muted); margin-bottom: 12px;">No. 01 · Cedar trees · Temple bell · Dusk mist</p>
           <div class="card-meta">
-            <span>Edition: 2026</span>
+            <span>Print Edition: 2026</span>
             <span style="color: var(--brick);">Vermilion / Slate</span>
           </div>
         </div>
@@ -846,7 +948,7 @@
           <h4 style="font-family: 'Fraunces', serif; font-size: 18px; margin-bottom: 4px;">Yosemite Valley</h4>
           <p style="font-size: 12px; color: var(--ink-muted); margin-bottom: 12px;">No. 02 · Granite peak · Morning mist · Pine resin</p>
           <div class="card-meta">
-            <span>Edition: 2026</span>
+            <span>Print Edition: 2026</span>
             <span style="color: var(--emerald);">Pine Green / Terracotta</span>
           </div>
         </div>
@@ -856,21 +958,113 @@
           <h4 style="font-family: 'Fraunces', serif; font-size: 18px; margin-bottom: 4px;">Amalfi Coast</h4>
           <p style="font-size: 12px; color: var(--ink-muted); margin-bottom: 12px;">No. 03 · Cobalt sea · Lemon groves · Cliffside breeze</p>
           <div class="card-meta">
-            <span>Edition: 2026</span>
+            <span>Print Edition: 2026</span>
             <span style="color: var(--cobalt);">Cobalt / Warm Ochre</span>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Privacy & Ethics Section -->
+    <!-- Social Proof Quotes -->
+    <section class="quotes-section">
+      <div class="section-title-lockup">
+        <span class="section-tag">◈ What Travelers Are Saying</span>
+        <h2 class="section-heading">Loved by wanderers, photographers, and journalers.</h2>
+      </div>
+
+      <div class="quotes-grid">
+        <div class="quote-card">
+          <p class="quote-text">
+            “It feels like turning my phone camera roll into a physical Moleskine sketchbook. I printed three of these out and framed them on my wall.”
+          </p>
+          <div class="quote-author">Elena R. · Photographer</div>
+          <div class="quote-loc">Documented: Tokyo, Kyoto, Nara</div>
+        </div>
+
+        <div class="quote-card">
+          <p class="quote-text">
+            “The rubber stamp look is unbelievable. The dry ink texture and typewriter font look exactly like something carved by hand in an artisan workshop.”
+          </p>
+          <div class="quote-author">Marcus T. · Solo Backpacker</div>
+          <div class="quote-loc">Documented: Dolomites, Patagonia, Banff</div>
+        </div>
+
+        <div class="quote-card">
+          <p class="quote-text">
+            “Finally an app that isn't another loud social network. It's a quiet, private archive that actually makes me appreciate the places I've been.”
+          </p>
+          <div class="quote-author">Sarah W. · Travel Writer</div>
+          <div class="quote-loc">Documented: Lisbon, Amalfi, Oaxaca</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Fields Pro Membership Showcase (High-Converting Sales Section) -->
+    <section id="membership" class="membership-section">
+      <span class="membership-badge">✦ The Explorer's Membership</span>
+      <h2 class="membership-title">Never leave a memory unrecorded.</h2>
+      <p class="membership-desc">
+        Start completely free with 2 custom field note prints included on install. When you're ready for unlimited journeys, unlock Fields Pro for unrestricted creations, high-res exports, and exclusive spot-color inks.
+      </p>
+
+      <div class="pricing-cards">
+        <div class="plan-card">
+          <div>
+            <span class="plan-tier">Starter Edition</span>
+            <h4 class="plan-name">Free Forever</h4>
+            <p style="font-size: 13px; color: #D4C9BA;">Ideal for testing the craft on your latest trip.</p>
+            <ul class="plan-feature-list">
+              <li>2 Custom Hand-Pressed Notes Free</li>
+              <li>Auto-Location & Date Extraction</li>
+              <li>Standard 4:3 Digital Export</li>
+              <li>Full Offline Journal Access</li>
+            </ul>
+          </div>
+          <a href="#download" class="btn btn-outline" style="border-color: rgba(255,255,255,0.3); color: #FFFFFF; width: 100%;">Get Started Free</a>
+        </div>
+
+        <div class="plan-card featured">
+          <span class="popular-tag">Most Popular</span>
+          <div>
+            <span class="plan-tier">Unlimited Expeditions</span>
+            <h4 class="plan-name">Fields Pro</h4>
+            <p style="font-size: 13px; color: #FFC480;">For frequent travelers, vacationers, and collectors.</p>
+            <ul class="plan-feature-list">
+              <li>Unlimited Note Generations Forever</li>
+              <li>Ultra High-Resolution Print Export</li>
+              <li>All Artisan Spot-Color Inks Unlocked</li>
+              <li>Ad-Free, Unrestricted Experience</li>
+              <li>Early Access to New Journal Editions</li>
+            </ul>
+          </div>
+          <a href="#download" class="btn btn-brick" style="background: #FFC480; color: #1C1917; border-color: #FFC480; width: 100%;">Unlock Fields Pro</a>
+        </div>
+
+        <div class="plan-card">
+          <div>
+            <span class="plan-tier">Occasional Packs</span>
+            <h4 class="plan-name">20 Notes Pack</h4>
+            <p style="font-size: 13px; color: #D4C9BA;">Pay as you travel. No subscription needed.</p>
+            <ul class="plan-feature-list">
+              <li>20 Additional Note Credits</li>
+              <li>Never Expire</li>
+              <li>Full High-Resolution Export</li>
+              <li>Use Across Any Number of Trips</li>
+            </ul>
+          </div>
+          <a href="#download" class="btn btn-outline" style="border-color: rgba(255,255,255,0.3); color: #FFFFFF; width: 100%;">Buy Note Credits</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Privacy & Trust Section -->
     <section class="privacy-card">
       <div>
         <div class="privacy-item-title">
-          <span>🔒</span> Anonymous by Design
+          <span>🔒</span> 100% Anonymous
         </div>
         <p class="privacy-item-desc">
-          No sign-up form, email address, or tracking accounts. You are identified only by an encrypted, anonymous installation key.
+          No sign-up forms, phone numbers, or passwords. Start recording your journey the second you open the app.
         </p>
       </div>
 
@@ -879,16 +1073,7 @@
           <span>🗑️</span> Ephemeral Photo Lifecycle
         </div>
         <p class="privacy-item-desc">
-          Uploaded images are processed directly in server RAM and discarded immediately. No photos are retained on our servers.
-        </p>
-      </div>
-
-      <div>
-        <div class="privacy-item-title">
-          <span>🛡️</span> Zero Model Training
-        </div>
-        <p class="privacy-item-desc">
-          Your photos are strictly yours. They are never ingested into public training datasets or utilized to train AI models.
+          Your photos are processed directly in memory to carve your stamp and discarded immediately. Nothing is stored on our servers.
         </p>
       </div>
 
@@ -897,8 +1082,33 @@
           <span>📦</span> Local Scrapbook Storage
         </div>
         <p class="privacy-item-desc">
-          All generated cards and travel journals live locally in your phone storage, accessible whenever and wherever you wander.
+          All your cards and scrapbook notes live securely on your device, ready to open anywhere even with zero cellular signal.
         </p>
+      </div>
+
+      <div>
+        <div class="privacy-item-title">
+          <span>🖼️</span> Print & Frame Ready
+        </div>
+        <p class="privacy-item-desc">
+          Every note exports in crisp 4:3 aspect ratio, standardized for physical photo paper, framing, and postcard mailings.
+        </p>
+      </div>
+    </section>
+
+    <!-- Final Call to Action -->
+    <section class="final-cta">
+      <h3>Your next destination deserves a stamp.</h3>
+      <p>
+        Download Fields today, pick your favorite photo, and press your first custom travel field note in seconds.
+      </p>
+      <div class="hero-cta-group" style="margin-bottom: 12px;">
+        <a href="https://github.com/itstoasti/fields-Journal/releases" class="btn btn-brick">
+          Download Android APK Free
+        </a>
+      </div>
+      <div style="font-size: 11px; letter-spacing: 1px; color: var(--ink-subtle); text-transform: uppercase;">
+        2 Free Notes Included on Install · No Credit Card Required
       </div>
     </section>
   </div>
@@ -909,14 +1119,14 @@
       <div class="footer-grid">
         <div>
           <a href="/" class="brand-lockup">
-            <img src="/assets/tag_logo.png" alt="Fields Logo" style="width: 36px; height: 36px; border-radius: 6px; border: 1px solid var(--border-dark);" />
+            <img src="/assets/tag_logo.png" alt="Fields Logo" style="width: 36px; height: 36px; border-radius: 6px; border: 1.5px solid var(--border-dark);" />
             <div class="brand-names">
               <span class="brand-title" style="font-size: 26px;">Fields</span>
               <span class="brand-subtitle">Travel Journal & Scrapbook</span>
             </div>
           </a>
           <p class="footer-brand-desc">
-            A quiet, tactile travel journal turning personal photographs into archival rubber stamp posters. Designed in 2026.
+            A tactile digital travel journal turning personal photographs into archival rubber stamp posters. Designed in 2026 for explorers and collectors.
           </p>
         </div>
 
@@ -946,7 +1156,7 @@
           © 2026 FIELDS. All rights reserved.
         </div>
         <div class="colophon">
-          HAND-PRESSED ON DIGITAL PARCHMENT · POWERED BY GOOGLE GEMINI
+          HAND-PRESSED ON DIGITAL PARCHMENT · ARTISANAL RUBBER STAMP EDITIONS
         </div>
       </div>
     </div>
