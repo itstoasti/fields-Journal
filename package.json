@@ -7,10 +7,12 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
+    "build:api": "npx esbuild server/api/index.ts --bundle --platform=node --target=node20 --outfile=api/index.js",
     "postinstall": "patch-package"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
+    "@libsql/client": "^0.18.0",
     "expo": "~54.0.37",
     "expo-application": "~7.0.8",
     "expo-constants": "~18.0.14",
@@ -29,6 +31,7 @@
     "expo-sharing": "~14.0.8",
     "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",
+    "hono": "^4.13.7",
     "puppeteer-core": "^25.9.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",

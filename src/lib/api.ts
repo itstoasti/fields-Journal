@@ -7,8 +7,8 @@ export function getApiBaseUrl(): string {
     return process.env.EXPO_PUBLIC_API_URL;
   }
 
-  // Active secure dev tunnel: directly reachable by physical devices over cellular, Wi-Fi, or Expo tunnel
-  return 'https://borough-nag-crestless.ngrok-free.dev';
+  // 100% Cloud Serverless API on Vercel + Turso Cloud SQLite
+  return 'https://fields-journal.vercel.app';
 }
 
 const COMMON_HEADERS = {
