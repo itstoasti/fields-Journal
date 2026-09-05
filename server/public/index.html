@@ -231,6 +231,99 @@
       box-shadow: 3px 3px 0 var(--border-dark);
     }
 
+    /* App Store Badges */
+    .store-badge-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--charcoal);
+      color: #FFFFFF;
+      text-decoration: none;
+      padding: 10px 22px;
+      border-radius: 8px;
+      border: 1.5px solid var(--charcoal);
+      box-shadow: 3px 3px 0 var(--border-dark);
+      transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .store-badge-btn:hover {
+      transform: translate(-1px, -1px);
+      box-shadow: 4px 4px 0 var(--border-dark);
+      background: #292524;
+    }
+
+    .store-badge-btn:active {
+      transform: translate(1px, 1px);
+      box-shadow: 1px 1px 0 var(--border-dark);
+    }
+
+    .store-badge-outline {
+      background: #FFFFFF;
+      color: var(--charcoal);
+      border: 1.5px solid var(--border-dark);
+    }
+
+    .store-badge-outline:hover {
+      background: var(--bg-cream);
+      color: var(--charcoal);
+    }
+
+    .store-badge-icon {
+      flex-shrink: 0;
+    }
+
+    .store-badge-text {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.15;
+    }
+
+    .store-badge-sub {
+      font-family: 'Space Mono', monospace;
+      font-size: 8.5px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      opacity: 0.75;
+    }
+
+    .store-badge-main {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .store-toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: var(--charcoal);
+      color: #FFFFFF;
+      padding: 12px 24px;
+      border-radius: 30px;
+      font-size: 13px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+      border: 1px solid rgba(255,255,255,0.15);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 1000;
+      opacity: 0;
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+      pointer-events: none;
+      max-width: 90vw;
+      text-align: center;
+    }
+
+    .store-toast.visible {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+      pointer-events: auto;
+    }
+
     /* Hero Section */
     .hero {
       padding: 68px 0 54px;
@@ -835,12 +928,27 @@
       </p>
 
       <div class="hero-cta-group" id="download">
-        <a href="https://github.com/itstoasti/fields-Journal/releases" class="btn btn-brick">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-          Download Free on Android
+        <a href="https://play.google.com/store/apps/details?id=com.fieldnotes.app" class="store-badge-btn" target="_blank" rel="noopener">
+          <svg class="store-badge-icon" width="24" height="24" viewBox="0 0 24 24">
+            <path d="M3.609 1.814L13.792 12 3.61 22.186a1.954 1.954 0 0 1-.61-.39 2.04 2.04 0 0 1-.482-1.373V3.577c0-.528.169-1.02.482-1.373.18-.202.39-.336.61-.39z" fill="#00D764"/>
+            <path d="M17.155 8.636l-3.363 3.364 3.363 3.364 3.805-2.182a1.866 1.866 0 0 0 0-3.184l-3.805-2.182z" fill="#FFC800"/>
+            <path d="M3.61 1.814l10.182 10.186 3.363-3.364L4.858 1.884a1.88 1.88 0 0 0-1.248-.07z" fill="#00C3FF"/>
+            <path d="M13.792 12L3.61 22.186c.38.163.818.138 1.248-.07l12.297-6.752L13.792 12z" fill="#FF3A44"/>
+          </svg>
+          <div class="store-badge-text">
+            <span class="store-badge-sub">GET IT ON</span>
+            <span class="store-badge-main">Google Play</span>
+          </div>
         </a>
-        <a href="#membership" class="btn btn-outline">
-          iOS App Store (Coming Soon)
+
+        <a href="#download" class="store-badge-btn store-badge-outline" onclick="openAppStoreNotice(event)">
+          <svg class="store-badge-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.62-.75 1.04-1.8 0.92-2.85-.9.04-2 .6-2.65 1.35-.58.66-1.08 1.73-.95 2.76.99.08 2.05-.51 2.68-1.26z"/>
+          </svg>
+          <div class="store-badge-text">
+            <span class="store-badge-sub">COMING SOON TO</span>
+            <span class="store-badge-main">App Store</span>
+          </div>
         </a>
       </div>
 
@@ -1100,15 +1208,34 @@
     <section class="final-cta">
       <h3>Your next destination deserves a stamp.</h3>
       <p>
-        Download Fields today, pick your favorite photo, and press your first custom travel field note in seconds.
+        Available on the official app stores. Pick your favorite travel photo and press your first custom field note in seconds.
       </p>
-      <div class="hero-cta-group" style="margin-bottom: 12px;">
-        <a href="https://github.com/itstoasti/fields-Journal/releases" class="btn btn-brick">
-          Download Android APK Free
+      <div class="hero-cta-group" style="margin-bottom: 16px;">
+        <a href="https://play.google.com/store/apps/details?id=com.fieldnotes.app" class="store-badge-btn" target="_blank" rel="noopener">
+          <svg class="store-badge-icon" width="24" height="24" viewBox="0 0 24 24">
+            <path d="M3.609 1.814L13.792 12 3.61 22.186a1.954 1.954 0 0 1-.61-.39 2.04 2.04 0 0 1-.482-1.373V3.577c0-.528.169-1.02.482-1.373.18-.202.39-.336.61-.39z" fill="#00D764"/>
+            <path d="M17.155 8.636l-3.363 3.364 3.363 3.364 3.805-2.182a1.866 1.866 0 0 0 0-3.184l-3.805-2.182z" fill="#FFC800"/>
+            <path d="M3.61 1.814l10.182 10.186 3.363-3.364L4.858 1.884a1.88 1.88 0 0 0-1.248-.07z" fill="#00C3FF"/>
+            <path d="M13.792 12L3.61 22.186c.38.163.818.138 1.248-.07l12.297-6.752L13.792 12z" fill="#FF3A44"/>
+          </svg>
+          <div class="store-badge-text">
+            <span class="store-badge-sub">GET IT ON</span>
+            <span class="store-badge-main">Google Play</span>
+          </div>
+        </a>
+
+        <a href="#download" class="store-badge-btn store-badge-outline" onclick="openAppStoreNotice(event)">
+          <svg class="store-badge-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.62-.75 1.04-1.8 0.92-2.85-.9.04-2 .6-2.65 1.35-.58.66-1.08 1.73-.95 2.76.99.08 2.05-.51 2.68-1.26z"/>
+          </svg>
+          <div class="store-badge-text">
+            <span class="store-badge-sub">COMING SOON TO</span>
+            <span class="store-badge-main">App Store</span>
+          </div>
         </a>
       </div>
       <div style="font-size: 11px; letter-spacing: 1px; color: var(--ink-subtle); text-transform: uppercase;">
-        2 Free Notes Included on Install · No Credit Card Required
+        2 Free Notes Included on Install · In-App Purchase Options
       </div>
     </section>
   </div>
@@ -1131,12 +1258,12 @@
         </div>
 
         <div>
-          <h5 class="footer-col-title">Downloads & Access</h5>
+          <h5 class="footer-col-title">App Stores</h5>
           <ul class="footer-links">
-            <li><a href="https://github.com/itstoasti/fields-Journal/releases" class="footer-link">Android APK Release</a></li>
-            <li><span class="footer-link" style="opacity: 0.6;">Google Play (In Review)</span></li>
-            <li><span class="footer-link" style="opacity: 0.6;">iOS App Store (Coming Soon)</span></li>
-            <li><a href="https://github.com/itstoasti/fields-Journal" class="footer-link">GitHub Repository</a></li>
+            <li><a href="https://play.google.com/store/apps/details?id=com.fieldnotes.app" class="footer-link" target="_blank" rel="noopener">Google Play Store</a></li>
+            <li><a href="#download" class="footer-link" onclick="openAppStoreNotice(event)">Apple App Store (Coming Soon)</a></li>
+            <li><a href="#membership" class="footer-link">Fields Pro Membership</a></li>
+            <li><a href="#features" class="footer-link">Artisanal Inks & Showcase</a></li>
           </ul>
         </div>
 
@@ -1202,6 +1329,25 @@
         img.style.opacity = '1';
       }, 150);
     }
+
+    function openAppStoreNotice(e) {
+      if (e) e.preventDefault();
+      const toast = document.getElementById('store-toast');
+      if (toast) {
+        toast.classList.add('visible');
+        setTimeout(() => {
+          toast.classList.remove('visible');
+        }, 4500);
+      }
+    }
   </script>
+
+  <!-- Store Notification Toast -->
+  <div id="store-toast" class="store-toast">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.62-.75 1.04-1.8 0.92-2.85-.9.04-2 .6-2.65 1.35-.58.66-1.08 1.73-.95 2.76.99.08 2.05-.51 2.68-1.26z"/>
+    </svg>
+    <span>Fields is currently in rollout for Apple App Store. Google Play is available now!</span>
+  </div>
 </body>
 </html>
