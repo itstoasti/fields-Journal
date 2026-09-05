@@ -12,8 +12,10 @@ web-build/
 android/
 ios/
 *.apk
+*.aab
 *.zip
 field-notes-debug.*
+field-notes-release.*
 
 # Environment files
 .env
