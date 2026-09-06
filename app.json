@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.fieldnotes.app",
+      "bundleIdentifier": "app.fields.journal",
       "infoPlist": {
         "NSCameraUsageDescription": "Fields accesses your camera to capture travel scenes for your carved stamp field notes.",
         "NSPhotoLibraryUsageDescription": "Fields accesses your photo gallery to select travel photos and read capture dates and locations.",
@@ -24,7 +24,7 @@
       }
     },
     "android": {
-      "package": "com.fieldnotes.app",
+      "package": "app.fields.journal",
       "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
