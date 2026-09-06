@@ -1,174 +1,225 @@
-# FIELD NOTES
+# FIELDS: Travel Journal & Scrapbook
 
-**FIELD NOTES** turns one travel photograph into a 4:3 landscape "Rubber Stamp Travel Field Notes Poster" featuring the preserved photo on the left (~58%) and a warm aged paper section on the right (~42%) with a minimal carved rubber-stamp and typewriter captions.
+<p align="center">
+  <img src="assets/icon.png" width="120" height="120" alt="Fields App Icon" style="border-radius: 26px;" />
+</p>
 
-Built for **Google Play** with **Expo SDK 54**, **React Native 0.81**, **React 19**, **Expo Router**, **xAI Grok Imagine 2.0**, **Google Mobile Ads (AdMob)**, and **RevenueCat (Google Play Billing)**.
+<p align="center">
+  <strong>Transform your travel photographs into timeless carved stamp prints, vintage travel posters, and field note memories.</strong>
+</p>
+
+<p align="center">
+  <a href="https://fields-journal.vercel.app"><img src="https://img.shields.io/badge/Web-Live%20on%20Vercel-black?style=for-the-badge&logo=vercel" alt="Vercel" /></a>
+  <a href="https://turso.tech"><img src="https://img.shields.io/badge/Database-Turso%20Cloud-00FFE0?style=for-the-badge&logo=sqlite&logoColor=black" alt="Turso" /></a>
+  <a href="https://expo.dev"><img src="https://img.shields.io/badge/Client-Expo%20SDK%2054-000020?style=for-the-badge&logo=expo" alt="Expo" /></a>
+  <a href="https://reactnative.dev"><img src="https://img.shields.io/badge/React%20Native-0.81%20%7C%20React%2019-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React Native" /></a>
+</p>
 
 ---
 
-## Monetization & Generation Architecture
+## ✦ Overview
 
-- **Note 1**: Free (no ads)
-- **Note 2**: Free (no ads)
-- **Note 3**: Rewarded video ad gate (Ad shown *after* tapping button, *before* generation; only `onEarnedReward` completed callback unlocks the Grok call)
-- **Note 4+**: Paywall modal for \$2.99 / 20 note credits (`notes_20`)
-- **Zero Gemini in Production**: Live generation uses xAI Grok Imagine image editing exclusively through the server.
-- **Fail-Safe Balance Protection**: Failed or interrupted generations never consume free slots, ad slots, or user credits.
-- **Durable Server Verification**: Entitlement state is tracked in a local SQLite store keyed by installation ID + RevenueCat app user ID.
+**Fields: Travel Journal & Scrapbook** is an editorial travel diary and artistic memory-keeping application built for iOS and Android. Inspired by mid-century national park field guides, archival travel scrapbooks, and traditional relief printmaking, Fields distills the atmosphere, light, and geometry of your travel photos into handcrafted linocut stamp posters.
+
+The app features an end-to-end cloud serverless backend deployed on **Vercel** with a distributed **Turso Cloud SQLite** database, providing instant response times, zero maintenance, and \$0/month idle infrastructure costs.
 
 ---
 
-## Project Structure
+## ✦ Core Features & Capabilities
+
+### 1. Linocut Stamp & Poster Generation
+* **Dual AI Printmaker Engine**: Integrates Google Gemini 2.5 Flash and xAI Grok Imagine to intelligently analyze scenery, architecture, and lighting to generate relief woodblock and linocut stamp artwork.
+* **4:3 Aspect Ratio Field Note Composition**: Beautifully proportions the original captured photo on the left (~58%) against an archival aged-paper panel on the right (~42%) featuring a minimalist carved rubber-stamp motif, destination coordinates, and typewriter typography.
+* **Paper Grain & Ink Bleed**: Incorporates authentic organic paper textures, deckled borders, and analog ink pressure variations.
+
+### 2. Smart Travel Metadata & EXIF Detection
+* **Automatic Geocoding**: Extracts GPS coordinates and reverse-geocodes photos into recognizable city, region, and country labels.
+* **Temporal Tracking**: Reads photo capture timestamps to automatically assign the travel year and date.
+* **Edition Numbering**: Sequential numbering system (`No. 01`, `No. 02`, etc.) giving every field note the feel of a limited-edition lithograph.
+
+### 3. AI Sensory Memory Keywords
+* Rather than generic hashtags, Fields analyzes the photo and location context to suggest three evocative sensory keywords (e.g., `"Salt Spray"`, `"Limestone"`, `"Golden Hour"`, `"Pinyon Pine"`).
+* Full manual customization allows travelers to preserve their own personal memories of the moment.
+
+### 4. Digital Scrapbook & Stamped Passport
+* **Archival Grid**: Browse all previously created field notes in a clean, high-density scrapbook grid.
+* **Chronological Sorting**: Filter your journey by year, destination, or edition number.
+* **Local Offline Storage**: All finalized field notes are cached locally on device using Zustand and secure persistent storage.
+
+### 5. High-Resolution Export & Sharing
+* One-tap export to the native device photo gallery in ultra-high resolution.
+* Native sharing sheet optimized for Instagram Stories, Pinterest, digital scrapbooking, or physical art printing.
+
+---
+
+## ✦ Monetization & Entitlement Architecture
+
+Fields implements a customer-friendly, transparent hybrid monetization model powered by **RevenueCat** and **Google Mobile Ads (AdMob)**:
+
+| Tier | Access Quota | Cost | Monetization Mechanism |
+| :--- | :--- | :--- | :--- |
+| **Notes 1 & 2** | 2 Field Notes | **Free** | Instant complimentary access on first download. |
+| **Note 3** | 1 Field Note | **Ad-Supported** | Unlocked after watching a single Google AdMob rewarded video ad. |
+| **Notes 4+** | Pay-As-You-Go | **\$2.99 / 20 Notes** | Consumable credit pack (`notes_20`) via Google Play Billing. |
+| **Pro Unlimited** | Unlimited | **Subscription** | Monthly, Yearly, or Lifetime Pro subscription with unlimited generation. |
+
+### Balance Protection & Anti-Abuse
+* **Fail-Safe Rollback**: If an image generation is interrupted, times out, or fails server-side, user credits and free quotas are automatically preserved.
+* **Hardware & Cloud Sync**: Entitlements are tied to device hardware identifiers and RevenueCat User IDs stored in Turso Cloud SQLite, preventing quota reset exploits on app reinstallation.
+
+---
+
+## ✦ Architecture & Tech Stack
+
+```
+                               ┌──────────────────────────────────────────────┐
+                               │             FIELDS MOBILE CLIENT             │
+                               │  Expo SDK 54 • React Native 0.81 • React 19  │
+                               │      Expo Router • Zustand • RevenueCat      │
+                               └──────────────────────┬───────────────────────┘
+                                                      │ HTTPS / JSON & Multipart
+                                                      ▼
+                               ┌──────────────────────────────────────────────┐
+                               │           VERCEL SERVERLESS API              │
+                               │           https://fields-journal.vercel.app  │
+                               │                                              │
+                               │  • /health             • /v1/me              │
+                               │  • /v1/notes           • /v1/credits/sync    │
+                               │  • /v1/keywords/suggest                      │
+                               └──────────────┬───────────────────────────────┘
+                                              │
+                     ┌────────────────────────┼────────────────────────┐
+                     ▼                        ▼                        ▼
+      ┌─────────────────────────┐  ┌─────────────────────┐  ┌─────────────────────┐
+      │    TURSO CLOUD SQLITE   │  │  GOOGLE GEMINI API  │  │   xAI GROK IMAGINE  │
+      │  libsql distributed db  │  │  2.5 Flash Vision   │  │   Image Edit 2.0    │
+      │  Users, credits, logs   │  │  Visual analysis    │  │   Linocut print art │
+      └─────────────────────────┘  └─────────────────────┘  └─────────────────────┘
+```
+
+### Client Technologies
+* **Framework**: [Expo SDK 54](https://expo.dev/) (Managed Workflow + Prebuild)
+* **Runtime**: React Native 0.81.5, React 19
+* **Navigation**: [Expo Router v6](https://docs.expo.dev/router/introduction/) (File-based routing with typed routes)
+* **State Management**: [Zustand v5](https://github.com/pmndrs/zustand) with async storage persistence
+* **In-App Purchases**: [RevenueCat](https://www.revenuecat.com/) (`react-native-purchases` & `react-native-purchases-ui`)
+* **Mobile Ads**: [Google Mobile Ads](https://github.com/invertase/react-native-google-mobile-ads) (`react-native-google-mobile-ads`)
+* **Camera & Media**: `expo-image-picker`, `expo-media-library`, `expo-image-manipulator`, `expo-location`
+
+### Cloud Infrastructure
+* **Serverless Compute**: [Vercel](https://vercel.com/) (Node.js 20 Serverless Runtime with Hono)
+* **Database**: [Turso](https://turso.tech/) (Distributed SQLite over libSQL WebSocket/HTTP)
+* **Web Landing & Legal**: Static, mobile-responsive compliance website served from Vercel Edge (`/`, `/privacy`, `/terms`)
+
+---
+
+## ✦ Project Directory Structure
 
 ```
 Field Notes/
-├── app/                       # Expo Router screens
-│   ├── _layout.tsx            # Root layout & theme initialization
-│   ├── index.tsx              # Home screen (Saved notes grid & wordmark)
-│   ├── compose.tsx            # Compose screen (Taped photo & field log)
-│   ├── pressing.tsx           # Pressing generation screen (Quiet status)
-│   ├── result.tsx             # Result screen (4:3 poster, Save & Share)
-│   ├── settings.tsx           # Settings (Credits, restore purchases, privacy)
-│   ├── privacy.tsx            # Full privacy policy & data safety
+├── app/                          # Expo Router file-based screens
+│   ├── _layout.tsx               # Root application layout, font loading & theme
+│   ├── index.tsx                 # Home screen: Travel scrapbook grid & action bar
+│   ├── compose.tsx               # Compose screen: Photo picker, metadata & keywords
+│   ├── pressing.tsx              # Generation screen: Atmospheric progress state
+│   ├── result.tsx                # Result screen: 4:3 poster viewer, save & share
+│   ├── settings.tsx              # Settings: Entitlements, credit restore & terms
+│   ├── privacy.tsx               # In-app privacy disclosure & data safety details
 │   └── modal/
-│       ├── paywall.tsx        # Paywall modal ($2.99 / 20 credits)
-│       └── privacy-consent.tsx# First-run privacy disclosure sheet
-├── assets/                    # Textures, icons, splash, empty-stamp
+│       ├── paywall.tsx           # In-app purchase sheet ($2.99 / 20 credits pack)
+│       └── privacy-consent.tsx   # First-run AI processing consent sheet
+│
+├── assets/                       # Visual assets, branding, fonts, icons & splash
+│   ├── icon.png                  # App icon (1024x1024)
+│   ├── adaptive-icon.png         # Android adaptive foreground icon
+│   └── splash.png                # Launch screen illustration
+│
 ├── src/
-│   ├── components/            # PaperContainer, PhotoTape, StampButton, etc.
-│   ├── theme/                 # Paper colors, typewriter typography, spacing
-│   ├── types/                 # TypeScript interfaces
-│   ├── store/                 # Zustand app state
-│   └── lib/                   # Ads, purchases, image manipulation, api
-├── server/                    # Hono / Node backend API
+│   ├── components/               # Reusable UI components (PaperContainer, StampButton)
+│   ├── lib/                      # Core business logic modules
+│   │   ├── api.ts                # API client pointing to production Vercel backend
+│   │   ├── purchases.ts          # RevenueCat SDK integration & entitlement checks
+│   │   ├── ads.ts                # Google AdMob rewarded ad controller
+│   │   └── location.ts           # EXIF parsing & reverse-geocoding utilities
+│   ├── store/                    # Zustand persistent application state
+│   ├── theme/                    # Paper color palettes, serif typography & spacing
+│   └── types/                    # TypeScript interfaces & API schemas
+│
+├── server/                       # Backend service (Hono + TypeScript)
+│   ├── api/index.ts              # Vercel serverless request listener bridge
 │   ├── src/
-│   │   ├── index.ts           # Hono endpoints (/v1/notes, /v1/me, /v1/credits/sync)
-│   │   ├── prompt.ts          # Server-owned locked Grok prompt
-│   │   ├── grok.ts            # xAI Imagine 2.0 client with retries
-│   │   └── db.ts              # SQLite database & entitlement state machine
-│   └── test/                  # Verification test suite
-├── app.json                   # Expo & Android native plugin config
-├── eas.json                   # EAS build configuration
-└── package.json               # Expo SDK 54 client dependencies
+│   │   ├── index.ts              # Route declarations (/v1/notes, /v1/me, /v1/keywords)
+│   │   ├── db.ts                 # Turso Cloud SQLite schema & balance state machine
+│   │   ├── gemini.ts             # Google Gemini 2.5 Flash image generation service
+│   │   ├── grok.ts               # xAI Grok Imagine 2.0 image editing service
+│   │   ├── keywords.ts           # Sensory keyword AI extraction prompt
+│   │   └── prompt.ts             # Server-locked master linocut prompt builder
+│   └── package.json              # Server dependencies & build scripts
+│
+├── public/                       # Static web assets for store compliance
+│   ├── index.html                # Marketing landing page
+│   ├── privacy.html              # Web privacy policy for Google Play compliance
+│   └── terms.html                # Terms of service for App Store compliance
+│
+├── api/index.js                  # Pre-bundled Vercel serverless entry point
+├── app.json                      # Expo app configuration & native plugin declarations
+├── eas.json                      # Expo Application Services (EAS) build profiles
+├── vercel.json                   # Vercel routing rules, rewrites & headers
+└── package.json                  # Root dependencies & package scripts
 ```
 
 ---
 
-## Getting Started
+## ✦ Getting Started Locally
 
 ### 1. Prerequisites
-- Node.js `>= 20.0.0`
-- Android Studio & Android SDK (for Android development builds)
-- EAS CLI (`npm install -g eas-cli`)
+* **Node.js**: `>= 20.0.0`
+* **npm**: `>= 10.0.0`
+* **EAS CLI**: `npm install -g eas-cli`
+* **Android Studio & SDK**: (Optional, for local compilation)
 
----
-
-### 2. Configure Environment Variables
-
-#### App Client (`.env` in root)
+### 2. Installation
 ```bash
-cp .env.example .env
-```
-Fill in the values:
-```env
-# For Android Emulator: http://10.0.2.2:3001
-# For Physical device: http://<YOUR_LOCAL_IP>:3001
-EXPO_PUBLIC_API_URL=http://10.0.2.2:3001
+# Clone repository
+git clone https://github.com/itstoasti/fields-Journal.git
+cd fields-Journal
 
-EXPO_PUBLIC_ADMOB_APP_ID=ca-app-pub-3940256099942544~3347511713
-EXPO_PUBLIC_ADMOB_REWARDED_ID=ca-app-pub-3940256099942544/5224354917
-EXPO_PUBLIC_REVENUECAT_API_KEY=goog_sample_fieldnotes_key
+# Install root dependencies
+npm install
+
+# Install server dependencies
+npm install --prefix server
+```
+
+### 3. Environment Setup
+Create a `.env` file in the project root:
+```env
+# Mobile Client (.env)
+EXPO_PUBLIC_API_URL=https://fields-journal.vercel.app
+EXPO_PUBLIC_REVENUECAT_API_KEY=test_kejmcZYQWmrefaSizVLCGOzPWDB
 EXPO_PUBLIC_RC_PRODUCT_NOTES_20=notes_20
-```
-
-#### Backend Server (`server/.env`)
-```bash
-cd server
-cp .env.example .env
-```
-Fill in the values:
-```env
-PORT=3001
-NODE_ENV=development
-XAI_API_KEY=xai-your-api-key-here
-XAI_IMAGE_MODEL=grok-imagine-image-2.0
-DATABASE_PATH=./data/fieldnotes.db
-```
-*(If `XAI_API_KEY` is not set or set to `mock`, the server operates in mock mode for development and local testing).*
-
----
-
-### 3. Running the Backend Server
-
-```bash
-cd server
-npm install
-npm run dev
-```
-
-To run the automated verification test suite:
-```bash
-cd server
-npx tsx test/verify.ts
+EXPO_PUBLIC_RC_ENTITLEMENT_ID=fields_travel_journal_scrapebook_pro
 ```
 
 ---
 
-### 4. Running the Expo App
+## ✦ Building for Production (Google Play & App Store)
 
+### 1. Android App Bundle (`.aab`)
+Production builds are built and signed in the cloud via EAS Build:
 ```bash
-# Install client dependencies
-npm install
-
-# Start development bundler
-npx expo start
+eas build --platform android --profile production
 ```
+* **Output**: Production `.aab` bundle ready for Google Play Console Internal / Closed testing tracks.
+* **Keystore**: Managed remotely via EAS Credentials.
+
+### 2. Google Play Store Compliance URLs
+* **Marketing Landing**: `https://fields-journal.vercel.app`
+* **Privacy Policy**: `https://fields-journal.vercel.app/privacy`
+* **Terms of Service**: `https://fields-journal.vercel.app/terms`
 
 ---
 
-### 5. Creating an Android Development Build
+## ✦ License
 
-Because Google Mobile Ads (`react-native-google-mobile-ads`) and RevenueCat (`react-native-purchases`) require native Android modules, use an Expo Development Build:
-
-#### Local Build & Run on Connected Android Device or Emulator:
-```bash
-npx expo run:android
-```
-
-#### EAS Cloud Build:
-```bash
-# Login to EAS
-eas login
-
-# Configure project
-eas build:configure
-
-# Build Android APK for testing
-eas build --profile development --platform android
-```
-
----
-
-### 6. Production Google Play Setup
-
-1. **Google AdMob**:
-   - Create a Google AdMob account and register an Android App.
-   - Replace `androidAppId` in `app.json` with your real AdMob App ID.
-   - Create a Rewarded Video Ad Unit and set `EXPO_PUBLIC_ADMOB_REWARDED_ID`.
-
-2. **RevenueCat & Play Console**:
-   - Create a managed in-app product in Google Play Console with Product ID `notes_20` (\$2.99).
-   - In RevenueCat dashboard, create an Offering and attach `notes_20`.
-   - Set `EXPO_PUBLIC_REVENUECAT_API_KEY` to your RevenueCat Google API key.
-
-3. **Data Safety Declarations**:
-   - Photo processing is declared honestly in `app/privacy.tsx`: images are sent to a third-party AI provider (xAI) to generate the poster and are deleted immediately after processing without model training.
-
----
-
-## Server Locked Prompt File
-
-The locked Grok Imagine prompt is located in:
-[`server/src/prompt.ts`](file:///Users/deanfieldz/Desktop/Code%20Projects/Field%20Notes/server/src/prompt.ts)
-
-It automatically interpolates `{{PLACE}}`, `{{NUMBER}}`, `{{KEYWORD_1}}`, `{{KEYWORD_2}}`, `{{KEYWORD_3}}`, and `{{YEAR}}` while guaranteeing that the formatting, color grading, whitespace, and rubber-stamp rules remain strictly enforced by the server.
+Copyright © 2026 Fields. All rights reserved. Private and proprietary.
