@@ -7,7 +7,9 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
+    "build:web": "expo export -p web",
     "build:api": "npx esbuild server/api/index.ts --bundle --platform=node --target=node20 --outfile=api/index.js",
+    "build": "npm run build:web && npm run build:api",
     "postinstall": "patch-package"
   },
   "dependencies": {

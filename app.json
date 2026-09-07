@@ -42,6 +42,11 @@
         "android.permission.READ_MEDIA_VISUAL_USER_SELECTED"
       ]
     },
+    "web": {
+      "favicon": "./assets/icon.png",
+      "bundler": "metro",
+      "output": "static"
+    },
     "plugins": [
       "expo-router",
       "expo-secure-store",

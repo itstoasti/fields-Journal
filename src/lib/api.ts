@@ -7,13 +7,30 @@ export function getApiBaseUrl(): string {
     return process.env.EXPO_PUBLIC_API_URL;
   }
 
+  // If running on web in a deployed environment (Vercel production/preview domain)
+  if (
+    Platform.OS === 'web' &&
+    typeof window !== 'undefined' &&
+    window.location &&
+    window.location.origin &&
+    !window.location.hostname.includes('localhost') &&
+    !window.location.hostname.includes('127.0.0.1')
+  ) {
+    return window.location.origin;
+  }
+
   // 100% Cloud Serverless API on Vercel + Turso Cloud SQLite
   return 'https://fields-journal.vercel.app';
 }
 
-const COMMON_HEADERS = {
-  'Accept': 'application/json',
-  'ngrok-skip-browser-warning': 'true',
+const getCommonHeaders = (baseUrl: string): Record<string, string> => {
+  const headers: Record<string, string> = {
+    'Accept': 'application/json',
+  };
+  if (baseUrl.includes('ngrok')) {
+    headers['ngrok-skip-browser-warning'] = 'true';
+  }
+  return headers;
 };
 
 export async function fetchUserEntitlements(
@@ -33,7 +50,7 @@ export async function fetchUserEntitlements(
     const response = await fetch(`${baseUrl}/v1/me?${query.toString()}`, {
       method: 'GET',
       headers: {
-        ...COMMON_HEADERS,
+        ...getCommonHeaders(baseUrl),
         'Authorization': `Bearer ${installationId}`,
       },
       signal: controller.signal,
@@ -67,7 +84,7 @@ export async function submitGenerateNote(request: GenerateNoteRequest): Promise<
     const response = await fetch(`${baseUrl}/v1/notes`, {
       method: 'POST',
       headers: {
-        ...COMMON_HEADERS,
+        ...getCommonHeaders(baseUrl),
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${request.installationId}`,
       },
@@ -110,7 +127,7 @@ export async function syncPurchasedCredits(
     const response = await fetch(`${baseUrl}/v1/credits/sync`, {
       method: 'POST',
       headers: {
-        ...COMMON_HEADERS,
+        ...getCommonHeaders(baseUrl),
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${installationId}`,
       },
@@ -163,7 +180,7 @@ export async function suggestKeywordsFromImage(
     const response = await fetch(`${baseUrl}/v1/keywords/suggest`, {
       method: 'POST',
       headers: {
-        ...COMMON_HEADERS,
+        ...getCommonHeaders(baseUrl),
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({

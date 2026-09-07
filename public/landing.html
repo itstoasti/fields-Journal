@@ -1,0 +1,1383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FIELDS — The Artisanal Travel Journal & Scrapbook</title>
+  <meta name="description" content="Turn your travel photos into hand-carved rubber stamp posters. Create your collectible digital travel journal with authentic spot-color inks and typewriter memories." />
+  
+  <!-- Open Graph -->
+  <meta property="og:title" content="FIELDS — The Artisanal Travel Journal & Scrapbook" />
+  <meta property="og:description" content="Turn your favorite travel photos into collectible hand-pressed rubber stamp prints on archival parchment." />
+  <meta property="og:image" content="/assets/poster_kyoto.jpg" />
+  <meta property="og:type" content="website" />
+
+  <!-- Favicon / Browser Tab Icons -->
+  <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16x16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png" />
+  <link rel="shortcut icon" href="/favicon.ico" />
+
+  <!-- Fonts: Space Mono, Fraunces (Editorial Serif), Caveat (Handwritten Cursive) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..700&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bg: #F5EFEB;
+      --bg-cream: #FAF6F0;
+      --paper: #FAF8F5;
+      --card-bg: #FFFFFF;
+      --charcoal: #1C1917;
+      --ink-dark: #292524;
+      --ink-muted: #665E55;
+      --ink-subtle: #9E9484;
+      --border: #D8CEBE;
+      --border-dark: #1C1917;
+      --brick: #B9381E;
+      --brick-light: #FBF0ED;
+      --emerald: #23533E;
+      --ochre: #B87A24;
+      --cobalt: #1E468F;
+      --tape: rgba(224, 213, 191, 0.75);
+      --radius: 8px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      color-scheme: light;
+    }
+
+    body {
+      background-color: var(--bg);
+      background-image: 
+        radial-gradient(#1C1917 0.45px, transparent 0.45px),
+        linear-gradient(to bottom, rgba(245, 239, 235, 0.85), rgba(245, 239, 235, 0.98));
+      background-size: 24px 24px, 100% 100%;
+      color: var(--charcoal);
+      font-family: 'Space Mono', Courier, monospace;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Top Utility Announcement Bar */
+    .top-bar {
+      border-bottom: 1px solid var(--border);
+      background: rgba(245, 239, 235, 0.92);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      padding: 9px 20px;
+      font-size: 11px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .top-bar-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .top-dot {
+      width: 7px;
+      height: 7px;
+      background: var(--brick);
+      border-radius: 50%;
+      display: inline-block;
+      box-shadow: 0 0 0 2px rgba(185, 56, 30, 0.25);
+    }
+
+    .container {
+      max-width: 1140px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Navigation */
+    nav {
+      padding: 24px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px dashed var(--border);
+    }
+
+    .brand-lockup {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .brand-logo {
+      width: 44px;
+      height: 44px;
+      border-radius: 8px;
+      border: 1.5px solid var(--border-dark);
+      box-shadow: 2px 2px 0px var(--border-dark);
+      object-fit: cover;
+    }
+
+    .brand-names {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .brand-title {
+      font-family: 'Caveat', cursive;
+      font-size: 34px;
+      line-height: 1;
+      color: var(--charcoal);
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    .brand-subtitle {
+      font-size: 9px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+      margin-top: 2px;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 24px;
+      align-items: center;
+      list-style: none;
+    }
+
+    @media (max-width: 768px) {
+      .nav-links { display: none; }
+    }
+
+    .nav-link {
+      font-size: 12px;
+      letter-spacing: 1px;
+      text-decoration: none;
+      color: var(--ink-muted);
+      text-transform: uppercase;
+      transition: color 0.15s ease;
+    }
+
+    .nav-link:hover {
+      color: var(--charcoal);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-decoration: none;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      min-height: 46px;
+    }
+
+    .btn-primary {
+      background: var(--charcoal);
+      color: var(--bg-cream);
+      border: 1.5px solid var(--charcoal);
+      box-shadow: 3px 3px 0 var(--border-dark);
+    }
+
+    .btn-primary:hover {
+      transform: translate(-1px, -1px);
+      box-shadow: 4px 4px 0 var(--border-dark);
+    }
+
+    .btn-primary:active {
+      transform: translate(1px, 1px);
+      box-shadow: 1px 1px 0 var(--border-dark);
+    }
+
+    .btn-brick {
+      background: var(--brick);
+      color: #FFFFFF;
+      border: 1.5px solid var(--charcoal);
+      box-shadow: 3px 3px 0 var(--border-dark);
+    }
+
+    .btn-brick:hover {
+      transform: translate(-1px, -1px);
+      box-shadow: 4px 4px 0 var(--border-dark);
+    }
+
+    .btn-outline {
+      background: transparent;
+      color: var(--charcoal);
+      border: 1.5px solid var(--border-dark);
+      box-shadow: 2px 2px 0 var(--border);
+    }
+
+    .btn-outline:hover {
+      background: var(--bg-cream);
+      box-shadow: 3px 3px 0 var(--border-dark);
+    }
+
+    /* App Store Badges */
+    .store-badge-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--charcoal);
+      color: #FFFFFF;
+      text-decoration: none;
+      padding: 10px 22px;
+      border-radius: 8px;
+      border: 1.5px solid var(--charcoal);
+      box-shadow: 3px 3px 0 var(--border-dark);
+      transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .store-badge-btn:hover {
+      transform: translate(-1px, -1px);
+      box-shadow: 4px 4px 0 var(--border-dark);
+      background: #292524;
+    }
+
+    .store-badge-btn:active {
+      transform: translate(1px, 1px);
+      box-shadow: 1px 1px 0 var(--border-dark);
+    }
+
+    .store-badge-outline {
+      background: #FFFFFF;
+      color: var(--charcoal);
+      border: 1.5px solid var(--border-dark);
+    }
+
+    .store-badge-outline:hover {
+      background: var(--bg-cream);
+      color: var(--charcoal);
+    }
+
+    .store-badge-pwa {
+      background: #FAF8F5;
+      color: #1C1917;
+      border: 2px solid #1C1917;
+    }
+
+    .store-badge-pwa:hover {
+      background: #EFE7DA;
+      color: #1C1917;
+    }
+
+    .store-badge-pwa .store-badge-icon {
+      fill: #1C1917;
+      color: #1C1917;
+    }
+
+    .store-badge-icon {
+      flex-shrink: 0;
+    }
+
+    .store-badge-text {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.15;
+    }
+
+    .store-badge-sub {
+      font-family: 'Space Mono', monospace;
+      font-size: 8.5px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      opacity: 0.75;
+    }
+
+    .store-badge-main {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .store-toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: var(--charcoal);
+      color: #FFFFFF;
+      padding: 12px 24px;
+      border-radius: 30px;
+      font-size: 13px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+      border: 1px solid rgba(255,255,255,0.15);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 1000;
+      opacity: 0;
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+      pointer-events: none;
+      max-width: 90vw;
+      text-align: center;
+    }
+
+    .store-toast.visible {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* Hero Section */
+    .hero {
+      padding: 68px 0 54px;
+      text-align: center;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-cream);
+      border: 1px solid var(--border);
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 11px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--brick);
+      margin-bottom: 24px;
+    }
+
+    .hero-title {
+      font-family: 'Fraunces', serif;
+      font-size: clamp(34px, 5.8vw, 70px);
+      line-height: 1.1;
+      font-weight: 500;
+      color: var(--charcoal);
+      max-width: 920px;
+      margin: 0 auto 22px;
+      letter-spacing: -0.02em;
+    }
+
+    .hero-title em {
+      font-style: italic;
+      font-family: 'Fraunces', serif;
+      font-weight: 400;
+      color: var(--brick);
+    }
+
+    .hero-desc {
+      font-size: clamp(14px, 1.8vw, 17px);
+      color: var(--ink-muted);
+      max-width: 680px;
+      margin: 0 auto 36px;
+      line-height: 1.75;
+    }
+
+    .hero-cta-group {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+
+    .hero-meta-proof {
+      font-size: 11px;
+      letter-spacing: 1px;
+      color: var(--ink-subtle);
+      text-transform: uppercase;
+      margin-top: 14px;
+    }
+
+    /* Showcase Stage */
+    .showcase-stage {
+      margin: 44px auto 76px;
+      background: var(--paper);
+      border: 1.5px solid var(--border-dark);
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 6px 8px 0px rgba(28, 25, 23, 0.95);
+      position: relative;
+    }
+
+    /* Washi tape accents */
+    .showcase-stage::before {
+      content: '';
+      position: absolute;
+      top: -12px;
+      left: 40px;
+      width: 90px;
+      height: 24px;
+      background: var(--tape);
+      border: 1px dashed rgba(180, 160, 130, 0.4);
+      transform: rotate(-3deg);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      z-index: 2;
+    }
+
+    .showcase-stage::after {
+      content: '';
+      position: absolute;
+      top: -12px;
+      right: 40px;
+      width: 90px;
+      height: 24px;
+      background: var(--tape);
+      border: 1px dashed rgba(180, 160, 130, 0.4);
+      transform: rotate(2.5deg);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      z-index: 2;
+    }
+
+    .showcase-tabs {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      cursor: pointer;
+      color: var(--ink-muted);
+      transition: all 0.15s ease;
+    }
+
+    .tab-btn:hover {
+      border-color: var(--charcoal);
+      color: var(--charcoal);
+    }
+
+    .tab-btn.active {
+      background: var(--charcoal);
+      border-color: var(--charcoal);
+      color: var(--bg-cream);
+      font-weight: bold;
+    }
+
+    .poster-display {
+      position: relative;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid rgba(28, 25, 23, 0.15);
+      background: #FFFFFF;
+      aspect-ratio: 4 / 3;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.04), 0 6px 24px rgba(0,0,0,0.07);
+    }
+
+    .poster-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: opacity 0.25s ease;
+    }
+
+    .poster-caption {
+      margin-top: 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      border-top: 1px dashed var(--border);
+      padding-top: 16px;
+      font-size: 12px;
+    }
+
+    .poster-details {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .poster-badge {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* Section Headings */
+    .section-title-lockup {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+
+    .section-tag {
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--brick);
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .section-heading {
+      font-family: 'Fraunces', serif;
+      font-size: clamp(28px, 4.2vw, 44px);
+      color: var(--charcoal);
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    /* 3 Step Craft Grid */
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+      gap: 24px;
+      margin-bottom: 80px;
+    }
+
+    .card {
+      background: var(--paper);
+      border: 1.5px solid var(--border-dark);
+      border-radius: 8px;
+      padding: 32px 28px;
+      box-shadow: 4px 4px 0px var(--border-dark);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .card-num {
+      font-size: 11px;
+      letter-spacing: 2px;
+      color: var(--brick);
+      font-weight: bold;
+      margin-bottom: 16px;
+      display: block;
+    }
+
+    .card-title {
+      font-family: 'Fraunces', serif;
+      font-size: 22px;
+      color: var(--charcoal);
+      margin-bottom: 12px;
+      line-height: 1.25;
+    }
+
+    .card-desc {
+      font-size: 13px;
+      color: var(--ink-muted);
+      line-height: 1.7;
+      margin-bottom: 20px;
+    }
+
+    .card-meta {
+      border-top: 1px dashed var(--border);
+      padding-top: 14px;
+      font-size: 11px;
+      color: var(--ink-subtle);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* Pro Membership Showcase (High-Converting Sales Section) */
+    .membership-section {
+      background: #1C1917;
+      color: #F4EFE6;
+      border-radius: 12px;
+      padding: clamp(36px, 5.5vw, 68px);
+      margin-bottom: 80px;
+      position: relative;
+      box-shadow: 8px 10px 0px rgba(185, 56, 30, 0.45);
+    }
+
+    .membership-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 11px;
+      letter-spacing: 1.5px;
+      color: #FFC480;
+      text-transform: uppercase;
+      margin-bottom: 24px;
+    }
+
+    .membership-title {
+      font-family: 'Fraunces', serif;
+      font-size: clamp(28px, 4.4vw, 48px);
+      font-weight: 500;
+      line-height: 1.15;
+      margin-bottom: 20px;
+      color: #FFFFFF;
+    }
+
+    .membership-desc {
+      font-size: 14px;
+      line-height: 1.8;
+      color: #D4C9BA;
+      max-width: 720px;
+      margin-bottom: 36px;
+    }
+
+    .pricing-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+      border-top: 1px solid rgba(255, 255, 255, 0.15);
+      padding-top: 36px;
+    }
+
+    .plan-card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 8px;
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+    }
+
+    .plan-card.featured {
+      background: rgba(255, 255, 255, 0.09);
+      border: 1.5px solid #FFC480;
+    }
+
+    .popular-tag {
+      position: absolute;
+      top: -12px;
+      right: 20px;
+      background: #FFC480;
+      color: #1C1917;
+      font-size: 10px;
+      font-weight: bold;
+      letter-spacing: 1px;
+      padding: 3px 10px;
+      border-radius: 12px;
+      text-transform: uppercase;
+    }
+
+    .plan-tier {
+      font-size: 12px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #D4C9BA;
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .plan-name {
+      font-family: 'Fraunces', serif;
+      font-size: 26px;
+      color: #FFFFFF;
+      margin-bottom: 12px;
+    }
+
+    .plan-feature-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin: 20px 0 28px;
+      font-size: 12px;
+      color: #D4C9BA;
+      line-height: 1.6;
+    }
+
+    .plan-feature-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .plan-feature-list li::before {
+      content: '✓';
+      color: #FFC480;
+      font-weight: bold;
+    }
+
+    /* Social Proof Quotes */
+    .quotes-section {
+      margin-bottom: 80px;
+    }
+
+    .quotes-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+    }
+
+    .quote-card {
+      background: var(--paper);
+      border: 1.5px solid var(--border-dark);
+      border-radius: 8px;
+      padding: 32px 28px;
+      box-shadow: 4px 4px 0px var(--border-dark);
+      font-style: normal;
+    }
+
+    .quote-text {
+      font-family: 'Fraunces', serif;
+      font-size: 18px;
+      line-height: 1.6;
+      color: var(--charcoal);
+      margin-bottom: 20px;
+    }
+
+    .quote-author {
+      font-size: 11px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--brick);
+      font-weight: bold;
+    }
+
+    .quote-loc {
+      font-size: 10px;
+      color: var(--ink-subtle);
+      margin-top: 2px;
+    }
+
+    /* Privacy Banner */
+    .privacy-card {
+      background: var(--bg-cream);
+      border: 1.5px solid var(--border-dark);
+      border-radius: 8px;
+      padding: 40px;
+      margin-bottom: 80px;
+      box-shadow: 4px 4px 0px var(--border-dark);
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 32px;
+    }
+
+    .privacy-item-title {
+      font-size: 12px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--charcoal);
+      font-weight: bold;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .privacy-item-desc {
+      font-size: 12px;
+      color: var(--ink-muted);
+      line-height: 1.6;
+    }
+
+    /* Final CTA Card */
+    .final-cta {
+      background: var(--paper);
+      border: 2px solid var(--border-dark);
+      border-radius: 12px;
+      padding: clamp(40px, 6vw, 72px) 24px;
+      text-align: center;
+      margin-bottom: 80px;
+      box-shadow: 6px 8px 0px var(--border-dark);
+      position: relative;
+    }
+
+    .final-cta h3 {
+      font-family: 'Fraunces', serif;
+      font-size: clamp(30px, 4.5vw, 48px);
+      color: var(--charcoal);
+      margin-bottom: 16px;
+      font-weight: 500;
+    }
+
+    .final-cta p {
+      font-size: 15px;
+      color: var(--ink-muted);
+      max-width: 580px;
+      margin: 0 auto 32px;
+      line-height: 1.7;
+    }
+
+    /* Footer */
+    footer {
+      border-top: 2px solid var(--border-dark);
+      background: var(--paper);
+      padding: 64px 0 40px;
+      margin-top: 40px;
+    }
+
+    .footer-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr;
+      gap: 48px;
+      margin-bottom: 48px;
+    }
+
+    @media (max-width: 768px) {
+      .footer-grid {
+        grid-template-columns: 1fr;
+        gap: 32px;
+      }
+    }
+
+    .footer-brand-desc {
+      font-size: 12px;
+      color: var(--ink-muted);
+      line-height: 1.7;
+      max-width: 380px;
+      margin-top: 12px;
+    }
+
+    .footer-col-title {
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--charcoal);
+      font-weight: bold;
+      margin-bottom: 16px;
+    }
+
+    .footer-links {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .footer-link {
+      font-size: 12px;
+      color: var(--ink-muted);
+      text-decoration: none;
+      transition: color 0.15s ease;
+    }
+
+    .footer-link:hover {
+      color: var(--brick);
+      text-decoration: underline;
+    }
+
+    .footer-bottom {
+      border-top: 1px dashed var(--border);
+      padding-top: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      font-size: 11px;
+      color: var(--ink-subtle);
+    }
+
+    .colophon {
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Announcement Bar -->
+  <div class="top-bar">
+    <div class="top-bar-left">
+      <span class="top-dot"></span>
+      <span>2026 Edition · Fields Travel Journal & Scrapbook</span>
+    </div>
+    <div>
+      <span>Limited Free Launch Edition · 2 Custom Notes Included</span>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- Header Navigation -->
+    <nav>
+      <a href="/" class="brand-lockup">
+        <img src="/assets/tag_logo.png" alt="Fields Logo" class="brand-logo" />
+        <div class="brand-names">
+          <span class="brand-title">Fields</span>
+          <span class="brand-subtitle">Travel Journal & Scrapbook</span>
+        </div>
+      </a>
+
+      <ul class="nav-links">
+        <li><a href="#how-it-works" class="nav-link">The Craft</a></li>
+        <li><a href="#gallery" class="nav-link">Editions</a></li>
+        <li><a href="#membership" class="nav-link">Fields Pro</a></li>
+        <li><a href="/privacy" class="nav-link">Privacy</a></li>
+        <li><a href="/terms" class="nav-link">Terms</a></li>
+        <li><a href="/" class="btn btn-primary" style="padding: 8px 18px; font-size: 11px;">Launch Web App</a></li>
+      </ul>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+      <div class="hero-tag">
+        <span class="stamp-chip">Relief Block &amp; Linocut Press</span>
+        <span>No. 01 Edition — Instant Web &amp; Mobile</span>
+      </div>
+
+      <h1 class="hero-title">
+        The travel scrapbook for the digital wanderer.
+      </h1>
+
+      <p class="hero-sub">
+        Transform ordinary travel photographs into collectible, hand-pressed rubber stamp prints on archival parchment. Record coordinates, dates, and evocative sensory memories in a timeless mid-century format.
+      </p>
+
+      <div class="hero-cta-group" id="download">
+        <a href="/" class="store-badge-btn store-badge-pwa">
+          <svg class="store-badge-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.62-.75 1.04-1.8 0.92-2.85-.9.04-2 .6-2.65 1.35-.58.66-1.08 1.73-.95 2.76.99.08 2.05-.51 2.68-1.26z"/>
+          </svg>
+          <div class="store-badge-text">
+            <span class="store-badge-sub">LAUNCH PWA APP</span>
+            <span class="store-badge-main">Use on Web / iOS</span>
+          </div>
+        </a>
+
+        <a href="https://play.google.com/store/apps/details?id=app.fields.journal" class="store-badge-btn" target="_blank" rel="noopener">
+          <svg class="store-badge-icon" width="24" height="24" viewBox="0 0 24 24">
+            <path d="M3.609 1.814L13.792 12 3.61 22.186a1.954 1.954 0 0 1-.61-.39 2.04 2.04 0 0 1-.482-1.373V3.577c0-.528.169-1.02.482-1.373.18-.202.39-.336.61-.39z" fill="#00D764"/>
+            <path d="M17.155 8.636l-3.363 3.364 3.363 3.364 3.805-2.182a1.866 1.866 0 0 0 0-3.184l-3.805-2.182z" fill="#FFC800"/>
+            <path d="M3.61 1.814l10.182 10.186 3.363-3.364L4.858 1.884a1.88 1.88 0 0 0-1.248-.07z" fill="#00C3FF"/>
+            <path d="M13.792 12L3.61 22.186c.38.163.818.138 1.248-.07l12.297-6.752L13.792 12z" fill="#FF3A44"/>
+          </svg>
+          <div class="store-badge-text">
+            <span class="store-badge-sub">GET IT ON</span>
+            <span class="store-badge-main">Google Play</span>
+          </div>
+        </a>
+      </div>
+
+      <div class="hero-meta-proof">
+        Free to use in browser or install as PWA · 2 free custom stamps included · Zero account setup
+      </div>
+
+      <!-- Interactive 4:3 Showcase Stage -->
+      <div class="showcase-stage">
+        <div class="showcase-tabs">
+          <button class="tab-btn active" onclick="switchPoster(0, this)">01. Kyoto Old District</button>
+          <button class="tab-btn" onclick="switchPoster(1, this)">02. Yosemite Valley</button>
+          <button class="tab-btn" onclick="switchPoster(2, this)">03. Amalfi Coast</button>
+        </div>
+
+        <div class="poster-display">
+          <img id="active-poster-img" src="/assets/poster_kyoto.jpg" alt="Kyoto Old District Field Note" class="poster-img" />
+        </div>
+
+        <div class="poster-caption">
+          <div class="poster-details">
+            <span id="poster-place" style="font-weight: bold; font-family: 'Fraunces', serif; font-size: 16px;">Kyoto Old District, No. 01</span>
+            <span id="poster-keywords" style="color: var(--ink-muted);">Cedar trees · Temple bell · Dusk mist</span>
+          </div>
+          <div>
+            <span class="poster-badge">4:3 Landscape Ratio</span>
+            <span class="poster-badge" style="color: var(--brick); border-color: var(--brick);">Archival Spot-Color Ink</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- How It Works Section -->
+    <section id="how-it-works">
+      <div class="section-title-lockup">
+        <span class="section-tag">◈ Three Simple Steps</span>
+        <h2 class="section-heading">How your journey becomes a collectible.</h2>
+      </div>
+
+      <div class="grid-3">
+        <div class="card">
+          <div>
+            <span class="card-num">STEP 01</span>
+            <h3 class="card-title">Choose Any Photo</h3>
+            <p class="card-desc">
+              Snap on the go or pick any photo from your camera roll. Your destination and capture year are automatically detected and stamped into your card header.
+            </p>
+          </div>
+          <div class="card-meta">
+            <span>58% Photo Area</span>
+            <span>Auto-Location Stamping</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div>
+            <span class="card-num">STEP 02</span>
+            <h3 class="card-title">Atmospheric Memory</h3>
+            <p class="card-desc">
+              We distill the exact emotional feeling of your scene into three poetic memory words (e.g. <em>Cedar trees · Temple bell · Dusk mist</em>). You can tap to change or customize them.
+            </p>
+          </div>
+          <div class="card-meta">
+            <span>Poetic Memory Triad</span>
+            <span>Customizable Words</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div>
+            <span class="card-num">STEP 03</span>
+            <h3 class="card-title">The Hand-Pressed Stamp</h3>
+            <p class="card-desc">
+              Your photo is minted into a bespoke multi-color rubber stamp print with relief carving notches, dry ink texture, and tactile misregistration pressed onto warm aged parchment.
+            </p>
+          </div>
+          <div class="card-meta">
+            <span>2–4 Spot Inks</span>
+            <span>42% Archival Whitespace</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Gallery / Scrapbook Showcase -->
+    <section id="gallery">
+      <div class="section-title-lockup">
+        <span class="section-tag">◈ Your Personal Passport</span>
+        <h2 class="section-heading">A visual archive of everywhere you wander.</h2>
+      </div>
+
+      <div class="grid-3">
+        <div class="card" style="padding: 16px;">
+          <img src="/assets/poster_kyoto.jpg" alt="Kyoto Field Note" style="width: 100%; border-radius: 4px; margin-bottom: 12px; border: 1px solid var(--border);" />
+          <h4 style="font-family: 'Fraunces', serif; font-size: 18px; margin-bottom: 4px;">Kyoto Old District</h4>
+          <p style="font-size: 12px; color: var(--ink-muted); margin-bottom: 12px;">No. 01 · Cedar trees · Temple bell · Dusk mist</p>
+          <div class="card-meta">
+            <span>Print Edition: 2026</span>
+            <span style="color: var(--brick);">Vermilion / Slate</span>
+          </div>
+        </div>
+
+        <div class="card" style="padding: 16px;">
+          <img src="/assets/poster_yosemite.jpg" alt="Yosemite Field Note" style="width: 100%; border-radius: 4px; margin-bottom: 12px; border: 1px solid var(--border);" />
+          <h4 style="font-family: 'Fraunces', serif; font-size: 18px; margin-bottom: 4px;">Yosemite Valley</h4>
+          <p style="font-size: 12px; color: var(--ink-muted); margin-bottom: 12px;">No. 02 · Granite peak · Morning mist · Pine resin</p>
+          <div class="card-meta">
+            <span>Print Edition: 2026</span>
+            <span style="color: var(--emerald);">Pine Green / Terracotta</span>
+          </div>
+        </div>
+
+        <div class="card" style="padding: 16px;">
+          <img src="/assets/poster_amalfi.jpg" alt="Amalfi Field Note" style="width: 100%; border-radius: 4px; margin-bottom: 12px; border: 1px solid var(--border);" />
+          <h4 style="font-family: 'Fraunces', serif; font-size: 18px; margin-bottom: 4px;">Amalfi Coast</h4>
+          <p style="font-size: 12px; color: var(--ink-muted); margin-bottom: 12px;">No. 03 · Cobalt sea · Lemon groves · Cliffside breeze</p>
+          <div class="card-meta">
+            <span>Print Edition: 2026</span>
+            <span style="color: var(--cobalt);">Cobalt / Warm Ochre</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Social Proof Quotes -->
+    <section class="quotes-section">
+      <div class="section-title-lockup">
+        <span class="section-tag">◈ What Travelers Are Saying</span>
+        <h2 class="section-heading">Loved by wanderers, photographers, and journalers.</h2>
+      </div>
+
+      <div class="quotes-grid">
+        <div class="quote-card">
+          <p class="quote-text">
+            “It feels like turning my phone camera roll into a physical Moleskine sketchbook. I printed three of these out and framed them on my wall.”
+          </p>
+          <div class="quote-author">Elena R. · Photographer</div>
+          <div class="quote-loc">Documented: Tokyo, Kyoto, Nara</div>
+        </div>
+
+        <div class="quote-card">
+          <p class="quote-text">
+            “The rubber stamp look is unbelievable. The dry ink texture and typewriter font look exactly like something carved by hand in an artisan workshop.”
+          </p>
+          <div class="quote-author">Marcus T. · Solo Backpacker</div>
+          <div class="quote-loc">Documented: Dolomites, Patagonia, Banff</div>
+        </div>
+
+        <div class="quote-card">
+          <p class="quote-text">
+            “Finally an app that isn't another loud social network. It's a quiet, private archive that actually makes me appreciate the places I've been.”
+          </p>
+          <div class="quote-author">Sarah W. · Travel Writer</div>
+          <div class="quote-loc">Documented: Lisbon, Amalfi, Oaxaca</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Fields Pro Membership Showcase (High-Converting Sales Section) -->
+    <section id="membership" class="membership-section">
+      <span class="membership-badge">✦ The Explorer's Membership</span>
+      <h2 class="membership-title">Never leave a memory unrecorded.</h2>
+      <p class="membership-desc">
+        Start completely free with 2 custom field note prints included on install. When you're ready for unlimited journeys, unlock Fields Pro for unrestricted creations, high-res exports, and exclusive spot-color inks.
+      </p>
+
+      <div class="pricing-cards">
+        <div class="plan-card">
+          <div>
+            <span class="plan-tier">Starter Edition</span>
+            <h4 class="plan-name">Free Forever</h4>
+            <p style="font-size: 13px; color: #D4C9BA;">Ideal for testing the craft on your latest trip.</p>
+            <ul class="plan-feature-list">
+              <li>2 Custom Hand-Pressed Notes Free</li>
+              <li>Auto-Location & Date Extraction</li>
+              <li>Standard 4:3 Digital Export</li>
+              <li>Full Offline Journal Access</li>
+            </ul>
+          </div>
+          <a href="#download" class="btn btn-outline" style="border-color: rgba(255,255,255,0.3); color: #FFFFFF; width: 100%;">Get Started Free</a>
+        </div>
+
+        <div class="plan-card featured">
+          <span class="popular-tag">Most Popular</span>
+          <div>
+            <span class="plan-tier">Unlimited Expeditions</span>
+            <h4 class="plan-name">Fields Pro</h4>
+            <p style="font-size: 13px; color: #FFC480;">For frequent travelers, vacationers, and collectors.</p>
+            <ul class="plan-feature-list">
+              <li>Unlimited Note Generations Forever</li>
+              <li>Ultra High-Resolution Print Export</li>
+              <li>All Artisan Spot-Color Inks Unlocked</li>
+              <li>Ad-Free, Unrestricted Experience</li>
+              <li>Early Access to New Journal Editions</li>
+            </ul>
+          </div>
+          <a href="#download" class="btn btn-brick" style="background: #FFC480; color: #1C1917; border-color: #FFC480; width: 100%;">Unlock Fields Pro</a>
+        </div>
+
+        <div class="plan-card">
+          <div>
+            <span class="plan-tier">Occasional Packs</span>
+            <h4 class="plan-name">20 Notes Pack</h4>
+            <p style="font-size: 13px; color: #D4C9BA;">Pay as you travel. No subscription needed.</p>
+            <ul class="plan-feature-list">
+              <li>20 Additional Note Credits</li>
+              <li>Never Expire</li>
+              <li>Full High-Resolution Export</li>
+              <li>Use Across Any Number of Trips</li>
+            </ul>
+          </div>
+          <a href="#download" class="btn btn-outline" style="border-color: rgba(255,255,255,0.3); color: #FFFFFF; width: 100%;">Buy Note Credits</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Privacy & Trust Section -->
+    <section class="privacy-card">
+      <div>
+        <div class="privacy-item-title">
+          <span>🔒</span> 100% Anonymous
+        </div>
+        <p class="privacy-item-desc">
+          No sign-up forms, phone numbers, or passwords. Start recording your journey the second you open the app.
+        </p>
+      </div>
+
+      <div>
+        <div class="privacy-item-title">
+          <span>🗑️</span> Ephemeral Photo Lifecycle
+        </div>
+        <p class="privacy-item-desc">
+          Your photos are processed directly in memory to carve your stamp and discarded immediately. Nothing is stored on our servers.
+        </p>
+      </div>
+
+      <div>
+        <div class="privacy-item-title">
+          <span>📦</span> Local Scrapbook Storage
+        </div>
+        <p class="privacy-item-desc">
+          All your cards and scrapbook notes live securely on your device, ready to open anywhere even with zero cellular signal.
+        </p>
+      </div>
+
+      <div>
+        <div class="privacy-item-title">
+          <span>🖼️</span> Print & Frame Ready
+        </div>
+        <p class="privacy-item-desc">
+          Every note exports in crisp 4:3 aspect ratio, standardized for physical photo paper, framing, and postcard mailings.
+        </p>
+      </div>
+    </section>
+
+    <!-- Final Call to Action -->
+    <section class="final-cta">
+      <h3>Your next destination deserves a stamp.</h3>
+      <p>
+        Available on the official app stores. Pick your favorite travel photo and press your first custom field note in seconds.
+      </p>
+      <div class="hero-cta-group" style="margin-bottom: 16px;">
+        <a href="https://play.google.com/store/apps/details?id=app.fields.journal" class="store-badge-btn" target="_blank" rel="noopener">
+          <svg class="store-badge-icon" width="24" height="24" viewBox="0 0 24 24">
+            <path d="M3.609 1.814L13.792 12 3.61 22.186a1.954 1.954 0 0 1-.61-.39 2.04 2.04 0 0 1-.482-1.373V3.577c0-.528.169-1.02.482-1.373.18-.202.39-.336.61-.39z" fill="#00D764"/>
+            <path d="M17.155 8.636l-3.363 3.364 3.363 3.364 3.805-2.182a1.866 1.866 0 0 0 0-3.184l-3.805-2.182z" fill="#FFC800"/>
+            <path d="M3.61 1.814l10.182 10.186 3.363-3.364L4.858 1.884a1.88 1.88 0 0 0-1.248-.07z" fill="#00C3FF"/>
+            <path d="M13.792 12L3.61 22.186c.38.163.818.138 1.248-.07l12.297-6.752L13.792 12z" fill="#FF3A44"/>
+          </svg>
+          <div class="store-badge-text">
+            <span class="store-badge-sub">GET IT ON</span>
+            <span class="store-badge-main">Google Play</span>
+          </div>
+        </a>
+
+        <a href="/" class="store-badge-btn store-badge-pwa">
+          <svg class="store-badge-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.62-.75 1.04-1.8 0.92-2.85-.9.04-2 .6-2.65 1.35-.58.66-1.08 1.73-.95 2.76.99.08 2.05-.51 2.68-1.26z"/>
+          </svg>
+          <div class="store-badge-text">
+            <span class="store-badge-sub">LAUNCH PWA APP</span>
+            <span class="store-badge-main">Use on Web / iOS</span>
+          </div>
+        </a>
+      </div>
+      <div style="font-size: 11px; letter-spacing: 1px; color: var(--ink-subtle); text-transform: uppercase;">
+        2 Free Notes Included on Install · Works in Any Browser
+      </div>
+    </section>
+  </div>
+
+  <!-- Minimalist 2026 Footer -->
+  <footer>
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <a href="/" class="brand-lockup">
+            <img src="/assets/tag_logo.png" alt="Fields Logo" style="width: 36px; height: 36px; border-radius: 6px; border: 1.5px solid var(--border-dark);" />
+            <div class="brand-names">
+              <span class="brand-title" style="font-size: 26px;">Fields</span>
+              <span class="brand-subtitle">Travel Journal & Scrapbook</span>
+            </div>
+          </a>
+          <p class="footer-brand-desc">
+            A tactile digital travel journal turning personal photographs into archival rubber stamp posters. Designed in 2026 for explorers and collectors.
+          </p>
+        </div>
+
+        <div>
+          <h5 class="footer-col-title">App Stores</h5>
+          <ul class="footer-links">
+            <li><a href="https://play.google.com/store/apps/details?id=app.fields.journal" class="footer-link" target="_blank" rel="noopener">Google Play Store</a></li>
+            <li><a href="#download" class="footer-link" onclick="openAppStoreNotice(event)">Apple App Store (Coming Soon)</a></li>
+            <li><a href="#membership" class="footer-link">Fields Pro Membership</a></li>
+            <li><a href="#features" class="footer-link">Artisanal Inks & Showcase</a></li>
+          </ul>
+        </div>
+
+        <div>
+          <h5 class="footer-col-title">Legal & Compliance</h5>
+          <ul class="footer-links">
+            <li><a href="/privacy" class="footer-link">Privacy Policy</a></li>
+            <li><a href="/terms" class="footer-link">Terms of Service</a></li>
+            <li><a href="mailto:deanfields48@gmail.com" class="footer-link">Developer Contact</a></li>
+            <li><a href="/health" class="footer-link">API Status</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <div>
+          © 2026 FIELDS. All rights reserved.
+        </div>
+        <div class="colophon">
+          HAND-PRESSED ON DIGITAL PARCHMENT · ARTISANAL RUBBER STAMP EDITIONS
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    const posters = [
+      {
+        src: '/assets/poster_kyoto.jpg',
+        place: 'Kyoto Old District, No. 01',
+        keywords: 'Cedar trees · Temple bell · Dusk mist',
+        alt: 'Kyoto Old District Field Note'
+      },
+      {
+        src: '/assets/poster_yosemite.jpg',
+        place: 'Yosemite Valley, No. 02',
+        keywords: 'Granite peak · Morning mist · Pine resin',
+        alt: 'Yosemite Valley Field Note'
+      },
+      {
+        src: '/assets/poster_amalfi.jpg',
+        place: 'Amalfi Coast, No. 03',
+        keywords: 'Cobalt sea · Lemon groves · Cliffside breeze',
+        alt: 'Amalfi Coast Field Note'
+      }
+    ];
+
+    function switchPoster(index, btnElement) {
+      const img = document.getElementById('active-poster-img');
+      const place = document.getElementById('poster-place');
+      const keywords = document.getElementById('poster-keywords');
+      const buttons = document.querySelectorAll('.tab-btn');
+
+      buttons.forEach(b => b.classList.remove('active'));
+      btnElement.classList.add('active');
+
+      img.style.opacity = '0.3';
+      setTimeout(() => {
+        img.src = posters[index].src;
+        img.alt = posters[index].alt;
+        place.innerText = posters[index].place;
+        keywords.innerText = posters[index].keywords;
+        img.style.opacity = '1';
+      }, 150);
+    }
+
+    function openAppStoreNotice(e) {
+      if (e) e.preventDefault();
+      const toast = document.getElementById('store-toast');
+      if (toast) {
+        toast.classList.add('visible');
+        setTimeout(() => {
+          toast.classList.remove('visible');
+        }, 4500);
+      }
+    }
+  </script>
+
+  <!-- Store Notification Toast -->
+  <div id="store-toast" class="store-toast">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.62-.75 1.04-1.8 0.92-2.85-.9.04-2 .6-2.65 1.35-.58.66-1.08 1.73-.95 2.76.99.08 2.05-.51 2.68-1.26z"/>
+    </svg>
+    <span>Fields is currently in rollout for Apple App Store. Google Play is available now!</span>
+  </div>
+</body>
+</html>

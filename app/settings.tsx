@@ -127,6 +127,13 @@ export default function SettingsScreen() {
     });
   };
 
+  const handleOpenAbout = () => {
+    const baseUrl = getApiBaseUrl();
+    Linking.openURL(`${baseUrl}/about`).catch(() => {
+      Alert.alert('Notice', 'Unable to open About page.');
+    });
+  };
+
   const handleOpenPaywall = () => {
     router.push('/modal/paywall');
   };
@@ -408,6 +415,18 @@ export default function SettingsScreen() {
           </TypewriterText>
 
           <View style={styles.menuList}>
+            <Pressable style={styles.menuItem} onPress={handleOpenAbout}>
+              <View style={styles.menuItemLeft}>
+                <Ionicons name="information-circle-outline" size={20} color={colors.charcoal} />
+                <TypewriterText size="sm" color={colors.charcoal} style={styles.menuItemText}>
+                  About Fields &amp; Art Gallery
+                </TypewriterText>
+              </View>
+              <Ionicons name="open-outline" size={16} color={colors.inkMuted} />
+            </Pressable>
+
+            <View style={styles.divider} />
+
             <Pressable style={styles.menuItem} onPress={handleOpenPrivacy}>
               <View style={styles.menuItemLeft}>
                 <Ionicons name="shield-checkmark-outline" size={20} color={colors.charcoal} />

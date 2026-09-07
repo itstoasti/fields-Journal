@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Image, StyleSheet, Animated } from 'react-native';
+import { View, Image, StyleSheet, Animated, Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useAppStore } from '../src/store/useAppStore';
-import { TypewriterText } from '../src/components';
+import { TypewriterText, PwaInstallBanner } from '../src/components';
 import { colors, spacing } from '../src/theme';
 
 export default function RootLayout() {
@@ -14,6 +14,20 @@ export default function RootLayout() {
   useEffect(() => {
     // Run background app initialization
     initApp();
+
+    // Register PWA Service Worker on web
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker
+          .register('/sw.js')
+          .then((registration) => {
+            console.log('[SW] ServiceWorker registered with scope:', registration.scope);
+          })
+          .catch((err) => {
+            console.warn('[SW] ServiceWorker registration failed:', err);
+          });
+      });
+    }
 
     // Guaranteed splash dismissal after 1.0s max, never blocks user UI
     const timer = setTimeout(() => {
@@ -60,6 +74,9 @@ export default function RootLayout() {
           }}
         />
       </Stack>
+
+      {/* PWA iOS Add to Home Screen & Install Prompt */}
+      <PwaInstallBanner />
 
       {/* Seamless High-Resolution In-App Splash Brand Tag */}
       {showSplash && (

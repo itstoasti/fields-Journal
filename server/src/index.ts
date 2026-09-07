@@ -27,7 +27,7 @@ const app = new Hono();
 app.use('*', logger());
 app.use('*', cors({
   origin: '*',
-  allowHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  allowHeaders: ['Content-Type', 'Authorization', 'Accept', 'ngrok-skip-browser-warning'],
   allowMethods: ['GET', 'POST', 'OPTIONS'],
 }));
 
