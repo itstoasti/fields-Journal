@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Image, StyleSheet, ViewStyle } from 'react-native';
+import { View, Image, StyleSheet, ViewStyle, Platform } from 'react-native';
 import { colors, spacing } from '../theme';
 
 interface PhotoTapeProps {
@@ -16,18 +16,45 @@ export const PhotoTape: React.FC<PhotoTapeProps> = ({
   return (
     <View style={[styles.container, style]}>
       {/* 4 Diagonal Translucent Masking Tape Strips (1:1 with mockup) */}
-      <View style={[styles.tapeStrip, styles.tapeTopLeft]} />
-      <View style={[styles.tapeStrip, styles.tapeTopRight]} />
-      <View style={[styles.tapeStrip, styles.tapeBottomLeft]} />
-      <View style={[styles.tapeStrip, styles.tapeBottomRight]} />
+      <View style={[styles.tapeStrip, styles.tapeTopLeft]} pointerEvents="none" />
+      <View style={[styles.tapeStrip, styles.tapeTopRight]} pointerEvents="none" />
+      <View style={[styles.tapeStrip, styles.tapeBottomLeft]} pointerEvents="none" />
+      <View style={[styles.tapeStrip, styles.tapeBottomRight]} pointerEvents="none" />
 
       {/* Photo Frame Container with White Matting */}
       <View style={styles.photoFrame}>
-        <Image
-          source={{ uri }}
-          style={[styles.image, { aspectRatio }]}
-          resizeMode="cover"
-        />
+        {Platform.OS === 'web' ? (
+          <div
+            style={{
+              position: 'relative',
+              width: '100%',
+              paddingBottom: `${(1 / aspectRatio) * 100}%`,
+              overflow: 'hidden',
+              borderRadius: 1,
+            }}
+          >
+            <img
+              src={uri}
+              alt="Selected travel photo"
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                display: 'block',
+                borderRadius: 1,
+              }}
+            />
+          </div>
+        ) : (
+          <Image
+            source={{ uri }}
+            style={[styles.image, { aspectRatio }]}
+            resizeMode="cover"
+          />
+        )}
       </View>
     </View>
   );
@@ -40,6 +67,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginVertical: spacing.xs,
+    width: '100%',
+    alignSelf: 'stretch',
   },
   photoFrame: {
     backgroundColor: '#FFFFFF',
