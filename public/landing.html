@@ -19,6 +19,28 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png" />
   <link rel="shortcut icon" href="/favicon.ico" />
 
+  <!-- PWA Manifest & Mobile Capability -->
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#F5EFEB" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Fields" />
+
+  <!-- Standalone Mode Detection & Service Worker -->
+  <script>
+    if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
+      window.location.replace('/app');
+    }
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch((err) => {
+          console.warn('[SW] Registration failed:', err);
+        });
+      });
+    }
+  </script>
+
   <!-- Fonts: Space Mono, Fraunces (Editorial Serif), Caveat (Handwritten Cursive) -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -938,7 +960,7 @@
         <li><a href="#membership" class="nav-link">Fields Pro</a></li>
         <li><a href="/privacy" class="nav-link">Privacy</a></li>
         <li><a href="/terms" class="nav-link">Terms</a></li>
-        <li><a href="/" class="btn btn-primary" style="padding: 8px 18px; font-size: 11px;">Launch Web App</a></li>
+        <li><a href="/app" class="btn btn-primary" style="padding: 8px 18px; font-size: 11px;">Launch Web App</a></li>
       </ul>
     </nav>
 
@@ -958,7 +980,7 @@
       </p>
 
       <div class="hero-cta-group" id="download">
-        <a href="/" class="store-badge-btn store-badge-pwa">
+        <a href="/app" class="store-badge-btn store-badge-pwa">
           <svg class="store-badge-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
             <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.62-.75 1.04-1.8 0.92-2.85-.9.04-2 .6-2.65 1.35-.58.66-1.08 1.73-.95 2.76.99.08 2.05-.51 2.68-1.26z"/>
           </svg>
@@ -978,6 +1000,16 @@
           <div class="store-badge-text">
             <span class="store-badge-sub">GET IT ON</span>
             <span class="store-badge-main">Google Play</span>
+          </div>
+        </a>
+
+        <a href="#download" class="store-badge-btn store-badge-outline" onclick="openAppStoreNotice(event)">
+          <svg class="store-badge-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.62-.75 1.04-1.8 0.92-2.85-.9.04-2 .6-2.65 1.35-.58.66-1.08 1.73-.95 2.76.99.08 2.05-.51 2.68-1.26z"/>
+          </svg>
+          <div class="store-badge-text">
+            <span class="store-badge-sub">ROLLOUT ON</span>
+            <span class="store-badge-main">App Store</span>
           </div>
         </a>
       </div>
@@ -1241,6 +1273,16 @@
         Available on the official app stores. Pick your favorite travel photo and press your first custom field note in seconds.
       </p>
       <div class="hero-cta-group" style="margin-bottom: 16px;">
+        <a href="/app" class="store-badge-btn store-badge-pwa">
+          <svg class="store-badge-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.62-.75 1.04-1.8 0.92-2.85-.9.04-2 .6-2.65 1.35-.58.66-1.08 1.73-.95 2.76.99.08 2.05-.51 2.68-1.26z"/>
+          </svg>
+          <div class="store-badge-text">
+            <span class="store-badge-sub">LAUNCH PWA APP</span>
+            <span class="store-badge-main">Use on Web / iOS</span>
+          </div>
+        </a>
+
         <a href="https://play.google.com/store/apps/details?id=app.fields.journal" class="store-badge-btn" target="_blank" rel="noopener">
           <svg class="store-badge-icon" width="24" height="24" viewBox="0 0 24 24">
             <path d="M3.609 1.814L13.792 12 3.61 22.186a1.954 1.954 0 0 1-.61-.39 2.04 2.04 0 0 1-.482-1.373V3.577c0-.528.169-1.02.482-1.373.18-.202.39-.336.61-.39z" fill="#00D764"/>
@@ -1254,13 +1296,13 @@
           </div>
         </a>
 
-        <a href="/" class="store-badge-btn store-badge-pwa">
+        <a href="#download" class="store-badge-btn store-badge-outline" onclick="openAppStoreNotice(event)">
           <svg class="store-badge-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
             <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.62-.75 1.04-1.8 0.92-2.85-.9.04-2 .6-2.65 1.35-.58.66-1.08 1.73-.95 2.76.99.08 2.05-.51 2.68-1.26z"/>
           </svg>
           <div class="store-badge-text">
-            <span class="store-badge-sub">LAUNCH PWA APP</span>
-            <span class="store-badge-main">Use on Web / iOS</span>
+            <span class="store-badge-sub">ROLLOUT ON</span>
+            <span class="store-badge-main">App Store</span>
           </div>
         </a>
       </div>

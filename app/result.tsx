@@ -10,6 +10,7 @@ import {
   FlatList,
   NativeSyntheticEvent,
   NativeScrollEvent,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
@@ -178,7 +179,7 @@ export default function ResultScreen() {
   };
 
   const handleBackToHome = () => {
-    router.replace('/');
+    router.replace((Platform.OS === 'web' ? '/app' : '/') as any);
   };
 
   const handleConfirmDelete = async () => {
@@ -187,7 +188,7 @@ export default function ResultScreen() {
       await deleteNote(activeNote.id);
     }
     if (displayNotes.length <= 1) {
-      router.replace('/');
+      router.replace((Platform.OS === 'web' ? '/app' : '/') as any);
     } else {
       const nextIdx = Math.max(0, currentIndex - 1);
       setCurrentIndex(nextIdx);
@@ -248,11 +249,24 @@ export default function ResultScreen() {
           renderItem={({ item }) => (
             <View style={styles.pageContainer}>
               <View style={styles.posterCard}>
-                <Image
-                  source={{ uri: item.posterUri }}
-                  style={styles.posterImage}
-                  resizeMode="contain"
-                />
+                {Platform.OS === 'web' ? (
+                  <img
+                    src={item.posterUri}
+                    alt="Poster preview"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'contain',
+                      display: 'block',
+                    }}
+                  />
+                ) : (
+                  <Image
+                    source={{ uri: item.posterUri }}
+                    style={styles.posterImage}
+                    resizeMode="contain"
+                  />
+                )}
               </View>
             </View>
           )}

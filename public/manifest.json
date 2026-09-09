@@ -2,7 +2,7 @@
   "name": "Fields: Travel Journal & Scrapbook",
   "short_name": "Fields",
   "description": "Transform your travel photographs into timeless carved stamp prints, vintage travel posters, and field note memories.",
-  "start_url": "/",
+  "start_url": "/app",
   "scope": "/",
   "display": "standalone",
   "display_override": ["standalone", "window-controls-overlay"],

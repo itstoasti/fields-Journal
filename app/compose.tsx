@@ -49,6 +49,7 @@ export default function ComposeScreen() {
   const [selectedPhotoUri, setSelectedPhotoUri] = useState<string | null>(
     params.photoUri || null
   );
+  const [selectedAspectRatio, setSelectedAspectRatio] = useState<number>(4 / 3);
   const [place, setPlace] = useState<string>('');
   const [noteNumber, setNoteNumber] = useState<string>(getNextNoteNumber());
   const [year, setYear] = useState<string>('');
@@ -202,6 +203,9 @@ export default function ComposeScreen() {
       const result = await pickImageFromLibrary();
       if (!result.canceled && result.uri) {
         setSelectedPhotoUri(result.uri);
+        if (result.width && result.height) {
+          setSelectedAspectRatio(result.width / result.height);
+        }
         await applyExtractedMetadata(result);
       }
     } catch (error: any) {
@@ -214,6 +218,9 @@ export default function ComposeScreen() {
       const result = await pickImageFromCamera();
       if (!result.canceled && result.uri) {
         setSelectedPhotoUri(result.uri);
+        if (result.width && result.height) {
+          setSelectedAspectRatio(result.width / result.height);
+        }
         await applyExtractedMetadata(result);
       }
     } catch (error: any) {
@@ -388,7 +395,7 @@ export default function ComposeScreen() {
               <View style={styles.photoContainer}>
                 <PhotoTape
                   uri={selectedPhotoUri}
-                  aspectRatio={4 / 3}
+                  aspectRatio={selectedAspectRatio}
                 />
               </View>
               <View style={styles.photoActionsRow}>
@@ -618,6 +625,7 @@ const styles = StyleSheet.create({
   photoPreviewWrapper: {
     marginBottom: spacing.xs,
     alignItems: 'center',
+    width: '100%',
   },
   photoContainer: {
     width: '100%',

@@ -3,10 +3,15 @@ const CACHE_NAME = 'fields-pwa-v1';
 
 const STATIC_ASSETS = [
   '/',
+  '/app',
   '/manifest.json',
   '/assets/icon-192.png',
   '/assets/icon-512.png',
   '/assets/apple-touch-icon.png',
+  '/assets/tag_logo.png',
+  '/assets/poster_kyoto.jpg',
+  '/assets/poster_yosemite.jpg',
+  '/assets/poster_amalfi.jpg',
   '/favicon.ico'
 ];
 

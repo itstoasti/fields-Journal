@@ -32,6 +32,14 @@
   ],
   "rewrites": [
     {
+      "source": "/app",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/app/(.*)",
+      "destination": "/app.html"
+    },
+    {
       "source": "/about",
       "destination": "/about.html"
     },
@@ -58,10 +66,6 @@
     {
       "source": "/health",
       "destination": "/api"
-    },
-    {
-      "source": "/((?!api|v1|health|_expo|assets|sw\\.js|manifest\\.json|.*\\..*).*)",
-      "destination": "/index.html"
     }
   ]
 }

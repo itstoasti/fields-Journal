@@ -7,6 +7,7 @@ import {
   Animated,
   Easing,
   Alert,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { PaperContainer, TypewriterText, StampButton } from '../src/components';
@@ -170,11 +171,25 @@ export default function PressingScreen() {
       {/* Main Visual: Original Photo with subtle plate press outline */}
       <View style={styles.plateContainer}>
         <View style={styles.photoFrame}>
-          <Image
-            source={{ uri: params.photoUri }}
-            style={styles.sourceImage}
-            resizeMode="cover"
-          />
+          {Platform.OS === 'web' ? (
+            <img
+              src={params.photoUri}
+              alt="Source travel photo"
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                borderRadius: 1,
+                display: 'block',
+              }}
+            />
+          ) : (
+            <Image
+              source={{ uri: params.photoUri }}
+              style={styles.sourceImage}
+              resizeMode="cover"
+            />
+          )}
           {phase !== 'error' && (
             <Animated.View
               style={[

@@ -61,12 +61,31 @@ function processWebFile(file: File): Promise<PickResult> {
       console.warn('[Picker Web] EXIF parsing error:', err);
     }
 
+    let width = 1600;
+    let height = 1200;
+    try {
+      await new Promise<void>((dimResolve) => {
+        const img = new Image();
+        img.onload = () => {
+          if (img.naturalWidth && img.naturalHeight) {
+            width = img.naturalWidth;
+            height = img.naturalHeight;
+          }
+          dimResolve();
+        };
+        img.onerror = () => dimResolve();
+        img.src = url;
+      });
+    } catch {
+      // ignore
+    }
+
     resolve({
       canceled: false,
       uri: url,
       fileName: file.name,
-      width: 1600,
-      height: 1200,
+      width,
+      height,
       exif,
       location,
       creationTime: creationTime || file.lastModified,

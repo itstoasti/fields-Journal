@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Image, StyleSheet, Pressable, ViewStyle } from 'react-native';
+import { View, Image, StyleSheet, Pressable, ViewStyle, Platform } from 'react-native';
 import { TypewriterText } from './TypewriterText';
 import { colors, fonts, fontSizes, spacing } from '../theme';
 import { Note } from '../types';
@@ -22,11 +22,24 @@ export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, style }) => {
       accessibilityRole="button"
     >
       <View style={styles.imageContainer}>
-        <Image
-          source={{ uri: note.posterUri || note.sourceUri }}
-          style={styles.image}
-          resizeMode="cover"
-        />
+        {Platform.OS === 'web' ? (
+          <img
+            src={note.posterUri || note.sourceUri}
+            alt={note.place || 'Travel note'}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              display: 'block',
+            }}
+          />
+        ) : (
+          <Image
+            source={{ uri: note.posterUri || note.sourceUri }}
+            style={styles.image}
+            resizeMode="cover"
+          />
+        )}
         
         {/* Mini Multi-Color Rubber Stamp Overlay in Bottom Right (1:1 with mockup) */}
         <View style={styles.stampOverlay}>

@@ -6,6 +6,7 @@ import {
   Pressable,
   Alert,
   Linking,
+  Platform,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -128,6 +129,10 @@ export default function SettingsScreen() {
   };
 
   const handleOpenAbout = () => {
+    if (Platform.OS === 'web') {
+      window.location.href = '/';
+      return;
+    }
     const baseUrl = getApiBaseUrl();
     Linking.openURL(`${baseUrl}/about`).catch(() => {
       Alert.alert('Notice', 'Unable to open About page.');

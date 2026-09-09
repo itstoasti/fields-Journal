@@ -54,6 +54,7 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="index" />
+        <Stack.Screen name="app" />
         <Stack.Screen name="compose" />
         <Stack.Screen name="pressing" />
         <Stack.Screen name="result" />
