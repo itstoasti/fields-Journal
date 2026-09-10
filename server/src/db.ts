@@ -11,6 +11,7 @@ export interface UserRecord {
   installation_id: string;
   device_id: string | null;
   rc_user_id: string | null;
+  account_key?: string | null;
   free_used: number;
   ad_used: number;
   credits: number;
@@ -73,7 +74,14 @@ export async function initDb(): Promise<void> {
       // Column already exists
     }
 
+    try {
+      await client.execute(`ALTER TABLE users ADD COLUMN account_key TEXT;`);
+    } catch {
+      // Column already exists
+    }
+
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_users_device_id ON users (device_id);`);
+    await client.execute(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_account_key ON users (account_key);`);
     console.log(`[Database] Initialized successfully (${isTurso ? 'Turso Cloud' : 'Local SQLite'})`);
   } catch (err) {
     console.error('[Database] Schema initialization warning:', err);
@@ -83,11 +91,23 @@ export async function initDb(): Promise<void> {
 // Automatically initialize schema on module load
 initDb().catch(console.error);
 
+export function generateAccountKey(): string {
+  const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  let part1 = '';
+  let part2 = '';
+  for (let i = 0; i < 4; i++) {
+    part1 += chars.charAt(Math.floor(Math.random() * chars.length));
+    part2 += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return `FIELD-${part1}-${part2}`;
+}
+
 function mapRowToUser(row: any): UserRecord {
   return {
     installation_id: String(row.installation_id),
     device_id: row.device_id ? String(row.device_id) : null,
     rc_user_id: row.rc_user_id ? String(row.rc_user_id) : null,
+    account_key: row.account_key ? String(row.account_key) : null,
     free_used: Number(row.free_used || 0),
     ad_used: Number(row.ad_used || 0),
     credits: Number(row.credits || 0),
@@ -130,6 +150,14 @@ export async function getOrCreateUser(
       if (rcUserId && existingByDevice.rc_user_id !== rcUserId) {
         existingByDevice.rc_user_id = rcUserId;
       }
+      if (!existingByDevice.account_key) {
+        const key = generateAccountKey();
+        await client.execute({
+          sql: 'UPDATE users SET account_key = ? WHERE installation_id = ?',
+          args: [key, existingByDevice.installation_id],
+        });
+        existingByDevice.account_key = key;
+      }
       return existingByDevice;
     }
   }
@@ -154,6 +182,14 @@ export async function getOrCreateUser(
       newRcUserId = rcUserId;
       shouldUpdate = true;
     }
+    if (!existing.account_key) {
+      const key = generateAccountKey();
+      await client.execute({
+        sql: 'UPDATE users SET account_key = ? WHERE installation_id = ?',
+        args: [key, existing.installation_id],
+      });
+      existing.account_key = key;
+    }
 
     if (shouldUpdate) {
       await client.execute({
@@ -166,23 +202,90 @@ export async function getOrCreateUser(
     return existing;
   }
 
-  // 3. Insert brand new user with hardware device_id
+  // 3. Insert brand new user with hardware device_id & unique account_key
+  const accountKey = generateAccountKey();
   await client.execute({
-    sql: `INSERT INTO users (installation_id, device_id, rc_user_id, free_used, ad_used, credits, created_at, updated_at)
-          VALUES (?, ?, ?, 0, 0, 0, ?, ?)`,
-    args: [installationId, deviceId ? deviceId.trim() : null, rcUserId || null, now, now],
+    sql: `INSERT INTO users (installation_id, device_id, rc_user_id, account_key, free_used, ad_used, credits, created_at, updated_at)
+          VALUES (?, ?, ?, ?, 0, 0, 0, ?, ?)`,
+    args: [installationId, deviceId ? deviceId.trim() : null, rcUserId || null, accountKey, now, now],
   });
 
   return {
     installation_id: installationId,
     device_id: deviceId ? deviceId.trim() : null,
     rc_user_id: rcUserId || null,
+    account_key: accountKey,
     free_used: 0,
     ad_used: 0,
     credits: 0,
     created_at: now,
     updated_at: now,
   };
+}
+
+/**
+ * Cross-Device Account Linking via Account Key (e.g. FIELD-XXXX-YYYY).
+ * Finds the account owned by targetAccountKey, merges any local purchased credits,
+ * and returns the master account record.
+ */
+export async function linkAccountByKey(
+  currentInstallationId: string,
+  rawAccountKey: string,
+  deviceId?: string
+): Promise<UserRecord> {
+  const now = new Date().toISOString();
+  const normalizedKey = rawAccountKey.trim().toUpperCase();
+
+  if (!normalizedKey || normalizedKey.length < 8) {
+    throw new Error('Invalid Account Key format. Expected FIELD-XXXX-YYYY.');
+  }
+
+  // 1. Find target master account
+  const res = await client.execute({
+    sql: 'SELECT * FROM users WHERE UPPER(account_key) = ? LIMIT 1',
+    args: [normalizedKey],
+  });
+
+  if (res.rows.length === 0) {
+    throw new Error('Account key not found. Please check your key from Settings on your other device.');
+  }
+
+  const targetUser = mapRowToUser(res.rows[0]);
+
+  // 2. If current installation is different, merge any local credits
+  if (targetUser.installation_id !== currentInstallationId) {
+    const currentRes = await client.execute({
+      sql: 'SELECT * FROM users WHERE installation_id = ? LIMIT 1',
+      args: [currentInstallationId],
+    });
+
+    if (currentRes.rows.length > 0) {
+      const currentUser = mapRowToUser(currentRes.rows[0]);
+      if (currentUser.credits > 0) {
+        console.log(`[Account Link] Merging ${currentUser.credits} credits from ${currentInstallationId} -> ${targetUser.installation_id}`);
+        await client.execute({
+          sql: 'UPDATE users SET credits = credits + ?, updated_at = ? WHERE installation_id = ?',
+          args: [currentUser.credits, now, targetUser.installation_id],
+        });
+        await client.execute({
+          sql: 'UPDATE users SET credits = 0, updated_at = ? WHERE installation_id = ?',
+          args: [now, currentInstallationId],
+        });
+        targetUser.credits += currentUser.credits;
+      }
+    }
+
+    // Associate target user with current device ID if provided
+    if (deviceId && deviceId.trim().length > 0) {
+      await client.execute({
+        sql: 'UPDATE users SET device_id = ?, updated_at = ? WHERE installation_id = ?',
+        args: [deviceId.trim(), now, targetUser.installation_id],
+      });
+      targetUser.device_id = deviceId.trim();
+    }
+  }
+
+  return targetUser;
 }
 
 export function determineEntitlement(user: UserRecord): EntitlementStatus {

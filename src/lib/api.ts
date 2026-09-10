@@ -68,6 +68,7 @@ export async function fetchUserEntitlements(
       adUsed: Boolean(data.adUsed),
       credits: data.credits ?? 0,
       entitlement: data.entitlement ?? 'free',
+      accountKey: data.accountKey || undefined,
     };
   } catch (error) {
     clearTimeout(timeoutId);
@@ -202,6 +203,56 @@ export async function suggestKeywordsFromImage(
   } catch (error: any) {
     clearTimeout(timeoutId);
     console.warn('[API] suggestKeywordsFromImage failed:', error);
+    throw error;
+  }
+}
+
+export async function linkAccountByKeyApi(
+  installationId: string,
+  accountKey: string,
+  deviceId?: string
+): Promise<{
+  success: boolean;
+  installationId: string;
+  accountKey: string;
+  credits: number;
+  freeUsed: number;
+  adUsed: boolean;
+  entitlement: string;
+}> {
+  const baseUrl = getApiBaseUrl();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+  try {
+    const response = await fetch(`${baseUrl}/v1/account/link`, {
+      method: 'POST',
+      headers: {
+        ...getCommonHeaders(baseUrl),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        installationId,
+        accountKey: accountKey.trim().toUpperCase(),
+        deviceId,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errorJson = await response.json().catch(() => ({
+        error: 'LINK_ERROR',
+        message: `HTTP Error ${response.status}`,
+      }));
+      throw new Error(errorJson.message || errorJson.error || 'Failed to link account key.');
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error: any) {
+    clearTimeout(timeoutId);
     throw error;
   }
 }

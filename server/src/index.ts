@@ -13,6 +13,7 @@ import {
   determineEntitlement,
   consumeUserEntitlement,
   addCreditsToUser,
+  linkAccountByKey,
   logGenerationRecord,
 } from './db.js';
 import { buildGrokPrompt } from './prompt.js';
@@ -145,6 +146,7 @@ app.get('/v1/me', async (c) => {
     installationId: user.installation_id,
     deviceId: user.device_id,
     rcUserId: user.rc_user_id,
+    accountKey: user.account_key,
     freeUsed: user.free_used,
     adUsed: Boolean(user.ad_used),
     credits: user.credits,
@@ -167,6 +169,7 @@ app.post('/v1/credits/sync', async (c) => {
 
     return c.json({
       success: true,
+      accountKey: updatedUser.account_key,
       freeUsed: updatedUser.free_used,
       adUsed: Boolean(updatedUser.ad_used),
       credits: updatedUser.credits,
@@ -174,6 +177,42 @@ app.post('/v1/credits/sync', async (c) => {
     });
   } catch (err: any) {
     return c.json({ error: 'SYNC_ERROR', message: err.message }, 500);
+  }
+});
+
+// Link existing account via Account Key (e.g. FIELD-XXXX-YYYY)
+app.post('/v1/account/link', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { installationId, accountKey, deviceId } = body;
+
+    if (!accountKey || typeof accountKey !== 'string') {
+      return c.json({ error: 'MISSING_ACCOUNT_KEY', message: 'Account key is required' }, 400);
+    }
+
+    if (!installationId) {
+      return c.json({ error: 'MISSING_INSTALLATION_ID', message: 'installationId is required' }, 400);
+    }
+
+    const linkedUser = await linkAccountByKey(installationId, accountKey, deviceId);
+    const entitlement = determineEntitlement(linkedUser);
+
+    console.log(`[Account Link] Linked install ${installationId} -> account ${linkedUser.account_key} (credits: ${linkedUser.credits})`);
+
+    return c.json({
+      success: true,
+      installationId: linkedUser.installation_id,
+      accountKey: linkedUser.account_key,
+      deviceId: linkedUser.device_id,
+      rcUserId: linkedUser.rc_user_id,
+      freeUsed: linkedUser.free_used,
+      adUsed: Boolean(linkedUser.ad_used),
+      credits: linkedUser.credits,
+      entitlement,
+    });
+  } catch (err: any) {
+    console.error('[Account Link] Error:', err);
+    return c.json({ error: 'LINK_ERROR', message: err.message || 'Failed to link account key.' }, 400);
   }
 });
 

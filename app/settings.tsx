@@ -7,11 +7,14 @@ import {
   Alert,
   Linking,
   Platform,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { PaperContainer, TypewriterText, StampButton } from '../src/components';
-import { colors, fontSizes, layout, spacing } from '../src/theme';
+import { colors, fonts, fontSizes, layout, spacing } from '../src/theme';
 import { useAppStore } from '../src/store/useAppStore';
 import {
   restorePurchases,
@@ -24,6 +27,8 @@ export default function SettingsScreen() {
   const router = useRouter();
   const entitlements = useAppStore((state) => state.entitlements);
   const installationId = useAppStore((state) => state.installationId);
+  const accountKey = useAppStore((state) => state.accountKey);
+  const linkAccountWithKey = useAppStore((state) => state.linkAccountWithKey);
   const selectedModel = useAppStore((state) => state.selectedModel);
   const setSelectedModel = useAppStore((state) => state.setSelectedModel);
   const clearAllNotes = useAppStore((state) => state.clearAllNotes);
@@ -37,6 +42,10 @@ export default function SettingsScreen() {
 
   const [isRestoring, setIsRestoring] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [inputKey, setInputKey] = useState('');
+  const [isLinking, setIsLinking] = useState(false);
 
   const handleManualSync = async () => {
     setIsSyncing(true);
@@ -64,6 +73,10 @@ export default function SettingsScreen() {
     } catch (e: any) {
       console.warn('[Settings] Pro paywall error:', e);
     }
+  };
+
+  const handleOpenPaywall = () => {
+    router.push('/modal/paywall');
   };
 
   const handleOpenCustomerCenter = async () => {
@@ -139,8 +152,39 @@ export default function SettingsScreen() {
     });
   };
 
-  const handleOpenPaywall = () => {
-    router.push('/modal/paywall');
+  const handleCopyKey = async () => {
+    if (!accountKey) {
+      Alert.alert('Notice', 'Generating your account key, please wait a moment...');
+      return;
+    }
+    try {
+      await Clipboard.setStringAsync(accountKey);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2500);
+    } catch {
+      Alert.alert('Your Account Key', accountKey);
+    }
+  };
+
+  const handleLinkAccount = async () => {
+    const clean = inputKey.trim().toUpperCase();
+    if (!clean) {
+      Alert.alert('Notice', 'Please enter your Account Key.');
+      return;
+    }
+    setIsLinking(true);
+    const result = await linkAccountWithKey(clean);
+    setIsLinking(false);
+    if (result.success) {
+      setShowLinkModal(false);
+      setInputKey('');
+      Alert.alert(
+        'Account Linked',
+        'Your purchased credits and account status are now linked and active on this device.'
+      );
+    } else {
+      Alert.alert('Link Error', result.message || 'Could not link this Account Key.');
+    }
   };
 
   const handleClose = () => {
@@ -382,6 +426,63 @@ export default function SettingsScreen() {
           })}
         </View>
 
+        {/* Account Key & Device Sync */}
+        <View style={styles.card}>
+          <View style={styles.membershipHeader}>
+            <TypewriterText size="xs" bold color={colors.inkSecondary} letterSpacing={1.5}>
+              ACCOUNT KEY &amp; DEVICE SYNC
+            </TypewriterText>
+            <Pressable
+              onPress={() => setShowLinkModal(true)}
+              hitSlop={8}
+            >
+              <TypewriterText size="xs" bold color={colors.brickRed}>
+                Link Existing Key
+              </TypewriterText>
+            </Pressable>
+          </View>
+
+          <TypewriterText size="xs" color={colors.inkMuted} style={{ marginTop: 4, marginBottom: spacing.sm }}>
+            Use your anonymous Account Key to restore purchased credits across devices (Android, iPhone, or Web) or after clearing browser storage.
+          </TypewriterText>
+
+          <View style={styles.accountKeyBox}>
+            <View style={styles.keyTextWrapper}>
+              <TypewriterText size="xs" color={colors.inkMuted}>
+                YOUR ACCOUNT KEY:
+              </TypewriterText>
+              <TypewriterText
+                size="sm"
+                bold
+                color={colors.charcoal}
+                style={styles.keyDisplay}
+                selectable
+              >
+                {accountKey || 'Generating key...'}
+              </TypewriterText>
+            </View>
+
+            <Pressable
+              style={[styles.copyKeyBtn, isCopied && styles.copyKeyBtnSuccess]}
+              onPress={handleCopyKey}
+              hitSlop={6}
+            >
+              <Ionicons
+                name={isCopied ? 'checkmark-outline' : 'copy-outline'}
+                size={16}
+                color={isCopied ? '#2E6930' : colors.charcoal}
+              />
+              <TypewriterText
+                size="xs"
+                bold
+                color={isCopied ? '#2E6930' : colors.charcoal}
+              >
+                {isCopied ? 'COPIED' : 'COPY'}
+              </TypewriterText>
+            </Pressable>
+          </View>
+        </View>
+
         {/* Notebook Data Management */}
         <View style={styles.card}>
           <TypewriterText size="xs" bold color={colors.inkSecondary} letterSpacing={1.5}>
@@ -478,6 +579,59 @@ export default function SettingsScreen() {
           </TypewriterText>
         </View>
       </ScrollView>
+
+      {/* Link Account Modal */}
+      <Modal
+        visible={showLinkModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowLinkModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeaderIcon}>
+              <Ionicons name="key-outline" size={28} color={colors.brickRed} />
+            </View>
+            <TypewriterText size="md" bold color={colors.charcoal} style={{ textAlign: 'center', marginBottom: 6 }}>
+              Link Account Key
+            </TypewriterText>
+            <TypewriterText size="xs" color={colors.inkMuted} style={styles.modalDesc}>
+              Enter your master Account Key (e.g. FIELD-ABCD-1234) from your other device to transfer your purchased credits and unify your account.
+            </TypewriterText>
+
+            <TextInput
+              style={styles.keyInput}
+              value={inputKey}
+              onChangeText={setInputKey}
+              placeholder="FIELD-XXXX-YYYY"
+              placeholderTextColor={colors.inkMuted}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              autoFocus
+            />
+
+            <View style={styles.modalButtonsRow}>
+              <StampButton
+                title="Cancel"
+                variant="secondary"
+                onPress={() => {
+                  setShowLinkModal(false);
+                  setInputKey('');
+                }}
+                disabled={isLinking}
+                style={styles.modalBtn}
+              />
+              <StampButton
+                title={isLinking ? 'Linking...' : 'Link Key'}
+                variant="primary"
+                onPress={handleLinkAccount}
+                disabled={isLinking || !inputKey.trim()}
+                style={styles.modalBtn}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </PaperContainer>
   );
 }
@@ -624,6 +778,93 @@ const styles = StyleSheet.create({
   },
   menuItemText: {
     marginLeft: spacing.xs,
+  },
+  accountKeyBox: {
+    backgroundColor: '#ECE3D4',
+    borderRadius: layout.borderRadius,
+    borderWidth: 1,
+    borderColor: colors.paperBorder,
+    padding: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  keyTextWrapper: {
+    flex: 1,
+  },
+  keyDisplay: {
+    fontFamily: fonts.mono,
+    letterSpacing: 1.2,
+    marginTop: 2,
+  },
+  copyKeyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.paperBorder,
+    backgroundColor: colors.paper,
+  },
+  copyKeyBtnSuccess: {
+    backgroundColor: '#E8F5E9',
+    borderColor: '#81C784',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.lg,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: colors.paperCard,
+    borderRadius: layout.cardRadius,
+    borderWidth: 1,
+    borderColor: colors.paperBorder,
+    padding: spacing.xl,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  modalHeaderIcon: {
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  modalDesc: {
+    textAlign: 'center',
+    marginBottom: spacing.md,
+    lineHeight: 18,
+  },
+  keyInput: {
+    fontFamily: fonts.mono,
+    fontSize: fontSizes.base,
+    letterSpacing: 1.5,
+    borderWidth: 1,
+    borderColor: colors.paperBorder,
+    borderRadius: layout.borderRadius,
+    backgroundColor: colors.paper,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    color: colors.charcoal,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+  },
+  modalButtonsRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    justifyContent: 'flex-end',
+  },
+  modalBtn: {
+    flex: 1,
+    minHeight: 42,
   },
   footerInfo: {
     alignItems: 'center',

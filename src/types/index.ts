@@ -6,6 +6,7 @@ export interface UserEntitlementState {
   credits: number;        // purchased balance from notes_20
   entitlement: EntitlementType;
   isPro?: boolean;        // true if user has active fields_travel_journal_scrapebook_pro subscription/entitlement
+  accountKey?: string;    // Human-friendly account key (e.g. FIELD-XXXX-YYYY) for cross-device linking
 }
 
 export interface Note {

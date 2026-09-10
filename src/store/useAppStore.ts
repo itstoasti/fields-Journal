@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
 import { Note, UserEntitlementState, EntitlementType } from '../types';
-import { getInstallationAndDeviceInfo } from '../lib/installation';
-import { fetchUserEntitlements } from '../lib/api';
+import { getInstallationAndDeviceInfo, updateActiveIdentity } from '../lib/installation';
+import { fetchUserEntitlements, linkAccountByKeyApi } from '../lib/api';
 import { initializePurchases } from '../lib/purchases';
 import { rewardedAdManager } from '../lib/ads';
 
@@ -52,6 +52,7 @@ export interface AppState {
   isInitialized: boolean;
   installationId: string;
   deviceId: string;
+  accountKey: string;
   notes: Note[];
   entitlements: UserEntitlementState;
   hasConsentedPrivacy: boolean;
@@ -66,6 +67,7 @@ export interface AppState {
   clearAllNotes: () => Promise<void>;
   updateEntitlements: (state: Partial<UserEntitlementState>) => void;
   syncWithBackend: () => Promise<void>;
+  linkAccountWithKey: (key: string) => Promise<{ success: boolean; message?: string }>;
   getNextNoteNumber: () => string;
   getEntitlementType: () => EntitlementType;
 }
@@ -74,6 +76,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   isInitialized: false,
   installationId: '',
   deviceId: '',
+  accountKey: '',
   notes: [],
   entitlements: {
     freeUsed: 0,
@@ -160,6 +163,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
         set({
           isInitialized: true,
+          accountKey: serverEntitlements.accountKey || '',
           entitlements: serverEntitlements,
         });
         await setStorageItem(ENTITLEMENTS_KEY, JSON.stringify(serverEntitlements));
@@ -249,13 +253,58 @@ export const useAppStore = create<AppState>((set, get) => ({
         serverEntitlements.entitlement = 'pro';
       }
 
-      set({ entitlements: serverEntitlements });
+      set({
+        entitlements: serverEntitlements,
+        accountKey: serverEntitlements.accountKey || get().accountKey,
+      });
       await setStorageItem(ENTITLEMENTS_KEY, JSON.stringify(serverEntitlements));
       if (serverEntitlements.entitlement === 'ad') {
         rewardedAdManager.preloadAd();
       }
     } catch (e) {
       console.warn('[Store] syncWithBackend failed, preserving current state:', e);
+    }
+  },
+
+  linkAccountWithKey: async (key: string) => {
+    const id = get().installationId;
+    const devId = get().deviceId;
+    const cleanKey = key?.trim().toUpperCase();
+
+    if (!cleanKey || cleanKey.length < 8) {
+      return { success: false, message: 'Please enter a valid Account Key (e.g. FIELD-XXXX-YYYY).' };
+    }
+
+    try {
+      console.log(`[Store] Linking account key ${cleanKey} for install=${id}...`);
+      const res = await linkAccountByKeyApi(id, cleanKey, devId);
+
+      if (res.success) {
+        // Persist the linked identity so it survives app reload/sessions
+        await updateActiveIdentity(res.installationId, res.accountKey);
+
+        const updatedEntitlements: UserEntitlementState = {
+          freeUsed: res.freeUsed,
+          adUsed: res.adUsed,
+          credits: res.credits,
+          entitlement: res.entitlement as any,
+          accountKey: res.accountKey,
+          isPro: get().entitlements.isPro,
+        };
+
+        set({
+          installationId: res.installationId,
+          accountKey: res.accountKey,
+          entitlements: updatedEntitlements,
+        });
+
+        await setStorageItem(ENTITLEMENTS_KEY, JSON.stringify(updatedEntitlements));
+        return { success: true };
+      }
+      return { success: false, message: 'Could not link account key.' };
+    } catch (err: any) {
+      console.error('[Store] linkAccountWithKey error:', err);
+      return { success: false, message: err.message || 'Failed to link account key.' };
     }
   },
 
