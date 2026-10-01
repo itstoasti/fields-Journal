@@ -11773,10 +11773,18 @@ async function getOrCreateUser(installationId, rcUserId, deviceId) {
       const existingByDevice = mapRowToUser(existingByDeviceRes.rows[0]);
       if (existingByDevice.installation_id !== installationId) {
         console.log(`[Anti-Abuse] Persistent device recognized (${deviceId}). Re-linking install ${installationId} -> original user with ${existingByDevice.free_used} free used.`);
+        const oldInstallId = existingByDevice.installation_id;
         await client.execute({
           sql: "UPDATE users SET installation_id = ?, rc_user_id = COALESCE(?, rc_user_id), updated_at = ? WHERE device_id = ?",
           args: [installationId, rcUserId || null, now, deviceId.trim()]
         });
+        try {
+          await client.execute({
+            sql: "UPDATE generations SET user_id = ? WHERE user_id = ?",
+            args: [installationId, oldInstallId]
+          });
+        } catch {
+        }
         existingByDevice.installation_id = installationId;
       }
       if (rcUserId && existingByDevice.rc_user_id !== rcUserId) {
@@ -11991,7 +11999,8 @@ function buildGrokPrompt(data) {
   const place = (data.place || "").trim() || "Field Observation";
   const number2 = (data.number || "01").trim();
   const year = (data.year || (/* @__PURE__ */ new Date()).getFullYear().toString()).trim();
-  const validKeywords = (data.keywords || []).map((k) => k.trim()).filter((k) => k.length > 0);
+  const rawKeywords = Array.isArray(data.keywords) ? data.keywords : typeof data.keywords === "string" ? data.keywords.split(/[·,\n|]/) : [];
+  const validKeywords = rawKeywords.map((k) => String(k).trim()).filter((k) => k.length > 0);
   const lines = [];
   lines.push(place);
   lines.push(`No. ${number2}`);
@@ -12478,7 +12487,19 @@ app.post("/v1/notes", async (c) => {
       entitlementClaim = body.entitlement || "free";
       place = body.place || "";
       number2 = body.number || "01";
-      keywords = body.keywords || [];
+      const kwRaw = body.keywords;
+      if (Array.isArray(kwRaw)) {
+        keywords = kwRaw.map((k) => String(k).trim());
+      } else if (typeof kwRaw === "string") {
+        try {
+          const parsed = JSON.parse(kwRaw);
+          keywords = Array.isArray(parsed) ? parsed.map((s) => String(s).trim()) : kwRaw.split(/[·,\n|]/).map((s) => s.trim());
+        } catch {
+          keywords = kwRaw.split(/[·,\n|]/).map((s) => s.trim());
+        }
+      } else {
+        keywords = [];
+      }
       year = body.year || "";
       model = body.model || void 0;
       if (!body.imageBase64) {

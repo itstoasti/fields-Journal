@@ -271,7 +271,19 @@ app.post('/v1/notes', async (c) => {
       entitlementClaim = body.entitlement || 'free';
       place = body.place || '';
       number = body.number || '01';
-      keywords = body.keywords || [];
+      const kwRaw = body.keywords;
+      if (Array.isArray(kwRaw)) {
+        keywords = kwRaw.map((k: any) => String(k).trim());
+      } else if (typeof kwRaw === 'string') {
+        try {
+          const parsed = JSON.parse(kwRaw);
+          keywords = Array.isArray(parsed) ? parsed.map((s: any) => String(s).trim()) : kwRaw.split(/[·,\n|]/).map((s: string) => s.trim());
+        } catch {
+          keywords = kwRaw.split(/[·,\n|]/).map((s: string) => s.trim());
+        }
+      } else {
+        keywords = [];
+      }
       year = body.year || '';
       model = body.model || undefined;
 

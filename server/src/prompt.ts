@@ -45,9 +45,15 @@ export function buildGrokPrompt(data: PromptInterpolationData): string {
   const number = (data.number || '01').trim();
   const year = (data.year || new Date().getFullYear().toString()).trim();
 
-  // Clean and filter user's exact keywords
-  const validKeywords = (data.keywords || [])
-    .map((k) => k.trim())
+  // Clean and filter user's exact keywords (resilient to array or string)
+  const rawKeywords = Array.isArray(data.keywords)
+    ? data.keywords
+    : typeof data.keywords === 'string'
+    ? (data.keywords as string).split(/[·,\n|]/)
+    : [];
+
+  const validKeywords = rawKeywords
+    .map((k) => String(k).trim())
     .filter((k) => k.length > 0);
 
   const lines: string[] = [];

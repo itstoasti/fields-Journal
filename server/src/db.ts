@@ -141,10 +141,19 @@ export async function getOrCreateUser(
 
       if (existingByDevice.installation_id !== installationId) {
         console.log(`[Anti-Abuse] Persistent device recognized (${deviceId}). Re-linking install ${installationId} -> original user with ${existingByDevice.free_used} free used.`);
+        const oldInstallId = existingByDevice.installation_id;
         await client.execute({
           sql: 'UPDATE users SET installation_id = ?, rc_user_id = COALESCE(?, rc_user_id), updated_at = ? WHERE device_id = ?',
           args: [installationId, rcUserId || null, now, deviceId.trim()],
         });
+        try {
+          await client.execute({
+            sql: 'UPDATE generations SET user_id = ? WHERE user_id = ?',
+            args: [installationId, oldInstallId],
+          });
+        } catch {
+          // Non-critical
+        }
         existingByDevice.installation_id = installationId;
       }
       if (rcUserId && existingByDevice.rc_user_id !== rcUserId) {
