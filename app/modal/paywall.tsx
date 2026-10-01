@@ -12,6 +12,7 @@ import { PaperContainer, TypewriterText, StampButton } from '../../src/component
 import { colors, fonts, fontSizes, layout, spacing } from '../../src/theme';
 import { useAppStore } from '../../src/store/useAppStore';
 import {
+  buyLifetimePackage,
   buyNotes20Package,
   presentRevenueCatPaywall,
   restorePurchases,
@@ -26,27 +27,36 @@ export default function PaywallModal() {
   const entitlements = useAppStore((state) => state.entitlements);
   const updateEntitlements = useAppStore((state) => state.updateEntitlements);
 
-  const [isPurchasing, setIsPurchasing] = useState(false);
+  const [isPurchasingLifetime, setIsPurchasingLifetime] = useState(false);
+  const [isPurchasing20, setIsPurchasing20] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
 
-  // Present Native RevenueCat UI Paywall
-  const handleOpenProPaywall = async () => {
+  // Purchase Lifetime Pro ($29.99)
+  const handlePurchaseLifetime = async () => {
+    setIsPurchasingLifetime(true);
     try {
-      const { result, isPro } = await presentRevenueCatPaywall();
-      if (isPro) {
+      const { success, isPro, error } = await buyLifetimePackage();
+      if (isPro || success) {
         updateEntitlements({ isPro: true, entitlement: 'pro' });
-        Alert.alert('Welcome to Pro', 'Thank you for subscribing to Fields Pro! You now have unlimited travel notes.', [
-          { text: 'Start Creating', onPress: () => router.back() },
-        ]);
+        Alert.alert(
+          'Fields Pro Unlocked',
+          'Thank you for supporting Fields! You now have lifetime unlimited field note stamps.',
+          [{ text: 'Start Creating', onPress: () => router.back() }]
+        );
+      } else if (error !== 'cancelled') {
+        Alert.alert('Purchase', error || 'Unable to complete purchase.');
       }
     } catch (err: any) {
-      console.warn('[Paywall] Pro paywall presentation error:', err);
+      console.warn('[Paywall] Lifetime purchase error:', err);
+      Alert.alert('Purchase', err?.message || 'Payment failed.');
+    } finally {
+      setIsPurchasingLifetime(false);
     }
   };
 
-  // Consumable 20 Notes Pack
+  // Consumable 20 Notes Pack ($2.99)
   const handlePurchase20 = async () => {
-    setIsPurchasing(true);
+    setIsPurchasing20(true);
     try {
       const result = await buyNotes20Package();
       if (result.success) {
@@ -63,7 +73,7 @@ export default function PaywallModal() {
       console.warn('[Paywall] Purchase error:', err);
       Alert.alert('Purchase', err.message || 'Payment failed.');
     } finally {
-      setIsPurchasing(false);
+      setIsPurchasing20(false);
     }
   };
 
@@ -73,11 +83,11 @@ export default function PaywallModal() {
       const result = await restorePurchases();
       if (result.isPro) {
         updateEntitlements({ isPro: true, entitlement: 'pro' });
-        Alert.alert('Purchases Restored', 'Your Fields Pro subscription has been verified and restored.', [
+        Alert.alert('Purchases Restored', 'Your Fields Pro access has been verified and restored.', [
           { text: 'OK', onPress: () => router.back() },
         ]);
       } else if (result.success) {
-        Alert.alert('Purchases Restored', 'Purchases checked. No active Pro subscription found.');
+        Alert.alert('Purchases Restored', 'Purchases checked. No active Pro access found.');
       } else {
         Alert.alert('Restore Purchases', result.error || 'Could not restore purchases.');
       }
@@ -105,27 +115,28 @@ export default function PaywallModal() {
             EXPAND YOUR JOURNAL
           </TypewriterText>
           <TypewriterText size="sm" color={colors.inkSecondary} style={styles.subtitle}>
-            Subscribe for unlimited notes or buy credits as you go
+            Collect your travel memories without limits
           </TypewriterText>
         </View>
 
         <View style={styles.detailsBox}>
           <TypewriterText size="xs" color={colors.inkSecondary} style={styles.bulletPoint}>
-            • Unlimited rubber stamp generations with Fields Pro
+            • Unlimited hand-pressed stamps with Fields Pro
           </TypewriterText>
           <TypewriterText size="xs" color={colors.inkSecondary} style={styles.bulletPoint}>
-            • Flexible Monthly, Yearly, or Lifetime options
+            • Lifetime access — one-time purchase, never a subscription
           </TypewriterText>
           <TypewriterText size="xs" color={colors.inkSecondary} style={styles.bulletPoint}>
-            • Zero ads, high-resolution vintage exports
+            • Ultra high-resolution exports and all spot-color inks
           </TypewriterText>
         </View>
 
         <View style={styles.buttonsContainer}>
           <StampButton
-            title="UPGRADE TO FIELDS PRO"
-            onPress={handleOpenProPaywall}
+            title="UNLOCK PRO LIFETIME — $29.99"
+            onPress={handlePurchaseLifetime}
             variant="primary"
+            loading={isPurchasingLifetime}
             style={styles.proButton}
           />
 
@@ -133,7 +144,7 @@ export default function PaywallModal() {
             title="Buy 20 Notes Pack — $2.99"
             onPress={handlePurchase20}
             variant="secondary"
-            loading={isPurchasing}
+            loading={isPurchasing20}
             style={styles.buyButton}
           />
 

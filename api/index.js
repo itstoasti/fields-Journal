@@ -12005,7 +12005,7 @@ function buildGrokPrompt(data) {
 
 // server/src/grok.ts
 var DEFAULT_MODEL = "grok-imagine-image-2.0";
-var TIMEOUT_MS = 6e4;
+var TIMEOUT_MS = 5e4;
 async function generateFieldNoteImage(options) {
   const apiKey = process.env.XAI_API_KEY;
   if (!apiKey || apiKey.startsWith("xai-your-api-key") || apiKey === "mock") {
@@ -12524,17 +12524,32 @@ app.post("/v1/notes", async (c) => {
     });
     console.log(`[Notes] Generating note ${noteId} for ${installationId} (dev: ${deviceId || "none"}) under ${entitlementClaim} with model ${model || "default"}...`);
     const isGeminiModel = model?.toLowerCase().startsWith("gemini");
-    const result = isGeminiModel ? await generateGeminiImage({
-      imageBuffer,
-      mimeType,
-      prompt,
-      model
-    }) : await generateFieldNoteImage({
-      imageBuffer,
-      mimeType,
-      prompt,
-      model
-    });
+    let result;
+    if (isGeminiModel) {
+      try {
+        result = await generateGeminiImage({
+          imageBuffer,
+          mimeType,
+          prompt,
+          model
+        });
+      } catch (geminiErr) {
+        console.warn(`[Notes] Gemini model ${model} failed (${geminiErr.message}). Falling back to Grok Imagine 2.0...`);
+        result = await generateFieldNoteImage({
+          imageBuffer,
+          mimeType,
+          prompt,
+          model: "grok-imagine-image-2.0"
+        });
+      }
+    } else {
+      result = await generateFieldNoteImage({
+        imageBuffer,
+        mimeType,
+        prompt,
+        model
+      });
+    }
     const consumed = await consumeUserEntitlement(installationId, entitlementClaim, deviceId);
     if (!consumed) {
       console.warn(`[Notes] Warning: Failed to consume entitlement for ${installationId}`);
@@ -12666,8 +12681,21 @@ async function handler(req, res) {
     });
     const response = await src_default.fetch(webReq);
     res.statusCode = response.status;
+    const hopByHopHeaders = /* @__PURE__ */ new Set([
+      "connection",
+      "keep-alive",
+      "proxy-authenticate",
+      "proxy-authorization",
+      "te",
+      "trailer",
+      "transfer-encoding",
+      "upgrade",
+      "content-length"
+    ]);
     response.headers.forEach((val, key) => {
-      res.setHeader(key, val);
+      if (!hopByHopHeaders.has(key.toLowerCase())) {
+        res.setHeader(key, val);
+      }
     });
     if (response.body) {
       const arrayBuffer = await response.arrayBuffer();

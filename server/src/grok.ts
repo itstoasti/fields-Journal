@@ -15,7 +15,7 @@ export interface GrokGenerationResult {
 }
 
 const DEFAULT_MODEL = 'grok-imagine-image-2.0';
-const TIMEOUT_MS = 60000;
+const TIMEOUT_MS = 50000;
 
 export async function generateFieldNoteImage(options: GrokGenerationOptions): Promise<GrokGenerationResult> {
   const apiKey = process.env.XAI_API_KEY;

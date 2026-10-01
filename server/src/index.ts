@@ -330,19 +330,32 @@ app.post('/v1/notes', async (c) => {
 
     // Step 3: Execute Image generation (Gemini or Grok Imagine)
     const isGeminiModel = model?.toLowerCase().startsWith('gemini');
-    const result = isGeminiModel
-      ? await generateGeminiImage({
-          imageBuffer,
-          mimeType,
-          prompt,
-          model,
-        })
-      : await generateFieldNoteImage({
+    let result;
+    if (isGeminiModel) {
+      try {
+        result = await generateGeminiImage({
           imageBuffer,
           mimeType,
           prompt,
           model,
         });
+      } catch (geminiErr: any) {
+        console.warn(`[Notes] Gemini model ${model} failed (${geminiErr.message}). Falling back to Grok Imagine 2.0...`);
+        result = await generateFieldNoteImage({
+          imageBuffer,
+          mimeType,
+          prompt,
+          model: 'grok-imagine-image-2.0',
+        });
+      }
+    } else {
+      result = await generateFieldNoteImage({
+        imageBuffer,
+        mimeType,
+        prompt,
+        model,
+      });
+    }
 
     // Step 4: Decrement entitlement ONLY after successful image generation
     const consumed = await consumeUserEntitlement(installationId, entitlementClaim, deviceId);

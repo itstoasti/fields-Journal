@@ -87,18 +87,6 @@ async function readImageFileBuffer(uri: string): Promise<ArrayBuffer | null> {
 }
 
 /**
- * Request media library permissions for full asset access.
- */
-async function ensureMediaLibraryPermission(): Promise<boolean> {
-  try {
-    const { status } = await MediaLibrary.requestPermissionsAsync();
-    return status === 'granted';
-  } catch {
-    return false;
-  }
-}
-
-/**
  * Parse Date from string or number
  */
 function parseDateString(rawDate: any): number | undefined {
@@ -126,8 +114,7 @@ function parseDateString(rawDate: any): number | undefined {
 }
 
 export async function pickImageFromLibrary(): Promise<PickResult> {
-  await ensureMediaLibraryPermission();
-
+  // Uses Android Photo Picker (zero broad storage permissions required)
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ['images'],
     allowsEditing: false,

@@ -21,7 +21,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
     } else if (freeUsed === 1) {
       return '1 free note left';
     } else if (freeUsed >= 2 && !adUsed) {
-      return 'Last free note needs a video';
+      return 'Get another free note by watching an ad';
     } else if (credits > 0) {
       return `${credits} ${credits === 1 ? 'note' : 'notes'} remaining`;
     } else {

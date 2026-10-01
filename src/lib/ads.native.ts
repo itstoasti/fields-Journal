@@ -54,7 +54,7 @@ if (!isExpoGoClient() && Platform.OS !== 'web') {
 
 const REWARDED_AD_UNIT_ID =
   process.env.EXPO_PUBLIC_ADMOB_REWARDED_ID ||
-  'ca-app-pub-3940256099942544/5224354917'; // Google Test Rewarded Ad ID
+  'ca-app-pub-5918407268001346/2808523904';
 
 export interface ShowAdCallbacks {
   onEarnedReward: () => void;

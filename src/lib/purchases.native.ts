@@ -1,6 +1,17 @@
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { Alert, Platform, NativeModules } from 'react-native';
 
+export const REVENUECAT_API_KEY =
+  process.env.EXPO_PUBLIC_REVENUECAT_API_KEY || 'goog_SIioGMRmaGojibFnWhGHsUJkNkK';
+
+export const ENTITLEMENT_PRO =
+  process.env.EXPO_PUBLIC_RC_ENTITLEMENT_ID || 'fields_travel_journal_scrapebook_pro';
+
+export const PRODUCT_LIFETIME = process.env.EXPO_PUBLIC_RC_PRODUCT_LIFETIME || 'lifetime';
+export const PRODUCT_YEARLY = process.env.EXPO_PUBLIC_RC_PRODUCT_YEARLY || 'yearly';
+export const PRODUCT_MONTHLY = process.env.EXPO_PUBLIC_RC_PRODUCT_MONTHLY || 'monthly';
+export const PRODUCT_NOTES_20 = process.env.EXPO_PUBLIC_RC_PRODUCT_NOTES_20 || 'notes_20';
+
 /**
  * Robust runtime detection of Expo Go / environments without native compiled modules.
  * In Expo Go, native binaries (RNPurchases, RNPaywalls, etc.) are NOT linked into the APK/IPA.
@@ -71,6 +82,17 @@ export function isRevenueCatNativeSupported(): boolean {
     return false;
   }
 
+  // In production (release) builds, if only a test_ API key is configured or key is empty, RevenueCat's SDK
+  // displays a blocking modal ('Wrong API Key - The app will close now') and terminates the process.
+  // We fall back safely to simulation mode until a production Google Play (goog_) key is provided.
+  const apiKey = REVENUECAT_API_KEY || '';
+  if (!apiKey || (!__DEV__ && apiKey.startsWith('test_'))) {
+    console.warn(
+      '[Purchases] Production build detected with test_ or empty API key. Falling back to simulation mode to prevent RevenueCat app closure.'
+    );
+    return false;
+  }
+
   return true;
 }
 
@@ -79,7 +101,14 @@ let Purchases: any = null;
 let RevenueCatUI: any = null;
 let LOG_LEVEL: any = null;
 
-if (isRevenueCatNativeSupported()) {
+let isNativeSupported = false;
+try {
+  isNativeSupported = isRevenueCatNativeSupported();
+} catch (supErr) {
+  console.warn('[Purchases Native] Error evaluating isRevenueCatNativeSupported:', supErr);
+}
+
+if (isNativeSupported) {
   try {
     const rcModule = require('react-native-purchases');
     Purchases = rcModule.default || rcModule;
@@ -99,17 +128,6 @@ if (isRevenueCatNativeSupported()) {
     '[Purchases Native] Running in simulation mode (Expo Go or dev client with earlier native binary detected).'
   );
 }
-
-export const REVENUECAT_API_KEY =
-  process.env.EXPO_PUBLIC_REVENUECAT_API_KEY || 'test_kejmcZYQWmrefaSizVLCGOzPWDB';
-
-export const ENTITLEMENT_PRO =
-  process.env.EXPO_PUBLIC_RC_ENTITLEMENT_ID || 'fields_travel_journal_scrapebook_pro';
-
-export const PRODUCT_LIFETIME = process.env.EXPO_PUBLIC_RC_PRODUCT_LIFETIME || 'lifetime';
-export const PRODUCT_YEARLY = process.env.EXPO_PUBLIC_RC_PRODUCT_YEARLY || 'yearly';
-export const PRODUCT_MONTHLY = process.env.EXPO_PUBLIC_RC_PRODUCT_MONTHLY || 'monthly';
-export const PRODUCT_NOTES_20 = process.env.EXPO_PUBLIC_RC_PRODUCT_NOTES_20 || 'notes_20';
 
 let isPurchasesConfigured = false;
 let customerInfoListenerSubscribed = false;
@@ -156,6 +174,12 @@ export async function initializePurchases(
       try {
         await Purchases.setLogLevel(LOG_LEVEL.DEBUG);
       } catch {}
+    }
+
+    if (!__DEV__ && REVENUECAT_API_KEY.startsWith('test_')) {
+      console.warn('[Purchases] Test API key detected in release mode. Purchases.configure bypassed.');
+      isPurchasesConfigured = true;
+      return;
     }
 
     await Purchases.configure({
@@ -438,6 +462,63 @@ export async function presentCustomerCenter(): Promise<void> {
       'Manage Subscription',
       'You can manage or cancel your active subscription in your Google Play Store or Apple App Store account settings.'
     );
+  }
+}
+
+/**
+ * Buy Lifetime Pro Access (non-consumable in-app product)
+ */
+export async function buyLifetimePackage(): Promise<{
+  success: boolean;
+  isPro: boolean;
+  error?: string;
+}> {
+  if (!isRevenueCatNativeSupported() || !Purchases) {
+    console.log('[Purchases] Simulated Lifetime purchase');
+    if (onCustomerInfoCallback) {
+      onCustomerInfoCallback(
+        { entitlements: { active: { [ENTITLEMENT_PRO]: { isActive: true } } } },
+        true
+      );
+    }
+    return { success: true, isPro: true };
+  }
+
+  try {
+    const offerings = await Purchases.getOfferings();
+    const currentOffering = offerings.current;
+
+    let packageToBuy = currentOffering?.availablePackages.find(
+      (pkg: any) =>
+        pkg.identifier === PRODUCT_LIFETIME ||
+        pkg.product.identifier === PRODUCT_LIFETIME ||
+        pkg.packageType === 'LIFETIME'
+    );
+
+    if (!packageToBuy && currentOffering?.lifetime) {
+      packageToBuy = currentOffering.lifetime;
+    }
+
+    if (!packageToBuy) {
+      const pwResult = await presentRevenueCatPaywall();
+      return { success: pwResult.isPro, isPro: pwResult.isPro };
+    }
+
+    const { customerInfo } = await Purchases.purchasePackage(packageToBuy);
+    const isPro = checkProEntitlement(customerInfo);
+    if (onCustomerInfoCallback) {
+      onCustomerInfoCallback(customerInfo, isPro);
+    }
+    return { success: true, isPro };
+  } catch (error: any) {
+    if (error.userCancelled) {
+      return { success: false, isPro: false, error: 'cancelled' };
+    }
+    return {
+      success: false,
+      isPro: false,
+      error: error.message || 'Payment could not be completed.',
+    };
   }
 }
 

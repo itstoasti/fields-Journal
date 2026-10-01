@@ -45,8 +45,21 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const response = await app.fetch(webReq);
 
     res.statusCode = response.status;
+    const hopByHopHeaders = new Set([
+      'connection',
+      'keep-alive',
+      'proxy-authenticate',
+      'proxy-authorization',
+      'te',
+      'trailer',
+      'transfer-encoding',
+      'upgrade',
+      'content-length',
+    ]);
     response.headers.forEach((val, key) => {
-      res.setHeader(key, val);
+      if (!hopByHopHeaders.has(key.toLowerCase())) {
+        res.setHeader(key, val);
+      }
     });
 
     if (response.body) {

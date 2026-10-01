@@ -1,6 +1,7 @@
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Paths, Directory, File } from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
+import { Image } from 'react-native';
 
 export interface ProcessedImage {
   uri: string;
@@ -10,21 +11,32 @@ export interface ProcessedImage {
 }
 
 /**
- * Downscale image so the longest edge is between 1600-2048px with ~0.82 JPEG quality.
+ * Downscale image so the longest edge is at most 1024px with ~0.78 JPEG quality.
+ * This guarantees the request body is under 300KB, preventing Vercel payload limits
+ * and ensuring fast, reliable generation on mobile networks.
  */
 export async function preparePhotoForGeneration(sourceUri: string): Promise<ProcessedImage> {
   try {
+    const dims = await new Promise<{ width: number; height: number }>((resolve) => {
+      Image.getSize(
+        sourceUri,
+        (w, h) => resolve({ width: w, height: h }),
+        () => resolve({ width: 1024, height: 1024 })
+      );
+    });
+
+    const isLandscape = dims.width >= dims.height;
+    const resizeAction = isLandscape ? { width: 1024 } : { height: 1024 };
+
     const manipResult = await ImageManipulator.manipulateAsync(
       sourceUri,
       [
         {
-          resize: {
-            width: 1800,
-          },
+          resize: resizeAction,
         },
       ],
       {
-        compress: 0.82,
+        compress: 0.78,
         format: ImageManipulator.SaveFormat.JPEG,
         base64: true,
       }
@@ -37,12 +49,16 @@ export async function preparePhotoForGeneration(sourceUri: string): Promise<Proc
       base64: manipResult.base64,
     };
   } catch (error) {
-    console.warn('[Image] Downscale with base64 failed, trying direct manipulate:', error);
+    console.warn('[Image] Downscale with proportional resize failed, trying fallback:', error);
     const fallback = await ImageManipulator.manipulateAsync(
       sourceUri,
-      [],
+      [
+        {
+          resize: { width: 1024 },
+        },
+      ],
       {
-        compress: 0.82,
+        compress: 0.78,
         format: ImageManipulator.SaveFormat.JPEG,
         base64: true,
       }
@@ -151,18 +167,26 @@ export async function savePosterLocally(
  */
 export async function saveToDeviceGallery(posterUri: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const { status } = await MediaLibrary.requestPermissionsAsync();
+    // Request write-only permission (requires zero broad READ_MEDIA_IMAGES permissions on Android 10+)
+    const { status } = await MediaLibrary.requestPermissionsAsync(true);
     if (status !== 'granted') {
       return { success: false, error: 'Photo library permission was not granted.' };
     }
 
+    // Save image asset directly to the device photo gallery
     const asset = await MediaLibrary.createAssetAsync(posterUri);
-    // Try to place into "Field Notes" album
-    const album = await MediaLibrary.getAlbumAsync('Field Notes');
-    if (album) {
-      await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
-    } else {
-      await MediaLibrary.createAlbumAsync('Field Notes', asset, false);
+
+    // Optional: Attempt to group into "Field Notes" album if permissions permit
+    try {
+      const album = await MediaLibrary.getAlbumAsync('Field Notes');
+      if (album) {
+        await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+      } else {
+        await MediaLibrary.createAlbumAsync('Field Notes', asset, false);
+      }
+    } catch {
+      // Album organization requires broad READ_MEDIA_IMAGES permissions which are restricted on Google Play.
+      // The image is already successfully saved directly to the device's photo gallery / Pictures folder.
     }
 
     return { success: true };

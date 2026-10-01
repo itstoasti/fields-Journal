@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import * as Clipboard from 'expo-clipboard';
 import { PaperContainer, TypewriterText, StampButton } from '../src/components';
 import { colors, fonts, fontSizes, layout, spacing } from '../src/theme';
 import { useAppStore } from '../src/store/useAppStore';
@@ -157,11 +156,26 @@ export default function SettingsScreen() {
       Alert.alert('Notice', 'Generating your account key, please wait a moment...');
       return;
     }
+    let success = false;
     try {
-      await Clipboard.setStringAsync(accountKey);
+      const Clipboard = require('expo-clipboard');
+      if (Clipboard?.setStringAsync) {
+        await Clipboard.setStringAsync(accountKey);
+        success = true;
+      }
+    } catch {}
+
+    if (!success && Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(accountKey);
+        success = true;
+      } catch {}
+    }
+
+    if (success) {
       setIsCopied(true);
       setTimeout(() => setIsCopied(false), 2500);
-    } catch {
+    } else {
       Alert.alert('Your Account Key', accountKey);
     }
   };

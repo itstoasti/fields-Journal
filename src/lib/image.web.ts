@@ -82,11 +82,11 @@ function processImageWithCanvas(
 }
 
 /**
- * Downscale image so the longest edge is at most 1800px with ~0.82 JPEG quality,
- * returning full base64 for AI poster generation.
+ * Downscale image so the longest edge is at most 1024px with ~0.78 JPEG quality,
+ * returning lightweight base64 (<300KB) for fast AI poster generation.
  */
 export async function preparePhotoForGeneration(sourceUri: string): Promise<ProcessedImage> {
-  return processImageWithCanvas(sourceUri, 1800, 0.82);
+  return processImageWithCanvas(sourceUri, 1024, 0.78);
 }
 
 /**

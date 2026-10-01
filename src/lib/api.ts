@@ -96,10 +96,28 @@ export async function submitGenerateNote(request: GenerateNoteRequest): Promise<
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      const errorJson: ApiError = await response.json().catch(() => ({
-        error: 'NETWORK_ERROR',
-        message: `HTTP Error ${response.status}`,
-      }));
+      const responseText = await response.text().catch(() => '');
+      let errorJson: ApiError;
+      try {
+        errorJson = JSON.parse(responseText);
+      } catch {
+        if (responseText.includes('FUNCTION_PAYLOAD_TOO_LARGE') || response.status === 413) {
+          errorJson = {
+            error: 'PAYLOAD_TOO_LARGE',
+            message: 'Photo payload is too large for cloud processing. Please try again.',
+          };
+        } else if (responseText.includes('FUNCTION_INVOCATION_TIMEOUT') || response.status === 504) {
+          errorJson = {
+            error: 'TIMEOUT',
+            message: 'Server generation timed out. The model took too long to carve the plate. Please retry.',
+          };
+        } else {
+          errorJson = {
+            error: 'NETWORK_ERROR',
+            message: `Server returned status ${response.status}. Please try again.`,
+          };
+        }
+      }
       throw new Error(errorJson.message || errorJson.error || 'Field note generation failed.');
     }
 

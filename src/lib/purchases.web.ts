@@ -123,6 +123,20 @@ export async function presentCustomerCenter(): Promise<void> {
   );
 }
 
+export async function buyLifetimePackage(): Promise<{
+  success: boolean;
+  isPro: boolean;
+  error?: string;
+}> {
+  console.log('[Purchases Web] Simulating purchase of Lifetime package');
+  mockIsPro = true;
+  const info = await getCustomerInfo();
+  if (onCustomerInfoCallback) {
+    onCustomerInfoCallback(info, true);
+  }
+  return { success: true, isPro: true };
+}
+
 export async function buyNotes20Package(): Promise<{ success: boolean; error?: string }> {
   console.log('[Purchases Web] Simulating purchase of 20 notes');
   return { success: true };
