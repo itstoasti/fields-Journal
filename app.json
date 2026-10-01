@@ -2,7 +2,7 @@
   "expo": {
     "name": "Fields",
     "slug": "field-notes",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "fieldnotes",
@@ -25,7 +25,7 @@
     },
     "android": {
       "package": "app.fields.journal",
-      "versionCode": 11,
+      "versionCode": 12,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F4EFE6"
