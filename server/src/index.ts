@@ -309,13 +309,6 @@ app.post('/v1/notes', async (c) => {
           },
         }, 402);
       }
-
-      if (entitlementClaim !== validEntitlement && !(entitlementClaim === 'credit' && user.credits > 0)) {
-        return c.json({
-          error: 'INVALID_ENTITLEMENT_CLAIM',
-          message: `Claimed ${entitlementClaim} but current valid entitlement is ${validEntitlement}`,
-        }, 403);
-      }
     }
 
     // Step 2: Build server-owned locked prompt

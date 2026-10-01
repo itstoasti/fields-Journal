@@ -17,26 +17,17 @@ export interface ProcessedImage {
  */
 export async function preparePhotoForGeneration(sourceUri: string): Promise<ProcessedImage> {
   try {
-    const dims = await new Promise<{ width: number; height: number }>((resolve) => {
-      Image.getSize(
-        sourceUri,
-        (w, h) => resolve({ width: w, height: h }),
-        () => resolve({ width: 1024, height: 1024 })
-      );
-    });
-
-    const isLandscape = dims.width >= dims.height;
-    const resizeAction = isLandscape ? { width: 1024 } : { height: 1024 };
-
     const manipResult = await ImageManipulator.manipulateAsync(
       sourceUri,
       [
         {
-          resize: resizeAction,
+          resize: {
+            width: 1200,
+          },
         },
       ],
       {
-        compress: 0.78,
+        compress: 0.8,
         format: ImageManipulator.SaveFormat.JPEG,
         base64: true,
       }
@@ -49,16 +40,12 @@ export async function preparePhotoForGeneration(sourceUri: string): Promise<Proc
       base64: manipResult.base64,
     };
   } catch (error) {
-    console.warn('[Image] Downscale with proportional resize failed, trying fallback:', error);
+    console.warn('[Image] Downscale with width 1200 failed, trying direct manipulate:', error);
     const fallback = await ImageManipulator.manipulateAsync(
       sourceUri,
-      [
-        {
-          resize: { width: 1024 },
-        },
-      ],
+      [],
       {
-        compress: 0.78,
+        compress: 0.8,
         format: ImageManipulator.SaveFormat.JPEG,
         base64: true,
       }

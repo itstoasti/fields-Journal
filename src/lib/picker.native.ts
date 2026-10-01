@@ -114,13 +114,42 @@ function parseDateString(rawDate: any): number | undefined {
 }
 
 export async function pickImageFromLibrary(): Promise<PickResult> {
-  // Uses Android Photo Picker (zero broad storage permissions required)
-  const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ['images'],
-    allowsEditing: false,
-    quality: 1,
-    exif: true,
-  });
+  // 1. Request permissions if needed (ensures Expo Go and Android < 13 grant access)
+  try {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      try {
+        await MediaLibrary.requestPermissionsAsync();
+      } catch {}
+    }
+  } catch (e) {
+    console.warn('[Picker] Permission request warning:', e);
+  }
+
+  // 2. Launch Image Picker with MediaTypeOptions and legacy fallback
+  let result: ImagePicker.ImagePickerResult;
+  try {
+    result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false,
+      quality: 1,
+      exif: true,
+    });
+  } catch (err: any) {
+    console.warn('[Picker] Modern photo picker rejected, launching with legacy fallback:', err);
+    try {
+      result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 1,
+        exif: true,
+        legacy: true,
+      });
+    } catch (fallbackErr: any) {
+      console.error('[Picker] Both modern and legacy picker failed:', fallbackErr);
+      return { canceled: true };
+    }
+  }
 
   if (!result.canceled && result.assets && result.assets.length > 0) {
     const asset = result.assets[0];
