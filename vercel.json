@@ -62,6 +62,14 @@
       "destination": "/terms.html"
     },
     {
+      "source": "/admin",
+      "destination": "/api"
+    },
+    {
+      "source": "/admin/(.*)",
+      "destination": "/api"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api"
     },
