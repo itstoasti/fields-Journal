@@ -392,3 +392,104 @@ export async function logGenerationRecord(
     console.warn('[Database] Failed to log generation record:', err);
   }
 }
+
+export interface AdminStats {
+  users: {
+    total: number;
+    last24h: number;
+    last7d: number;
+    payingCount: number;
+    freeUsedTotal: number;
+    adsWatchedTotal: number;
+    creditsBalanceTotal: number;
+  };
+  generations: {
+    total: number;
+    last24h: number;
+    last7d: number;
+    successful: number;
+    failed: number;
+    successRate: number;
+  };
+  topDestinations: Array<{ place: string; count: number }>;
+  recentActivity: Array<{
+    id: string;
+    userId: string;
+    place: string;
+    number: string;
+    status: string;
+    costInfo: string | null;
+    createdAt: string;
+  }>;
+}
+
+export async function getAdminStats(): Promise<AdminStats> {
+  const now = new Date();
+  const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const [usersTotal, usersDay, usersWeek] = await Promise.all([
+    client.execute(
+      'SELECT COUNT(*) as c, SUM(free_used) as free_used, SUM(ad_used) as ads, SUM(credits) as credits, SUM(CASE WHEN credits > 0 THEN 1 ELSE 0 END) as paying FROM users'
+    ),
+    client.execute({ sql: 'SELECT COUNT(*) as c FROM users WHERE created_at >= ?', args: [dayAgo] }),
+    client.execute({ sql: 'SELECT COUNT(*) as c FROM users WHERE created_at >= ?', args: [weekAgo] }),
+  ]);
+
+  const [genTotal, genDay, genWeek] = await Promise.all([
+    client.execute(
+      'SELECT COUNT(*) as total, SUM(CASE WHEN status = \'success\' THEN 1 ELSE 0 END) as success, SUM(CASE WHEN status = \'failed\' THEN 1 ELSE 0 END) as failed FROM generations'
+    ),
+    client.execute({ sql: 'SELECT COUNT(*) as c FROM generations WHERE created_at >= ?', args: [dayAgo] }),
+    client.execute({ sql: 'SELECT COUNT(*) as c FROM generations WHERE created_at >= ?', args: [weekAgo] }),
+  ]);
+
+  const [topPlacesRes, recentFeedRes] = await Promise.all([
+    client.execute(
+      'SELECT place, COUNT(*) as count FROM generations WHERE place IS NOT NULL AND place != \'\' GROUP BY place ORDER BY count DESC LIMIT 8'
+    ),
+    client.execute(
+      'SELECT id, user_id, place, number, status, cost_info, created_at FROM generations ORDER BY created_at DESC LIMIT 20'
+    ),
+  ]);
+
+  const uRow = usersTotal.rows[0] || {};
+  const gRow = genTotal.rows[0] || {};
+
+  const totalGens = Number(gRow.total || 0);
+  const successGens = Number(gRow.success || 0);
+  const successRate = totalGens > 0 ? Math.round((successGens / totalGens) * 100) : 100;
+
+  return {
+    users: {
+      total: Number(uRow.c || 0),
+      last24h: Number(usersDay.rows[0]?.c || 0),
+      last7d: Number(usersWeek.rows[0]?.c || 0),
+      payingCount: Number(uRow.paying || 0),
+      freeUsedTotal: Number(uRow.free_used || 0),
+      adsWatchedTotal: Number(uRow.ads || 0),
+      creditsBalanceTotal: Number(uRow.credits || 0),
+    },
+    generations: {
+      total: totalGens,
+      last24h: Number(genDay.rows[0]?.c || 0),
+      last7d: Number(genWeek.rows[0]?.c || 0),
+      successful: successGens,
+      failed: Number(gRow.failed || 0),
+      successRate,
+    },
+    topDestinations: topPlacesRes.rows.map((r: any) => ({
+      place: String(r.place),
+      count: Number(r.count),
+    })),
+    recentActivity: recentFeedRes.rows.map((r: any) => ({
+      id: String(r.id),
+      userId: String(r.user_id),
+      place: String(r.place || 'Unknown'),
+      number: String(r.number || '01'),
+      status: String(r.status),
+      costInfo: r.cost_info ? String(r.cost_info) : null,
+      createdAt: String(r.created_at),
+    })),
+  };
+}

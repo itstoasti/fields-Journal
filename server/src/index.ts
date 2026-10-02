@@ -15,11 +15,13 @@ import {
   addCreditsToUser,
   linkAccountByKey,
   logGenerationRecord,
+  getAdminStats,
 } from './db.js';
 import { buildGrokPrompt } from './prompt.js';
 import { generateFieldNoteImage } from './grok.js';
 import { generateGeminiImage } from './gemini.js';
 import { suggestMemoryKeywords } from './keywords.js';
+import { renderAdminDashboardHtml } from './adminHtml.js';
 
 dotenv.config();
 
@@ -124,6 +126,30 @@ app.get('/terms', (c) => {
     return c.html(fs.readFileSync(filePath, 'utf-8'));
   }
   return c.text('Terms of Service not found', 404);
+});
+
+// Admin Telemetry Dashboard (Mobile Web)
+app.get('/admin', (c) => {
+  return c.html(renderAdminDashboardHtml());
+});
+
+// Admin Telemetry Stats API
+app.get('/v1/admin/stats', async (c) => {
+  const adminSecret = process.env.ADMIN_PIN || process.env.ADMIN_KEY || 'fields2026';
+  const authHeader = c.req.header('Authorization');
+  const token = authHeader?.replace('Bearer ', '').trim();
+  const queryKey = c.req.query('key');
+
+  if ((token || queryKey) !== adminSecret) {
+    return c.json({ error: 'UNAUTHORIZED', message: 'Invalid admin PIN' }, 401);
+  }
+
+  try {
+    const stats = await getAdminStats();
+    return c.json(stats);
+  } catch (err: any) {
+    return c.json({ error: 'STATS_ERROR', message: err.message }, 500);
+  }
 });
 
 // User profile & entitlements
