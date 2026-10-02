@@ -410,6 +410,50 @@ export function renderAdminDashboardHtml(): string {
       </div>
     </div>
 
+    <!-- Active AI Printmaker Model Control -->
+    <div class="card full-width" style="margin-bottom: 20px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <div class="card-label" style="margin-bottom: 0;">Active AI Printmaker Engine</div>
+        <span id="activeModelBadge" class="badge-pill badge-amber">Loading...</span>
+      </div>
+      <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px;">
+        Controls the engine used to carve and press field notes store-wide. Only you can change this.
+      </p>
+
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <label style="display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); padding: 10px 12px; border-radius: 8px; cursor: pointer;">
+          <input type="radio" name="aiModel" value="grok-imagine-image-2.0" id="modelGrok2" style="accent-color: var(--amber);">
+          <div>
+            <div style="font-size: 13px; font-weight: 600; color: var(--text);">xAI Grok Imagine 2.0 (Recommended)</div>
+            <div style="font-size: 11px; color: var(--text-muted);">Standard 2K linocut print carving (~5-6¢)</div>
+          </div>
+        </label>
+
+        <label style="display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); padding: 10px 12px; border-radius: 8px; cursor: pointer;">
+          <input type="radio" name="aiModel" value="grok-imagine-image-quality" id="modelGrokUltra" style="accent-color: var(--amber);">
+          <div>
+            <div style="font-size: 13px; font-weight: 600; color: var(--text);">xAI Grok Imagine Ultra HD</div>
+            <div style="font-size: 11px; color: var(--text-muted);">Maximum linocut detail and texture (~7-8¢)</div>
+          </div>
+        </label>
+
+        <label style="display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); padding: 10px 12px; border-radius: 8px; cursor: pointer;">
+          <input type="radio" name="aiModel" value="gemini-2.5-flash-image" id="modelGemini" style="accent-color: var(--amber);">
+          <div>
+            <div style="font-size: 13px; font-weight: 600; color: var(--text);">Google Gemini 2.5 Flash</div>
+            <div style="font-size: 11px; color: var(--text-muted);">Google fast image tier (~3¢)</div>
+          </div>
+        </label>
+      </div>
+
+      <div style="margin-top: 12px; display: flex; align-items: center; justify-content: space-between;">
+        <button onclick="handleSaveModel()" id="saveModelBtn" style="background: var(--amber); color: #141210; border: none; border-radius: 6px; font-family: var(--font-mono); font-weight: 700; font-size: 12px; padding: 8px 16px; cursor: pointer;">
+          APPLY ACTIVE MODEL
+        </button>
+        <span id="modelSaveNotice" style="font-size: 11px; color: var(--green); font-family: var(--font-mono); display: none;">✓ Saved & Active!</span>
+      </div>
+    </div>
+
     <!-- Top Destinations -->
     <div class="section-title">
       <span>Top Travel Destinations</span>
@@ -499,6 +543,13 @@ export function renderAdminDashboardHtml(): string {
       document.getElementById('statAdsWatched').textContent = data.users.adsWatchedTotal;
       document.getElementById('statCreditsBalance').textContent = data.users.creditsBalanceTotal;
 
+      // Active Model Selection
+      if (data.activeModel) {
+        updateModelBadge(data.activeModel);
+        const radio = document.querySelector('input[name="aiModel"][value="' + data.activeModel + '"]');
+        if (radio) radio.checked = true;
+      }
+
       // Destinations
       const destContainer = document.getElementById('destinationsList');
       if (data.topDestinations && data.topDestinations.length > 0) {
@@ -535,6 +586,54 @@ export function renderAdminDashboardHtml(): string {
         }).join('');
       } else {
         actContainer.innerHTML = '<div style="font-size: 12px; color: var(--text-muted); font-style: italic; text-align: center; padding: 20px;">No recent events recorded.</div>';
+      }
+    }
+
+    function updateModelBadge(modelId) {
+      const badge = document.getElementById('activeModelBadge');
+      if (!badge) return;
+      if (modelId === 'grok-imagine-image-quality') {
+        badge.textContent = 'Grok Ultra HD';
+        badge.className = 'badge-pill badge-green';
+      } else if (modelId.startsWith('gemini')) {
+        badge.textContent = 'Gemini 2.5 Flash';
+        badge.className = 'badge-pill badge-amber';
+      } else {
+        badge.textContent = 'Grok Imagine 2.0';
+        badge.className = 'badge-pill badge-amber';
+      }
+    }
+
+    async function handleSaveModel() {
+      const pin = getStoredPin();
+      const selected = document.querySelector('input[name="aiModel"]:checked')?.value;
+      if (!selected || !pin) return;
+
+      const btn = document.getElementById('saveModelBtn');
+      btn.textContent = 'SAVING...';
+
+      try {
+        const res = await fetch('/v1/admin/settings', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + pin,
+          },
+          body: JSON.stringify({ key: 'active_model', value: selected }),
+        });
+
+        if (res.ok) {
+          const notice = document.getElementById('modelSaveNotice');
+          notice.style.display = 'inline';
+          setTimeout(() => { notice.style.display = 'none'; }, 3000);
+          updateModelBadge(selected);
+        } else {
+          alert('Failed to update active model. Please check PIN.');
+        }
+      } catch (e) {
+        alert('Error saving model: ' + e.message);
+      } finally {
+        btn.textContent = 'APPLY ACTIVE MODEL';
       }
     }
 

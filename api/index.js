@@ -11966,11 +11966,40 @@ async function logGenerationRecord(id, userId, place, number2, status, costInfo)
     console.warn("[Database] Failed to log generation record:", err);
   }
 }
+async function getSystemSetting(key, defaultValue) {
+  try {
+    const res = await client.execute({
+      sql: "SELECT value FROM app_settings WHERE key = ? LIMIT 1",
+      args: [key]
+    });
+    if (res.rows.length > 0 && res.rows[0].value) {
+      return String(res.rows[0].value);
+    }
+  } catch {
+  }
+  return defaultValue;
+}
+async function setSystemSetting(key, value) {
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+  `);
+  await client.execute({
+    sql: `INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)
+          ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+    args: [key, value, now]
+  });
+}
 async function getAdminStats() {
   const now = /* @__PURE__ */ new Date();
   const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1e3).toISOString();
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1e3).toISOString();
-  const [usersTotal, usersDay, usersWeek] = await Promise.all([
+  const [activeModel, usersTotal, usersDay, usersWeek] = await Promise.all([
+    getSystemSetting("active_model", "grok-imagine-image-2.0"),
     client.execute(
       "SELECT COUNT(*) as c, SUM(free_used) as free_used, SUM(ad_used) as ads, SUM(credits) as credits, SUM(CASE WHEN credits > 0 THEN 1 ELSE 0 END) as paying FROM users"
     ),
@@ -11998,6 +12027,7 @@ async function getAdminStats() {
   const successGens = Number(gRow.success || 0);
   const successRate = totalGens > 0 ? Math.round(successGens / totalGens * 100) : 100;
   return {
+    activeModel: String(activeModel),
     users: {
       total: Number(uRow.c || 0),
       last24h: Number(usersDay.rows[0]?.c || 0),
@@ -12754,6 +12784,50 @@ function renderAdminDashboardHtml() {
       </div>
     </div>
 
+    <!-- Active AI Printmaker Model Control -->
+    <div class="card full-width" style="margin-bottom: 20px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <div class="card-label" style="margin-bottom: 0;">Active AI Printmaker Engine</div>
+        <span id="activeModelBadge" class="badge-pill badge-amber">Loading...</span>
+      </div>
+      <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px;">
+        Controls the engine used to carve and press field notes store-wide. Only you can change this.
+      </p>
+
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <label style="display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); padding: 10px 12px; border-radius: 8px; cursor: pointer;">
+          <input type="radio" name="aiModel" value="grok-imagine-image-2.0" id="modelGrok2" style="accent-color: var(--amber);">
+          <div>
+            <div style="font-size: 13px; font-weight: 600; color: var(--text);">xAI Grok Imagine 2.0 (Recommended)</div>
+            <div style="font-size: 11px; color: var(--text-muted);">Standard 2K linocut print carving (~5-6\xA2)</div>
+          </div>
+        </label>
+
+        <label style="display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); padding: 10px 12px; border-radius: 8px; cursor: pointer;">
+          <input type="radio" name="aiModel" value="grok-imagine-image-quality" id="modelGrokUltra" style="accent-color: var(--amber);">
+          <div>
+            <div style="font-size: 13px; font-weight: 600; color: var(--text);">xAI Grok Imagine Ultra HD</div>
+            <div style="font-size: 11px; color: var(--text-muted);">Maximum linocut detail and texture (~7-8\xA2)</div>
+          </div>
+        </label>
+
+        <label style="display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); padding: 10px 12px; border-radius: 8px; cursor: pointer;">
+          <input type="radio" name="aiModel" value="gemini-2.5-flash-image" id="modelGemini" style="accent-color: var(--amber);">
+          <div>
+            <div style="font-size: 13px; font-weight: 600; color: var(--text);">Google Gemini 2.5 Flash</div>
+            <div style="font-size: 11px; color: var(--text-muted);">Google fast image tier (~3\xA2)</div>
+          </div>
+        </label>
+      </div>
+
+      <div style="margin-top: 12px; display: flex; align-items: center; justify-content: space-between;">
+        <button onclick="handleSaveModel()" id="saveModelBtn" style="background: var(--amber); color: #141210; border: none; border-radius: 6px; font-family: var(--font-mono); font-weight: 700; font-size: 12px; padding: 8px 16px; cursor: pointer;">
+          APPLY ACTIVE MODEL
+        </button>
+        <span id="modelSaveNotice" style="font-size: 11px; color: var(--green); font-family: var(--font-mono); display: none;">\u2713 Saved & Active!</span>
+      </div>
+    </div>
+
     <!-- Top Destinations -->
     <div class="section-title">
       <span>Top Travel Destinations</span>
@@ -12843,6 +12917,13 @@ function renderAdminDashboardHtml() {
       document.getElementById('statAdsWatched').textContent = data.users.adsWatchedTotal;
       document.getElementById('statCreditsBalance').textContent = data.users.creditsBalanceTotal;
 
+      // Active Model Selection
+      if (data.activeModel) {
+        updateModelBadge(data.activeModel);
+        const radio = document.querySelector('input[name="aiModel"][value="' + data.activeModel + '"]');
+        if (radio) radio.checked = true;
+      }
+
       // Destinations
       const destContainer = document.getElementById('destinationsList');
       if (data.topDestinations && data.topDestinations.length > 0) {
@@ -12879,6 +12960,54 @@ function renderAdminDashboardHtml() {
         }).join('');
       } else {
         actContainer.innerHTML = '<div style="font-size: 12px; color: var(--text-muted); font-style: italic; text-align: center; padding: 20px;">No recent events recorded.</div>';
+      }
+    }
+
+    function updateModelBadge(modelId) {
+      const badge = document.getElementById('activeModelBadge');
+      if (!badge) return;
+      if (modelId === 'grok-imagine-image-quality') {
+        badge.textContent = 'Grok Ultra HD';
+        badge.className = 'badge-pill badge-green';
+      } else if (modelId.startsWith('gemini')) {
+        badge.textContent = 'Gemini 2.5 Flash';
+        badge.className = 'badge-pill badge-amber';
+      } else {
+        badge.textContent = 'Grok Imagine 2.0';
+        badge.className = 'badge-pill badge-amber';
+      }
+    }
+
+    async function handleSaveModel() {
+      const pin = getStoredPin();
+      const selected = document.querySelector('input[name="aiModel"]:checked')?.value;
+      if (!selected || !pin) return;
+
+      const btn = document.getElementById('saveModelBtn');
+      btn.textContent = 'SAVING...';
+
+      try {
+        const res = await fetch('/v1/admin/settings', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + pin,
+          },
+          body: JSON.stringify({ key: 'active_model', value: selected }),
+        });
+
+        if (res.ok) {
+          const notice = document.getElementById('modelSaveNotice');
+          notice.style.display = 'inline';
+          setTimeout(() => { notice.style.display = 'none'; }, 3000);
+          updateModelBadge(selected);
+        } else {
+          alert('Failed to update active model. Please check PIN.');
+        }
+      } catch (e) {
+        alert('Error saving model: ' + e.message);
+      } finally {
+        btn.textContent = 'APPLY ACTIVE MODEL';
       }
     }
 
@@ -13011,6 +13140,26 @@ app.get("/v1/admin/stats", async (c) => {
     return c.json(stats);
   } catch (err) {
     return c.json({ error: "STATS_ERROR", message: err.message }, 500);
+  }
+});
+app.post("/v1/admin/settings", async (c) => {
+  const adminSecret = process.env.ADMIN_PIN || process.env.ADMIN_KEY || "fields2026";
+  const authHeader = c.req.header("Authorization");
+  const token = authHeader?.replace("Bearer ", "").trim();
+  const queryKey = c.req.query("key");
+  if ((token || queryKey) !== adminSecret) {
+    return c.json({ error: "UNAUTHORIZED", message: "Invalid admin PIN" }, 401);
+  }
+  try {
+    const body = await c.req.json();
+    const { key, value } = body;
+    if (!key || !value) {
+      return c.json({ error: "BAD_REQUEST", message: "key and value are required" }, 400);
+    }
+    await setSystemSetting(key, String(value));
+    return c.json({ success: true, key, value });
+  } catch (err) {
+    return c.json({ error: "SETTINGS_ERROR", message: err.message }, 500);
   }
 });
 app.get("/v1/me", async (c) => {
@@ -13184,8 +13333,10 @@ app.post("/v1/notes", async (c) => {
       keywords,
       year
     });
-    console.log(`[Notes] Generating note ${noteId} for ${installationId} (dev: ${deviceId || "none"}) under ${entitlementClaim} with model ${model || "default"}...`);
-    const isGeminiModel = model?.toLowerCase().startsWith("gemini");
+    const serverActiveModel = await getSystemSetting("active_model", "grok-imagine-image-2.0");
+    const effectiveModel = serverActiveModel || model || "grok-imagine-image-2.0";
+    console.log(`[Notes] Generating note ${noteId} for ${installationId} (dev: ${deviceId || "none"}) under ${entitlementClaim} with model ${effectiveModel}...`);
+    const isGeminiModel = effectiveModel?.toLowerCase().startsWith("gemini");
     let result;
     if (isGeminiModel) {
       try {
@@ -13193,10 +13344,10 @@ app.post("/v1/notes", async (c) => {
           imageBuffer,
           mimeType,
           prompt,
-          model
+          model: effectiveModel
         });
       } catch (geminiErr) {
-        console.warn(`[Notes] Gemini model ${model} failed (${geminiErr.message}). Falling back to Grok Imagine 2.0...`);
+        console.warn(`[Notes] Gemini model ${effectiveModel} failed (${geminiErr.message}). Falling back to Grok Imagine 2.0...`);
         result = await generateFieldNoteImage({
           imageBuffer,
           mimeType,
@@ -13209,7 +13360,7 @@ app.post("/v1/notes", async (c) => {
         imageBuffer,
         mimeType,
         prompt,
-        model
+        model: effectiveModel
       });
     }
     const consumed = await consumeUserEntitlement(installationId, entitlementClaim, deviceId);

@@ -394,6 +394,7 @@ export async function logGenerationRecord(
 }
 
 export interface AdminStats {
+  activeModel: string;
   users: {
     total: number;
     last24h: number;
@@ -423,12 +424,44 @@ export interface AdminStats {
   }>;
 }
 
+export async function getSystemSetting(key: string, defaultValue: string): Promise<string> {
+  try {
+    const res = await client.execute({
+      sql: 'SELECT value FROM app_settings WHERE key = ? LIMIT 1',
+      args: [key],
+    });
+    if (res.rows.length > 0 && res.rows[0].value) {
+      return String(res.rows[0].value);
+    }
+  } catch {
+    // If table doesn't exist yet
+  }
+  return defaultValue;
+}
+
+export async function setSystemSetting(key: string, value: string): Promise<void> {
+  const now = new Date().toISOString();
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+  `);
+  await client.execute({
+    sql: `INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)
+          ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+    args: [key, value, now],
+  });
+}
+
 export async function getAdminStats(): Promise<AdminStats> {
   const now = new Date();
   const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [usersTotal, usersDay, usersWeek] = await Promise.all([
+  const [activeModel, usersTotal, usersDay, usersWeek] = await Promise.all([
+    getSystemSetting('active_model', 'grok-imagine-image-2.0'),
     client.execute(
       'SELECT COUNT(*) as c, SUM(free_used) as free_used, SUM(ad_used) as ads, SUM(credits) as credits, SUM(CASE WHEN credits > 0 THEN 1 ELSE 0 END) as paying FROM users'
     ),
@@ -461,6 +494,7 @@ export async function getAdminStats(): Promise<AdminStats> {
   const successRate = totalGens > 0 ? Math.round((successGens / totalGens) * 100) : 100;
 
   return {
+    activeModel: String(activeModel),
     users: {
       total: Number(uRow.c || 0),
       last24h: Number(usersDay.rows[0]?.c || 0),

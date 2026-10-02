@@ -28,8 +28,6 @@ export default function SettingsScreen() {
   const installationId = useAppStore((state) => state.installationId);
   const accountKey = useAppStore((state) => state.accountKey);
   const linkAccountWithKey = useAppStore((state) => state.linkAccountWithKey);
-  const selectedModel = useAppStore((state) => state.selectedModel);
-  const setSelectedModel = useAppStore((state) => state.setSelectedModel);
   const clearAllNotes = useAppStore((state) => state.clearAllNotes);
   const syncWithBackend = useAppStore((state) => state.syncWithBackend);
 
@@ -328,116 +326,6 @@ export default function SettingsScreen() {
               textStyle={styles.syncBtnText}
             />
           </View>
-        </View>
-
-        {/* AI Generation Model Selector */}
-        <View style={styles.card}>
-          <TypewriterText size="xs" bold color={colors.inkSecondary} letterSpacing={1.5}>
-            AI GENERATION MODEL
-          </TypewriterText>
-          <TypewriterText size="xs" color={colors.inkMuted} style={{ marginTop: 4, marginBottom: spacing.md }}>
-            Select the model used for rendering travel note posters and carved stamps:
-          </TypewriterText>
-
-          <TypewriterText size="xs" bold color={colors.brickRed} letterSpacing={1} style={{ marginBottom: spacing.xs }}>
-            GOOGLE GEMINI IMAGE MODELS
-          </TypewriterText>
-
-          {[
-            {
-              id: 'gemini-3.1-flash-image',
-              label: 'Gemini 3.1 Flash Image (Balanced)',
-              subtitle: 'Google · Fast, rich stamp detail (~3¢)',
-            },
-            {
-              id: 'gemini-3.1-flash-lite-image',
-              label: 'Gemini 3.1 Flash-Lite Image (Lowest Cost)',
-              subtitle: 'Google · Ultra economical stamp tier (~1.5¢)',
-            },
-            {
-              id: 'gemini-3-pro-image',
-              label: 'Gemini 3 Pro Image (Flagship Detail)',
-              subtitle: 'Google · High-precision stamp carving (~5-6¢)',
-            },
-          ].map((item) => {
-            const isSelected = selectedModel === item.id;
-            return (
-              <Pressable
-                key={item.id}
-                onPress={() => setSelectedModel(item.id)}
-                style={[
-                  styles.modelOption,
-                  isSelected && styles.modelOptionSelected,
-                ]}
-              >
-                <View style={styles.modelRadioOuter}>
-                  {isSelected && <View style={styles.modelRadioInner} />}
-                </View>
-                <View style={styles.modelTextContainer}>
-                  <TypewriterText
-                    size="sm"
-                    bold={isSelected}
-                    color={isSelected ? colors.brickRed : colors.charcoal}
-                  >
-                    {item.label}
-                  </TypewriterText>
-                  <TypewriterText size="xs" color={colors.inkMuted} style={{ marginTop: 2 }}>
-                    {item.subtitle}
-                  </TypewriterText>
-                </View>
-              </Pressable>
-            );
-          })}
-
-          <TypewriterText size="xs" bold color={colors.charcoal} letterSpacing={1} style={{ marginTop: spacing.md, marginBottom: spacing.xs }}>
-            xAI GROK IMAGINE MODELS
-          </TypewriterText>
-
-          {[
-            {
-              id: 'grok-imagine-image-2.0',
-              label: 'Grok Imagine 2.0 (High Quality)',
-              subtitle: 'xAI Grok · 2K standard quality (~5-6¢)',
-            },
-            {
-              id: 'grok-imagine-image-2.0-low',
-              label: 'Grok Imagine 2.0 (Low Compute)',
-              subtitle: 'xAI Grok · Low compute tier (~2-3¢)',
-            },
-            {
-              id: 'grok-imagine-image-quality',
-              label: 'Grok Imagine (Ultra HD)',
-              subtitle: 'xAI Grok · High detail & texture (~7-8¢)',
-            },
-          ].map((item) => {
-            const isSelected = selectedModel === item.id;
-            return (
-              <Pressable
-                key={item.id}
-                onPress={() => setSelectedModel(item.id)}
-                style={[
-                  styles.modelOption,
-                  isSelected && styles.modelOptionSelected,
-                ]}
-              >
-                <View style={styles.modelRadioOuter}>
-                  {isSelected && <View style={styles.modelRadioInner} />}
-                </View>
-                <View style={styles.modelTextContainer}>
-                  <TypewriterText
-                    size="sm"
-                    bold={isSelected}
-                    color={isSelected ? colors.brickRed : colors.charcoal}
-                  >
-                    {item.label}
-                  </TypewriterText>
-                  <TypewriterText size="xs" color={colors.inkMuted} style={{ marginTop: 2 }}>
-                    {item.subtitle}
-                  </TypewriterText>
-                </View>
-              </Pressable>
-            );
-          })}
         </View>
 
         {/* Account Key & Device Sync */}
@@ -742,39 +630,6 @@ const styles = StyleSheet.create({
   },
   syncBtnText: {
     fontSize: fontSizes.xs,
-  },
-  modelOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.sm,
-    borderRadius: layout.borderRadius,
-    marginBottom: spacing.xs,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  modelOptionSelected: {
-    backgroundColor: '#ECE3D4',
-    borderColor: colors.brickRed,
-  },
-  modelRadioOuter: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: colors.charcoal,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.sm,
-  },
-  modelRadioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.brickRed,
-  },
-  modelTextContainer: {
-    flex: 1,
   },
   menuList: {
     marginTop: spacing.sm,

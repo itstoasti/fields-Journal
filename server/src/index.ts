@@ -16,6 +16,8 @@ import {
   linkAccountByKey,
   logGenerationRecord,
   getAdminStats,
+  getSystemSetting,
+  setSystemSetting,
 } from './db.js';
 import { buildGrokPrompt } from './prompt.js';
 import { generateFieldNoteImage } from './grok.js';
@@ -149,6 +151,31 @@ app.get('/v1/admin/stats', async (c) => {
     return c.json(stats);
   } catch (err: any) {
     return c.json({ error: 'STATS_ERROR', message: err.message }, 500);
+  }
+});
+
+// Update System Settings (Active Model, etc.)
+app.post('/v1/admin/settings', async (c) => {
+  const adminSecret = process.env.ADMIN_PIN || process.env.ADMIN_KEY || 'fields2026';
+  const authHeader = c.req.header('Authorization');
+  const token = authHeader?.replace('Bearer ', '').trim();
+  const queryKey = c.req.query('key');
+
+  if ((token || queryKey) !== adminSecret) {
+    return c.json({ error: 'UNAUTHORIZED', message: 'Invalid admin PIN' }, 401);
+  }
+
+  try {
+    const body = await c.req.json();
+    const { key, value } = body;
+    if (!key || !value) {
+      return c.json({ error: 'BAD_REQUEST', message: 'key and value are required' }, 400);
+    }
+
+    await setSystemSetting(key, String(value));
+    return c.json({ success: true, key, value });
+  } catch (err: any) {
+    return c.json({ error: 'SETTINGS_ERROR', message: err.message }, 500);
   }
 });
 
@@ -357,10 +384,14 @@ app.post('/v1/notes', async (c) => {
       year,
     });
 
-    console.log(`[Notes] Generating note ${noteId} for ${installationId} (dev: ${deviceId || 'none'}) under ${entitlementClaim} with model ${model || 'default'}...`);
+    // Server-controlled active model overrides client setting
+    const serverActiveModel = await getSystemSetting('active_model', 'grok-imagine-image-2.0');
+    const effectiveModel = serverActiveModel || model || 'grok-imagine-image-2.0';
+
+    console.log(`[Notes] Generating note ${noteId} for ${installationId} (dev: ${deviceId || 'none'}) under ${entitlementClaim} with model ${effectiveModel}...`);
 
     // Step 3: Execute Image generation (Gemini or Grok Imagine)
-    const isGeminiModel = model?.toLowerCase().startsWith('gemini');
+    const isGeminiModel = effectiveModel?.toLowerCase().startsWith('gemini');
     let result;
     if (isGeminiModel) {
       try {
@@ -368,10 +399,10 @@ app.post('/v1/notes', async (c) => {
           imageBuffer,
           mimeType,
           prompt,
-          model,
+          model: effectiveModel,
         });
       } catch (geminiErr: any) {
-        console.warn(`[Notes] Gemini model ${model} failed (${geminiErr.message}). Falling back to Grok Imagine 2.0...`);
+        console.warn(`[Notes] Gemini model ${effectiveModel} failed (${geminiErr.message}). Falling back to Grok Imagine 2.0...`);
         result = await generateFieldNoteImage({
           imageBuffer,
           mimeType,
@@ -384,7 +415,7 @@ app.post('/v1/notes', async (c) => {
         imageBuffer,
         mimeType,
         prompt,
-        model,
+        model: effectiveModel,
       });
     }
 
