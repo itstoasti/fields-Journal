@@ -12023,6 +12023,11 @@ async function getAdminStats() {
     androidThreeDayRes,
     androidWeekRes,
     androidActiveRes,
+    iosTotalRes,
+    iosDayRes,
+    iosThreeDayRes,
+    iosWeekRes,
+    iosActiveRes,
     webTotalRes,
     webDayRes,
     webWeekRes,
@@ -12041,11 +12046,17 @@ async function getAdminStats() {
     client.execute({ sql: `SELECT COUNT(DISTINCT device_id) as c FROM users WHERE device_id LIKE 'android_%' AND created_at >= ? AND ${testUserFilter}`, args: [weekAgo] }),
     // Active devices: checked in within the last 48 hours (matches Google Play installed active audience, excluding uninstalls)
     client.execute({ sql: `SELECT COUNT(DISTINCT device_id) as c FROM users WHERE device_id LIKE 'android_%' AND updated_at >= ? AND ${testUserFilter}`, args: [twoDaysAgo] }),
-    // 2. Web Visitors
+    // 2. iOS App Devices (Apple App Store)
+    client.execute(`SELECT COUNT(DISTINCT device_id) as c FROM users WHERE device_id LIKE 'ios_%' AND ${testUserFilter}`),
+    client.execute({ sql: `SELECT COUNT(DISTINCT device_id) as c FROM users WHERE device_id LIKE 'ios_%' AND created_at >= ? AND ${testUserFilter}`, args: [dayAgo] }),
+    client.execute({ sql: `SELECT COUNT(DISTINCT device_id) as c FROM users WHERE device_id LIKE 'ios_%' AND created_at >= ? AND ${testUserFilter}`, args: [threeDaysAgo] }),
+    client.execute({ sql: `SELECT COUNT(DISTINCT device_id) as c FROM users WHERE device_id LIKE 'ios_%' AND created_at >= ? AND ${testUserFilter}`, args: [weekAgo] }),
+    client.execute({ sql: `SELECT COUNT(DISTINCT device_id) as c FROM users WHERE device_id LIKE 'ios_%' AND updated_at >= ? AND ${testUserFilter}`, args: [twoDaysAgo] }),
+    // 3. Web Visitors
     client.execute(`SELECT COUNT(*) as c FROM users WHERE (device_id LIKE 'web_%' OR device_id IS NULL) AND ${testUserFilter}`),
     client.execute({ sql: `SELECT COUNT(*) as c FROM users WHERE (device_id LIKE 'web_%' OR device_id IS NULL) AND created_at >= ? AND ${testUserFilter}`, args: [dayAgo] }),
     client.execute({ sql: `SELECT COUNT(*) as c FROM users WHERE (device_id LIKE 'web_%' OR device_id IS NULL) AND created_at >= ? AND ${testUserFilter}`, args: [weekAgo] }),
-    // 3. Monetization totals across all real users
+    // 4. Monetization totals across all real users
     client.execute(`
       SELECT 
         COUNT(*) as c, 
@@ -12055,7 +12066,7 @@ async function getAdminStats() {
         SUM(CASE WHEN credits > 0 THEN 1 ELSE 0 END) as paying 
       FROM users WHERE ${testUserFilter}
     `),
-    // 4. Generations (excluding developer test probes)
+    // 5. Generations (excluding developer test probes)
     client.execute(`
       SELECT 
         COUNT(*) as total, 
@@ -12065,7 +12076,7 @@ async function getAdminStats() {
     `),
     client.execute({ sql: `SELECT COUNT(*) as c FROM generations WHERE created_at >= ? AND ${testGenFilter}`, args: [dayAgo] }),
     client.execute({ sql: `SELECT COUNT(*) as c FROM generations WHERE created_at >= ? AND ${testGenFilter}`, args: [weekAgo] }),
-    // 5. Top Places
+    // 6. Top Places
     client.execute(`
       SELECT place, COUNT(*) as count 
       FROM generations 
@@ -12074,7 +12085,7 @@ async function getAdminStats() {
       ORDER BY count DESC 
       LIMIT 8
     `),
-    // 6. Recent generations
+    // 7. Recent generations
     client.execute(`
       SELECT id, user_id, place, number, status, cost_info, created_at 
       FROM generations 
@@ -12093,6 +12104,11 @@ async function getAdminStats() {
   const android3d = Number(androidThreeDayRes.rows[0]?.c || 0);
   const androidWeek = Number(androidWeekRes.rows[0]?.c || 0);
   const androidActive = Number(androidActiveRes.rows[0]?.c || 0);
+  const iosTotal = Number(iosTotalRes.rows[0]?.c || 0);
+  const iosDay = Number(iosDayRes.rows[0]?.c || 0);
+  const ios3d = Number(iosThreeDayRes.rows[0]?.c || 0);
+  const iosWeek = Number(iosWeekRes.rows[0]?.c || 0);
+  const iosActive = Number(iosActiveRes.rows[0]?.c || 0);
   const webTotal = Number(webTotalRes.rows[0]?.c || 0);
   const webDay = Number(webDayRes.rows[0]?.c || 0);
   const webWeek = Number(webWeekRes.rows[0]?.c || 0);
@@ -12105,16 +12121,23 @@ async function getAdminStats() {
       last7d: androidWeek,
       activeDevices: androidActive
     },
+    ios: {
+      total: iosTotal,
+      last24h: iosDay,
+      last3d: ios3d,
+      last7d: iosWeek,
+      activeDevices: iosActive
+    },
     web: {
       total: webTotal,
       last24h: webDay,
       last7d: webWeek
     },
     users: {
-      total: androidTotal,
-      // Point to real Android count for backward-compatible consumers
-      last24h: androidDay,
-      last7d: androidWeek,
+      total: androidTotal + iosTotal,
+      // Combined mobile store installs
+      last24h: androidDay + iosDay,
+      last7d: androidWeek + iosWeek,
       payingCount: Number(uRow.paying || 0),
       freeUsedTotal: Number(uRow.free_used || 0),
       adsWatchedTotal: Number(uRow.ads || 0),
@@ -12569,6 +12592,44 @@ function renderAdminDashboardHtml() {
       background: var(--amber-dim);
     }
 
+    /* Platform Filter Tabs */
+    .tab-bar {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 16px;
+      background: rgba(0, 0, 0, 0.35);
+      padding: 4px;
+      border-radius: 10px;
+      border: 1px solid var(--card-border);
+    }
+
+    .tab-btn {
+      flex: 1;
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 8px 6px;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .tab-btn:hover {
+      color: var(--text);
+    }
+
+    .tab-btn.active {
+      background: var(--card-bg);
+      color: var(--amber);
+      border-color: rgba(255, 196, 128, 0.3);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+    }
+
     /* Stats Grid */
     .grid {
       display: grid;
@@ -12828,29 +12889,37 @@ function renderAdminDashboardHtml() {
       </button>
     </header>
 
+    <!-- Platform Filter Tabs -->
+    <div class="tab-bar">
+      <button id="tabAndroid" onclick="setPlatform('android')" class="tab-btn active">\u{1F916} Android</button>
+      <button id="tabIos" onclick="setPlatform('ios')" class="tab-btn">\u{1F34F} iOS</button>
+      <button id="tabAll" onclick="setPlatform('all')" class="tab-btn">\u{1F4F1} All Stores</button>
+      <button id="tabWeb" onclick="setPlatform('web')" class="tab-btn">\u{1F310} Web</button>
+    </div>
+
     <!-- Top KPI Grid -->
     <div class="grid">
       <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <div class="card-label" style="margin-bottom: 0;">Play Store Installs</div>
-          <span class="badge-pill badge-green" style="font-size: 10px;">Android</span>
+          <div id="statInstallsTitle" class="card-label" style="margin-bottom: 0;">Play Store Installs</div>
+          <span id="statPlatformBadge" class="badge-pill badge-green" style="font-size: 10px;">Android</span>
         </div>
-        <div id="statAndroidTotal" class="card-value">-</div>
+        <div id="statInstallsTotal" class="card-value">-</div>
         <div class="card-meta">
-          <span>Today: <strong id="statAndroidToday" style="color: var(--text);">-</strong></span>
-          <span>3d: <strong id="statAndroid3d" style="color: var(--text);">-</strong></span>
-          <span>7d: <strong id="statAndroid7d" style="color: var(--text);">-</strong></span>
+          <span>Today: <strong id="statInstallsToday" style="color: var(--text);">-</strong></span>
+          <span id="statInstalls3dWrapper">3d: <strong id="statInstalls3d" style="color: var(--text);">-</strong></span>
+          <span>7d: <strong id="statInstalls7d" style="color: var(--text);">-</strong></span>
         </div>
       </div>
 
       <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <div class="card-label" style="margin-bottom: 0;">Active Devices</div>
-          <span class="badge-pill badge-green" style="font-size: 10px;">Google Play</span>
+          <div id="statActiveTitle" class="card-label" style="margin-bottom: 0;">Active Devices</div>
+          <span id="statActiveBadge" class="badge-pill badge-green" style="font-size: 10px;">Google Play</span>
         </div>
-        <div id="statAndroidActive" class="card-value">-</div>
+        <div id="statActiveTotal" class="card-value">-</div>
         <div class="card-meta">
-          <span>Active audience (retained)</span>
+          <span id="statActiveSub">Active audience (retained)</span>
         </div>
       </div>
 
@@ -13011,16 +13080,105 @@ function renderAdminDashboardHtml() {
       }
     }
 
-    function renderStats(data) {
-      // Android Play Store Metrics
-      const android = data.android || { total: data.users?.total || 0, last24h: 0, last3d: 0, last7d: 0, activeDevices: 0 };
-      document.getElementById('statAndroidTotal').textContent = android.total;
-      document.getElementById('statAndroidToday').textContent = '+' + android.last24h;
-      document.getElementById('statAndroid3d').textContent = '+' + android.last3d;
-      document.getElementById('statAndroid7d').textContent = '+' + android.last7d;
-      document.getElementById('statAndroidActive').textContent = android.activeDevices;
+    let currentPlatform = 'android';
+    let cachedStats = null;
 
-      // Web Visitors
+    function setPlatform(platform) {
+      currentPlatform = platform;
+      ['android', 'ios', 'all', 'web'].forEach(p => {
+        const btn = document.getElementById('tab' + (p.charAt(0).toUpperCase() + p.slice(1)));
+        if (btn) btn.className = 'tab-btn' + (p === platform ? ' active' : '');
+      });
+      if (cachedStats) {
+        updatePlatformCards(cachedStats);
+      }
+    }
+
+    function updatePlatformCards(data) {
+      const android = data.android || { total: 0, last24h: 0, last3d: 0, last7d: 0, activeDevices: 0 };
+      const ios = data.ios || { total: 0, last24h: 0, last3d: 0, last7d: 0, activeDevices: 0 };
+      const web = data.web || { total: 0, last24h: 0, last7d: 0 };
+
+      const titleEl = document.getElementById('statInstallsTitle');
+      const badgeEl = document.getElementById('statPlatformBadge');
+      const totalEl = document.getElementById('statInstallsTotal');
+      const todayEl = document.getElementById('statInstallsToday');
+      const threeDEl = document.getElementById('statInstalls3d');
+      const threeDWrapper = document.getElementById('statInstalls3dWrapper');
+      const sevenDEl = document.getElementById('statInstalls7d');
+
+      const activeTitleEl = document.getElementById('statActiveTitle');
+      const activeBadgeEl = document.getElementById('statActiveBadge');
+      const activeTotalEl = document.getElementById('statActiveTotal');
+      const activeSubEl = document.getElementById('statActiveSub');
+
+      if (currentPlatform === 'android') {
+        titleEl.textContent = 'Play Store Installs';
+        badgeEl.textContent = 'Android';
+        badgeEl.className = 'badge-pill badge-green';
+        totalEl.textContent = android.total;
+        todayEl.textContent = '+' + android.last24h;
+        threeDWrapper.style.display = 'inline';
+        threeDEl.textContent = '+' + android.last3d;
+        sevenDEl.textContent = '+' + android.last7d;
+
+        activeTitleEl.textContent = 'Active Devices';
+        activeBadgeEl.textContent = 'Google Play';
+        activeBadgeEl.className = 'badge-pill badge-green';
+        activeTotalEl.textContent = android.activeDevices;
+        activeSubEl.textContent = 'Active audience (retained)';
+      } else if (currentPlatform === 'ios') {
+        titleEl.textContent = 'App Store Installs';
+        badgeEl.textContent = 'Apple iOS';
+        badgeEl.className = 'badge-pill badge-amber';
+        totalEl.textContent = ios.total;
+        todayEl.textContent = '+' + ios.last24h;
+        threeDWrapper.style.display = 'inline';
+        threeDEl.textContent = '+' + ios.last3d;
+        sevenDEl.textContent = '+' + ios.last7d;
+
+        activeTitleEl.textContent = 'Active Devices';
+        activeBadgeEl.textContent = 'App Store';
+        activeBadgeEl.className = 'badge-pill badge-amber';
+        activeTotalEl.textContent = ios.activeDevices;
+        activeSubEl.textContent = ios.total === 0 ? 'Ready for iOS launch' : 'Active audience (retained)';
+      } else if (currentPlatform === 'all') {
+        titleEl.textContent = 'Total Store Installs';
+        badgeEl.textContent = 'Android + iOS';
+        badgeEl.className = 'badge-pill badge-green';
+        totalEl.textContent = android.total + ios.total;
+        todayEl.textContent = '+' + (android.last24h + ios.last24h);
+        threeDWrapper.style.display = 'inline';
+        threeDEl.textContent = '+' + (android.last3d + ios.last3d);
+        sevenDEl.textContent = '+' + (android.last7d + ios.last7d);
+
+        activeTitleEl.textContent = 'Active Devices';
+        activeBadgeEl.textContent = 'Combined';
+        activeBadgeEl.className = 'badge-pill badge-green';
+        activeTotalEl.textContent = android.activeDevices + ios.activeDevices;
+        activeSubEl.textContent = 'Total retained store audience';
+      } else if (currentPlatform === 'web') {
+        titleEl.textContent = 'Web App Visitors';
+        badgeEl.textContent = 'Web';
+        badgeEl.className = 'badge-pill';
+        totalEl.textContent = web.total;
+        todayEl.textContent = '+' + web.last24h;
+        threeDWrapper.style.display = 'none';
+        sevenDEl.textContent = '+' + web.last7d;
+
+        activeTitleEl.textContent = 'Web Sessions';
+        activeBadgeEl.textContent = 'Online';
+        activeBadgeEl.className = 'badge-pill';
+        activeTotalEl.textContent = web.total;
+        activeSubEl.textContent = 'Browser visitors (Safari/Chrome)';
+      }
+    }
+
+    function renderStats(data) {
+      cachedStats = data;
+      updatePlatformCards(data);
+
+      // Web Visitors (Dedicated Card)
       const web = data.web || { total: 0, last24h: 0, last7d: 0 };
       document.getElementById('statWebTotal').textContent = web.total;
       document.getElementById('statWebToday').textContent = '+' + web.last24h;

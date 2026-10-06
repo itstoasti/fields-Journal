@@ -420,6 +420,13 @@ export interface AdminStats {
     last7d: number;
     activeDevices: number;
   };
+  ios: {
+    total: number;
+    last24h: number;
+    last3d: number;
+    last7d: number;
+    activeDevices: number;
+  };
   web: {
     total: number;
     last24h: number;
@@ -504,6 +511,11 @@ export async function getAdminStats(): Promise<AdminStats> {
     androidThreeDayRes,
     androidWeekRes,
     androidActiveRes,
+    iosTotalRes,
+    iosDayRes,
+    iosThreeDayRes,
+    iosWeekRes,
+    iosActiveRes,
     webTotalRes,
     webDayRes,
     webWeekRes,
@@ -524,12 +536,19 @@ export async function getAdminStats(): Promise<AdminStats> {
     // Active devices: checked in within the last 48 hours (matches Google Play installed active audience, excluding uninstalls)
     client.execute({ sql: `SELECT COUNT(DISTINCT device_id) as c FROM users WHERE device_id LIKE 'android_%' AND updated_at >= ? AND ${testUserFilter}`, args: [twoDaysAgo] }),
 
-    // 2. Web Visitors
+    // 2. iOS App Devices (Apple App Store)
+    client.execute(`SELECT COUNT(DISTINCT device_id) as c FROM users WHERE device_id LIKE 'ios_%' AND ${testUserFilter}`),
+    client.execute({ sql: `SELECT COUNT(DISTINCT device_id) as c FROM users WHERE device_id LIKE 'ios_%' AND created_at >= ? AND ${testUserFilter}`, args: [dayAgo] }),
+    client.execute({ sql: `SELECT COUNT(DISTINCT device_id) as c FROM users WHERE device_id LIKE 'ios_%' AND created_at >= ? AND ${testUserFilter}`, args: [threeDaysAgo] }),
+    client.execute({ sql: `SELECT COUNT(DISTINCT device_id) as c FROM users WHERE device_id LIKE 'ios_%' AND created_at >= ? AND ${testUserFilter}`, args: [weekAgo] }),
+    client.execute({ sql: `SELECT COUNT(DISTINCT device_id) as c FROM users WHERE device_id LIKE 'ios_%' AND updated_at >= ? AND ${testUserFilter}`, args: [twoDaysAgo] }),
+
+    // 3. Web Visitors
     client.execute(`SELECT COUNT(*) as c FROM users WHERE (device_id LIKE 'web_%' OR device_id IS NULL) AND ${testUserFilter}`),
     client.execute({ sql: `SELECT COUNT(*) as c FROM users WHERE (device_id LIKE 'web_%' OR device_id IS NULL) AND created_at >= ? AND ${testUserFilter}`, args: [dayAgo] }),
     client.execute({ sql: `SELECT COUNT(*) as c FROM users WHERE (device_id LIKE 'web_%' OR device_id IS NULL) AND created_at >= ? AND ${testUserFilter}`, args: [weekAgo] }),
 
-    // 3. Monetization totals across all real users
+    // 4. Monetization totals across all real users
     client.execute(`
       SELECT 
         COUNT(*) as c, 
@@ -540,7 +559,7 @@ export async function getAdminStats(): Promise<AdminStats> {
       FROM users WHERE ${testUserFilter}
     `),
 
-    // 4. Generations (excluding developer test probes)
+    // 5. Generations (excluding developer test probes)
     client.execute(`
       SELECT 
         COUNT(*) as total, 
@@ -551,7 +570,7 @@ export async function getAdminStats(): Promise<AdminStats> {
     client.execute({ sql: `SELECT COUNT(*) as c FROM generations WHERE created_at >= ? AND ${testGenFilter}`, args: [dayAgo] }),
     client.execute({ sql: `SELECT COUNT(*) as c FROM generations WHERE created_at >= ? AND ${testGenFilter}`, args: [weekAgo] }),
 
-    // 5. Top Places
+    // 6. Top Places
     client.execute(`
       SELECT place, COUNT(*) as count 
       FROM generations 
@@ -561,7 +580,7 @@ export async function getAdminStats(): Promise<AdminStats> {
       LIMIT 8
     `),
 
-    // 6. Recent generations
+    // 7. Recent generations
     client.execute(`
       SELECT id, user_id, place, number, status, cost_info, created_at 
       FROM generations 
@@ -584,6 +603,12 @@ export async function getAdminStats(): Promise<AdminStats> {
   const androidWeek = Number(androidWeekRes.rows[0]?.c || 0);
   const androidActive = Number(androidActiveRes.rows[0]?.c || 0);
 
+  const iosTotal = Number(iosTotalRes.rows[0]?.c || 0);
+  const iosDay = Number(iosDayRes.rows[0]?.c || 0);
+  const ios3d = Number(iosThreeDayRes.rows[0]?.c || 0);
+  const iosWeek = Number(iosWeekRes.rows[0]?.c || 0);
+  const iosActive = Number(iosActiveRes.rows[0]?.c || 0);
+
   const webTotal = Number(webTotalRes.rows[0]?.c || 0);
   const webDay = Number(webDayRes.rows[0]?.c || 0);
   const webWeek = Number(webWeekRes.rows[0]?.c || 0);
@@ -597,15 +622,22 @@ export async function getAdminStats(): Promise<AdminStats> {
       last7d: androidWeek,
       activeDevices: androidActive,
     },
+    ios: {
+      total: iosTotal,
+      last24h: iosDay,
+      last3d: ios3d,
+      last7d: iosWeek,
+      activeDevices: iosActive,
+    },
     web: {
       total: webTotal,
       last24h: webDay,
       last7d: webWeek,
     },
     users: {
-      total: androidTotal, // Point to real Android count for backward-compatible consumers
-      last24h: androidDay,
-      last7d: androidWeek,
+      total: androidTotal + iosTotal, // Combined mobile store installs
+      last24h: androidDay + iosDay,
+      last7d: androidWeek + iosWeek,
       payingCount: Number(uRow.paying || 0),
       freeUsedTotal: Number(uRow.free_used || 0),
       adsWatchedTotal: Number(uRow.ads || 0),

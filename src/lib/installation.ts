@@ -162,13 +162,25 @@ export async function getPersistentDeviceId(): Promise<string> {
           return devId;
         }
       }
+
+      if (Platform.OS === 'ios' && typeof app?.getIosIdForVendorAsync === 'function') {
+        const idfv = await app.getIosIdForVendorAsync();
+        if (idfv) {
+          const devId = `ios_${idfv}`;
+          try {
+            await SecureStore.setItemAsync(PERSISTENT_DEVICE_KEY, devId);
+          } catch {}
+          return devId;
+        }
+      }
     }
   } catch (e) {
     console.warn('[Installation] Native application ID probe skipped:', e);
   }
 
   // 4. Generate and persist fallback device ID in SecureStore
-  const newDeviceId = generateRandomId('dev_');
+  const prefix = Platform.OS === 'ios' ? 'ios_dev_' : Platform.OS === 'android' ? 'android_dev_' : 'dev_';
+  const newDeviceId = generateRandomId(prefix);
   try {
     await SecureStore.setItemAsync(PERSISTENT_DEVICE_KEY, newDeviceId);
   } catch (e) {
