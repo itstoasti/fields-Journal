@@ -60,8 +60,14 @@ export default function PaywallModal() {
     try {
       const result = await buyNotes20Package();
       if (result.success) {
-        // Sync with backend server
-        const updatedState = await syncPurchasedCredits(installationId, 20);
+        // Sync with backend server using verified transactionId
+        const updatedState = await syncPurchasedCredits(
+          installationId,
+          20,
+          undefined,
+          undefined,
+          result.transactionId
+        );
         updateEntitlements(updatedState);
         Alert.alert('Thank You', '20 Field Note credits have been added to your notebook.', [
           { text: 'OK', onPress: () => router.back() },

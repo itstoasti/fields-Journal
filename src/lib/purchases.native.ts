@@ -525,10 +525,13 @@ export async function buyLifetimePackage(): Promise<{
 /**
  * Backward compatibility: Buy 20 Note Credits consumable package
  */
-export async function buyNotes20Package(): Promise<{ success: boolean; error?: string }> {
+export async function buyNotes20Package(): Promise<{ success: boolean; error?: string; transactionId?: string }> {
   if (!isRevenueCatNativeSupported() || !Purchases) {
-    console.log('[Purchases] Simulated 20 note credits purchase');
-    return { success: true };
+    if (!__DEV__) {
+      return { success: false, error: 'Store purchases are unavailable in this environment.' };
+    }
+    console.log('[Purchases] Simulated 20 note credits purchase (Dev mode)');
+    return { success: true, transactionId: `dev_tx_${Date.now()}` };
   }
 
   try {
@@ -547,12 +550,17 @@ export async function buyNotes20Package(): Promise<{ success: boolean; error?: s
       return { success: false, error: 'Product not found in current offerings.' };
     }
 
-    const { customerInfo } = await Purchases.purchasePackage(packageToBuy);
+    const { customerInfo, transaction } = await Purchases.purchasePackage(packageToBuy);
     const isPro = checkProEntitlement(customerInfo);
     if (onCustomerInfoCallback) {
       onCustomerInfoCallback(customerInfo, isPro);
     }
-    return { success: true };
+
+    const nonSubs = customerInfo?.nonSubscriptionTransactions || [];
+    const latestTx = nonSubs[nonSubs.length - 1];
+    const txId = transaction?.transactionIdentifier || latestTx?.transactionIdentifier || `rc_tx_${Date.now()}`;
+
+    return { success: true, transactionId: txId };
   } catch (error: any) {
     if (error.userCancelled) {
       return { success: false, error: 'cancelled' };

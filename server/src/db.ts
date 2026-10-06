@@ -18,6 +18,8 @@ export interface UserRecord {
   created_at: string;
   updated_at: string;
   is_developer?: number;
+  is_pro?: number;
+  pro_expires_at?: string | null;
 }
 
 export type EntitlementStatus = 'free' | 'ad' | 'credit' | 'paywall' | 'pro';
@@ -32,11 +34,6 @@ export function isDeveloperDevice(deviceId?: string | null, installationId?: str
   if (deviceId) {
     const trimmed = deviceId.trim();
     if (KNOWN_DEVELOPER_DEVICES.includes(trimmed)) return true;
-    if (trimmed.startsWith('dev_') || trimmed.startsWith('android_dev_') || trimmed.startsWith('ios_dev_')) return true;
-  }
-  if (installationId) {
-    const trimmedInst = installationId.trim();
-    if (trimmedInst.startsWith('dev_') || trimmedInst.startsWith('test_') || trimmedInst.startsWith('verify_') || trimmedInst.includes('probe')) return true;
   }
   return false;
 }
@@ -106,21 +103,38 @@ export async function initDb(): Promise<void> {
       // Column already exists
     }
 
-    // Automatically tag known developer devices & prefixes as internal
+    try {
+      await client.execute(`ALTER TABLE users ADD COLUMN is_pro INTEGER DEFAULT 0;`);
+    } catch {
+      // Column already exists
+    }
+
+    try {
+      await client.execute(`ALTER TABLE users ADD COLUMN pro_expires_at TEXT;`);
+    } catch {
+      // Column already exists
+    }
+
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS processed_purchases (
+        transaction_id TEXT PRIMARY KEY,
+        installation_id TEXT NOT NULL,
+        package_id TEXT NOT NULL,
+        credits_added INTEGER NOT NULL,
+        created_at TEXT NOT NULL
+      );
+    `);
+
+    // Automatically tag known developer devices as internal
     await client.execute(`
       UPDATE users 
       SET is_developer = 1 
       WHERE device_id IN ('android_fc341bad05cf8c5a', 'dev_ygv47mz4tj2x5zw31z1ez4gz')
-         OR device_id LIKE 'dev_%'
-         OR device_id LIKE 'android_dev_%'
-         OR device_id LIKE 'ios_dev_%'
-         OR installation_id LIKE 'test_%'
-         OR installation_id LIKE 'verify_%'
-         OR installation_id LIKE 'dev_%'
     `);
 
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_users_device_id ON users (device_id);`);
     await client.execute(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_account_key ON users (account_key);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_purchases_inst ON processed_purchases (installation_id);`);
     console.log(`[Database] Initialized successfully (${isTurso ? 'Turso Cloud' : 'Local SQLite'})`);
   } catch (err) {
     console.error('[Database] Schema initialization warning:', err);
@@ -153,6 +167,8 @@ function mapRowToUser(row: any): UserRecord {
     created_at: String(row.created_at || ''),
     updated_at: String(row.updated_at || ''),
     is_developer: Number(row.is_developer || 0),
+    is_pro: Number(row.is_pro || 0),
+    pro_expires_at: row.pro_expires_at ? String(row.pro_expires_at) : null,
   };
 }
 
@@ -304,6 +320,8 @@ export async function getOrCreateUser(
     created_at: now,
     updated_at: now,
     is_developer: isDev,
+    is_pro: 0,
+    pro_expires_at: null,
   };
 }
 
@@ -336,43 +354,94 @@ export async function linkAccountByKey(
 
   const targetUser = mapRowToUser(res.rows[0]);
 
-  // 2. If current installation is different, merge any local credits
+  // 2. If current installation is different, merge any local credits AND usage
   if (targetUser.installation_id !== currentInstallationId) {
     const currentRes = await client.execute({
       sql: 'SELECT * FROM users WHERE installation_id = ? LIMIT 1',
       args: [currentInstallationId],
     });
 
+    let localCredits = 0;
+    let localFreeUsed = 0;
+    let localAdUsed = 0;
+
     if (currentRes.rows.length > 0) {
       const currentUser = mapRowToUser(currentRes.rows[0]);
-      if (currentUser.credits > 0) {
-        console.log(`[Account Link] Merging ${currentUser.credits} credits from ${currentInstallationId} -> ${targetUser.installation_id}`);
-        await client.execute({
-          sql: 'UPDATE users SET credits = credits + ?, updated_at = ? WHERE installation_id = ?',
-          args: [currentUser.credits, now, targetUser.installation_id],
-        });
-        await client.execute({
-          sql: 'UPDATE users SET credits = 0, updated_at = ? WHERE installation_id = ?',
-          args: [now, currentInstallationId],
-        });
-        targetUser.credits += currentUser.credits;
+      localCredits = currentUser.credits;
+      localFreeUsed = currentUser.free_used;
+      localAdUsed = currentUser.ad_used;
+    }
+
+    // Check if the physical hardware device already has recorded usage
+    let hwFreeUsed = 0;
+    let hwAdUsed = 0;
+    if (deviceId && deviceId.trim().length > 0) {
+      const hwRes = await client.execute({
+        sql: 'SELECT MAX(free_used) as max_free, MAX(ad_used) as max_ad FROM users WHERE device_id = ?',
+        args: [deviceId.trim()],
+      });
+      if (hwRes.rows.length > 0) {
+        hwFreeUsed = Number(hwRes.rows[0].max_free || 0);
+        hwAdUsed = Number(hwRes.rows[0].max_ad || 0);
       }
     }
 
-    // Associate target user with current device ID if provided
+    // Anti-Abuse: Starter free notes and ad notes NEVER reset upon account linking.
+    // Preserves maximum usage across all linked instances and hardware.
+    const mergedFreeUsed = Math.max(targetUser.free_used, localFreeUsed, hwFreeUsed);
+    const mergedAdUsed = Math.max(targetUser.ad_used, localAdUsed, hwAdUsed);
+
+    if (localCredits > 0) {
+      console.log(`[Account Link] Merging ${localCredits} credits from ${currentInstallationId} -> ${targetUser.installation_id}`);
+      targetUser.credits += localCredits;
+    }
+
+    await client.execute({
+      sql: `UPDATE users 
+            SET credits = credits + ?,
+                free_used = ?,
+                ad_used = ?,
+                device_id = COALESCE(?, device_id),
+                updated_at = ? 
+            WHERE installation_id = ?`,
+      args: [
+        localCredits,
+        mergedFreeUsed,
+        mergedAdUsed,
+        deviceId ? deviceId.trim() : null,
+        now,
+        targetUser.installation_id,
+      ],
+    });
+
+    targetUser.free_used = mergedFreeUsed;
+    targetUser.ad_used = mergedAdUsed;
     if (deviceId && deviceId.trim().length > 0) {
-      await client.execute({
-        sql: 'UPDATE users SET device_id = ?, updated_at = ? WHERE installation_id = ?',
-        args: [deviceId.trim(), now, targetUser.installation_id],
-      });
       targetUser.device_id = deviceId.trim();
     }
+
+    // Zero out old installation record and detach device_id so hardware 1:1 mapping stays clean
+    await client.execute({
+      sql: 'UPDATE users SET credits = 0, device_id = NULL, updated_at = ? WHERE installation_id = ?',
+      args: [now, currentInstallationId],
+    });
   }
 
   return targetUser;
 }
 
 export function determineEntitlement(user: UserRecord): EntitlementStatus {
+  if (user.is_pro) {
+    if (user.pro_expires_at) {
+      const expTime = new Date(user.pro_expires_at).getTime();
+      if (!isNaN(expTime) && expTime > Date.now()) {
+        return 'pro';
+      }
+    } else {
+      // Lifetime Pro (no expiration)
+      return 'pro';
+    }
+  }
   if (user.free_used < 2) {
     return 'free';
   }
@@ -385,48 +454,206 @@ export function determineEntitlement(user: UserRecord): EntitlementStatus {
   return 'paywall';
 }
 
-export async function consumeUserEntitlement(
+export interface ReservationResult {
+  success: boolean;
+  entitlement: EntitlementStatus;
+  user: UserRecord;
+  error?: string;
+}
+
+/**
+ * Atomically reserves a generation slot BEFORE invoking the AI model.
+ * Eliminates TOCTOU race conditions where multiple parallel requests consume a single credit.
+ */
+export async function reserveEntitlement(
   installationId: string,
-  entitlement: 'free' | 'ad' | 'credit' | 'pro',
-  deviceId?: string
-): Promise<boolean> {
-  if (entitlement === 'pro') {
-    // Pro subscribers have active subscription; no quota or credits deducted
-    return true;
+  deviceId?: string,
+  rcUserId?: string
+): Promise<ReservationResult> {
+  const user = await getOrCreateUser(installationId, rcUserId, deviceId);
+  const now = new Date().toISOString();
+  const targetId = user.installation_id;
+
+  // 1. Pro Subscription check
+  if (user.is_pro) {
+    if (!user.pro_expires_at || new Date(user.pro_expires_at).getTime() > Date.now()) {
+      return { success: true, entitlement: 'pro', user };
+    }
   }
+
+  // 2. Free Starter Note atomic reservation (notes 1 & 2)
+  if (user.free_used < 2) {
+    const res = await client.execute({
+      sql: `UPDATE users 
+            SET free_used = free_used + 1, updated_at = ? 
+            WHERE installation_id = ? AND free_used < 2`,
+      args: [now, targetId],
+    });
+    if (res.rowsAffected > 0) {
+      user.free_used += 1;
+      return { success: true, entitlement: 'free', user };
+    }
+  }
+
+  // 3. Rewarded Ad Note atomic reservation (note 3)
+  if (user.free_used >= 2 && user.ad_used === 0) {
+    const res = await client.execute({
+      sql: `UPDATE users 
+            SET ad_used = 1, updated_at = ? 
+            WHERE installation_id = ? AND free_used >= 2 AND ad_used = 0`,
+      args: [now, targetId],
+    });
+    if (res.rowsAffected > 0) {
+      user.ad_used = 1;
+      return { success: true, entitlement: 'ad', user };
+    }
+  }
+
+  // 4. Purchased Credits atomic reservation (note 4+)
+  const creditRes = await client.execute({
+    sql: `UPDATE users 
+          SET credits = credits - 1, updated_at = ? 
+          WHERE installation_id = ? AND credits > 0`,
+    args: [now, targetId],
+  });
+
+  if (creditRes.rowsAffected > 0) {
+    user.credits -= 1;
+    return { success: true, entitlement: 'credit', user };
+  }
+
+  // Paywall required
+  return {
+    success: false,
+    entitlement: 'paywall',
+    user,
+    error: 'No remaining free notes, ad allowance, or credits. Please purchase notes.',
+  };
+}
+
+/**
+ * Safely rolls back / refunds a reserved slot if AI generation fails or times out.
+ */
+export async function rollbackEntitlement(
+  installationId: string,
+  entitlement: EntitlementStatus,
+  deviceId?: string
+): Promise<void> {
+  if (entitlement === 'pro' || entitlement === 'paywall') return;
 
   const user = await getOrCreateUser(installationId, undefined, deviceId);
   const now = new Date().toISOString();
   const targetId = user.installation_id;
 
-  if (entitlement === 'free') {
-    if (user.free_used >= 2) return false;
-    await client.execute({
-      sql: 'UPDATE users SET free_used = free_used + 1, updated_at = ? WHERE installation_id = ?',
-      args: [now, targetId],
-    });
-    return true;
+  try {
+    if (entitlement === 'credit') {
+      await client.execute({
+        sql: 'UPDATE users SET credits = credits + 1, updated_at = ? WHERE installation_id = ?',
+        args: [now, targetId],
+      });
+      console.log(`[Entitlement] Safely refunded credit to ${targetId}`);
+    } else if (entitlement === 'free') {
+      await client.execute({
+        sql: 'UPDATE users SET free_used = MAX(0, free_used - 1), updated_at = ? WHERE installation_id = ?',
+        args: [now, targetId],
+      });
+      console.log(`[Entitlement] Safely refunded free slot to ${targetId}`);
+    } else if (entitlement === 'ad') {
+      await client.execute({
+        sql: 'UPDATE users SET ad_used = 0, updated_at = ? WHERE installation_id = ?',
+        args: [now, targetId],
+      });
+      console.log(`[Entitlement] Safely refunded ad slot to ${targetId}`);
+    }
+  } catch (err) {
+    console.error(`[Entitlement] Rollback failed for ${targetId}:`, err);
+  }
+}
+
+export async function consumeUserEntitlement(
+  installationId: string,
+  entitlement: 'free' | 'ad' | 'credit' | 'pro',
+  deviceId?: string
+): Promise<boolean> {
+  if (entitlement === 'pro') return true;
+  const reservation = await reserveEntitlement(installationId, deviceId);
+  return reservation.success;
+}
+
+/**
+ * Records a verified store purchase with idempotency protection against replay attacks.
+ */
+export async function recordVerifiedPurchase(
+  transactionId: string,
+  installationId: string,
+  packageId: string,
+  creditsAmount: number,
+  deviceId?: string,
+  rcUserId?: string
+): Promise<{ success: boolean; alreadyProcessed: boolean; user: UserRecord }> {
+  const user = await getOrCreateUser(installationId, rcUserId, deviceId);
+  const now = new Date().toISOString();
+  const targetId = user.installation_id;
+
+  // 1. Check if transaction already processed
+  const existing = await client.execute({
+    sql: 'SELECT * FROM processed_purchases WHERE transaction_id = ? LIMIT 1',
+    args: [transactionId],
+  });
+
+  if (existing.rows.length > 0) {
+    console.warn(`[Purchases] Transaction ${transactionId} already processed. Rejecting duplicate.`);
+    return { success: true, alreadyProcessed: true, user };
   }
 
-  if (entitlement === 'ad') {
-    if (user.ad_used !== 0) return false;
+  // 2. Insert into processed_purchases AND atomically increment credits
+  try {
     await client.execute({
-      sql: 'UPDATE users SET ad_used = 1, updated_at = ? WHERE installation_id = ?',
-      args: [now, targetId],
+      sql: `INSERT INTO processed_purchases (transaction_id, installation_id, package_id, credits_added, created_at)
+            VALUES (?, ?, ?, ?, ?)`,
+      args: [transactionId, targetId, packageId, creditsAmount, now],
     });
-    return true;
+  } catch (insertErr: any) {
+    if (
+      insertErr?.message?.includes('UNIQUE') ||
+      insertErr?.message?.includes('constraint') ||
+      insertErr?.message?.includes('primary key')
+    ) {
+      console.warn(`[Purchases] Concurrent duplicate transaction ${transactionId} caught by DB constraint.`);
+      return { success: true, alreadyProcessed: true, user };
+    }
+    throw insertErr;
   }
 
-  if (entitlement === 'credit') {
-    if (user.credits <= 0) return false;
-    await client.execute({
-      sql: 'UPDATE users SET credits = credits - 1, updated_at = ? WHERE installation_id = ?',
-      args: [now, targetId],
-    });
-    return true;
-  }
+  await client.execute({
+    sql: `UPDATE users 
+          SET credits = credits + ?, rc_user_id = COALESCE(?, rc_user_id), updated_at = ? 
+          WHERE installation_id = ?`,
+    args: [creditsAmount, rcUserId || null, now, targetId],
+  });
 
-  return false;
+  const updatedUser = await getOrCreateUser(targetId, undefined, deviceId);
+  console.log(`[Purchases] Verified purchase ${transactionId}: added ${creditsAmount} credits to ${targetId}. Balance now: ${updatedUser.credits}`);
+  return { success: true, alreadyProcessed: false, user: updatedUser };
+}
+
+/**
+ * Sets Pro subscription status (e.g. from RevenueCat webhook or verified customer info)
+ */
+export async function setProStatus(
+  installationIdOrRcUserId: string,
+  isPro: boolean,
+  proExpiresAt?: string | null
+): Promise<void> {
+  const now = new Date().toISOString();
+  const val = isPro ? 1 : 0;
+  await client.execute({
+    sql: `UPDATE users 
+          SET is_pro = ?, pro_expires_at = ?, updated_at = ? 
+          WHERE installation_id = ? OR rc_user_id = ?`,
+    args: [val, proExpiresAt || null, now, installationIdOrRcUserId, installationIdOrRcUserId],
+  });
+  console.log(`[Pro] Set is_pro=${val} for ${installationIdOrRcUserId}`);
 }
 
 export async function addCreditsToUser(
@@ -447,6 +674,46 @@ export async function addCreditsToUser(
   });
 
   return getOrCreateUser(targetId, undefined, deviceId);
+}
+
+export async function grantAdminCredits(
+  targetIdentifier: string,
+  amount: number,
+  deviceId?: string
+): Promise<UserRecord> {
+  const clean = targetIdentifier.trim();
+  const now = new Date().toISOString();
+
+  // 1. Try finding by account_key (e.g. FIELD-XXXX-YYYY)
+  const byKey = await client.execute({
+    sql: 'SELECT * FROM users WHERE UPPER(account_key) = UPPER(?) LIMIT 1',
+    args: [clean],
+  });
+  if (byKey.rows.length > 0) {
+    const user = mapRowToUser(byKey.rows[0]);
+    await client.execute({
+      sql: 'UPDATE users SET credits = credits + ?, updated_at = ? WHERE installation_id = ?',
+      args: [amount, now, user.installation_id],
+    });
+    return getOrCreateUser(user.installation_id, undefined, user.device_id || deviceId);
+  }
+
+  // 2. Try finding by persistent device_id (e.g. android_xxxx)
+  const byDevice = await client.execute({
+    sql: 'SELECT * FROM users WHERE device_id = ? LIMIT 1',
+    args: [clean],
+  });
+  if (byDevice.rows.length > 0) {
+    const user = mapRowToUser(byDevice.rows[0]);
+    await client.execute({
+      sql: 'UPDATE users SET credits = credits + ?, updated_at = ? WHERE installation_id = ?',
+      args: [amount, now, user.installation_id],
+    });
+    return getOrCreateUser(user.installation_id, undefined, user.device_id || deviceId);
+  }
+
+  // 3. Fallback to installation_id
+  return addCreditsToUser(clean, amount, undefined, deviceId);
 }
 
 export async function logGenerationRecord(

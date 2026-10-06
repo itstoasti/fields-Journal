@@ -527,6 +527,44 @@ export function renderAdminDashboardHtml(): string {
       </div>
     </div>
 
+    <!-- Developer Test Credits Control -->
+    <div class="card" style="margin-top: 16px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <span style="font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--amber); letter-spacing: 1px; text-transform: uppercase;">
+          Grant Test Credits
+        </span>
+        <span style="font-size: 10px; color: var(--text-muted);">Developer Access</span>
+      </div>
+      <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">
+        Add test credits to your device by entering your <b>Account Key</b> (found in Settings &rarr; Account Key in the app) or Device ID.
+      </p>
+
+      <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+        <input 
+          type="text" 
+          id="grantTargetInput" 
+          placeholder="e.g. FIELD-XXXX-YYYY" 
+          style="flex: 2; background: rgba(0,0,0,0.3); border: 1px solid var(--card-border); color: var(--text); padding: 8px 10px; border-radius: 6px; font-family: var(--font-mono); font-size: 12px; text-transform: uppercase;"
+        />
+        <input 
+          type="number" 
+          id="grantAmountInput" 
+          value="20" 
+          min="1" 
+          max="100" 
+          style="flex: 1; max-width: 70px; background: rgba(0,0,0,0.3); border: 1px solid var(--card-border); color: var(--text); padding: 8px 10px; border-radius: 6px; font-family: var(--font-mono); font-size: 12px;"
+        />
+        <button 
+          onclick="handleGrantCredits()" 
+          id="grantCreditsBtn" 
+          style="background: var(--green); color: #141210; border: none; border-radius: 6px; font-family: var(--font-mono); font-weight: 700; font-size: 12px; padding: 8px 14px; cursor: pointer;"
+        >
+          GRANT
+        </button>
+      </div>
+      <div id="grantResultNotice" style="font-size: 11px; font-family: var(--font-mono); display: none;"></div>
+    </div>
+
     <!-- Top Destinations -->
     <div class="section-title">
       <span>Top Travel Destinations</span>
@@ -810,6 +848,52 @@ export function renderAdminDashboardHtml(): string {
         alert('Error saving model: ' + e.message);
       } finally {
         btn.textContent = 'APPLY ACTIVE MODEL';
+      }
+    }
+
+    async function handleGrantCredits() {
+      const pin = getStoredPin();
+      const target = document.getElementById('grantTargetInput').value.trim();
+      const amount = parseInt(document.getElementById('grantAmountInput').value, 10) || 20;
+      const notice = document.getElementById('grantResultNotice');
+      const btn = document.getElementById('grantCreditsBtn');
+
+      if (!target) {
+        alert('Please enter your Account Key or Device ID.');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = '...';
+
+      try {
+        const res = await fetch('/v1/admin/credits', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + pin,
+          },
+          body: JSON.stringify({ target, amount }),
+        });
+
+        const data = await res.json();
+        if (res.ok && data.success) {
+          notice.style.display = 'block';
+          notice.style.color = 'var(--green)';
+          notice.textContent = '✓ Added ' + amount + ' credits to ' + (data.accountKey || target) + '! New balance: ' + data.credits + '. Tap "Sync Balance" in app.';
+          fetchStats();
+        } else {
+          notice.style.display = 'block';
+          notice.style.color = 'var(--red)';
+          notice.textContent = '✗ ' + (data.message || 'Failed to grant credits. Check PIN or Account Key.');
+        }
+      } catch (err) {
+        notice.style.display = 'block';
+        notice.style.color = 'var(--red)';
+        notice.textContent = '✗ Error: ' + err.message;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'GRANT';
       }
     }
 

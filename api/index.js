@@ -11693,11 +11693,6 @@ function isDeveloperDevice(deviceId, installationId) {
   if (deviceId) {
     const trimmed = deviceId.trim();
     if (KNOWN_DEVELOPER_DEVICES.includes(trimmed)) return true;
-    if (trimmed.startsWith("dev_") || trimmed.startsWith("android_dev_") || trimmed.startsWith("ios_dev_")) return true;
-  }
-  if (installationId) {
-    const trimmedInst = installationId.trim();
-    if (trimmedInst.startsWith("dev_") || trimmedInst.startsWith("test_") || trimmedInst.startsWith("verify_") || trimmedInst.includes("probe")) return true;
   }
   return false;
 }
@@ -11753,19 +11748,31 @@ async function initDb() {
       await client.execute(`ALTER TABLE users ADD COLUMN is_developer INTEGER DEFAULT 0;`);
     } catch {
     }
+    try {
+      await client.execute(`ALTER TABLE users ADD COLUMN is_pro INTEGER DEFAULT 0;`);
+    } catch {
+    }
+    try {
+      await client.execute(`ALTER TABLE users ADD COLUMN pro_expires_at TEXT;`);
+    } catch {
+    }
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS processed_purchases (
+        transaction_id TEXT PRIMARY KEY,
+        installation_id TEXT NOT NULL,
+        package_id TEXT NOT NULL,
+        credits_added INTEGER NOT NULL,
+        created_at TEXT NOT NULL
+      );
+    `);
     await client.execute(`
       UPDATE users 
       SET is_developer = 1 
       WHERE device_id IN ('android_fc341bad05cf8c5a', 'dev_ygv47mz4tj2x5zw31z1ez4gz')
-         OR device_id LIKE 'dev_%'
-         OR device_id LIKE 'android_dev_%'
-         OR device_id LIKE 'ios_dev_%'
-         OR installation_id LIKE 'test_%'
-         OR installation_id LIKE 'verify_%'
-         OR installation_id LIKE 'dev_%'
     `);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_users_device_id ON users (device_id);`);
     await client.execute(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_account_key ON users (account_key);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_purchases_inst ON processed_purchases (installation_id);`);
     console.log(`[Database] Initialized successfully (${isTurso ? "Turso Cloud" : "Local SQLite"})`);
   } catch (err) {
     console.error("[Database] Schema initialization warning:", err);
@@ -11793,7 +11800,9 @@ function mapRowToUser(row) {
     credits: Number(row.credits || 0),
     created_at: String(row.created_at || ""),
     updated_at: String(row.updated_at || ""),
-    is_developer: Number(row.is_developer || 0)
+    is_developer: Number(row.is_developer || 0),
+    is_pro: Number(row.is_pro || 0),
+    pro_expires_at: row.pro_expires_at ? String(row.pro_expires_at) : null
   };
 }
 async function getOrCreateUser(installationId, rcUserId, deviceId) {
@@ -11914,7 +11923,9 @@ async function getOrCreateUser(installationId, rcUserId, deviceId) {
     credits: 0,
     created_at: now,
     updated_at: now,
-    is_developer: isDev
+    is_developer: isDev,
+    is_pro: 0,
+    pro_expires_at: null
   };
 }
 async function linkAccountByKey(currentInstallationId, rawAccountKey, deviceId) {
@@ -11936,32 +11947,73 @@ async function linkAccountByKey(currentInstallationId, rawAccountKey, deviceId) 
       sql: "SELECT * FROM users WHERE installation_id = ? LIMIT 1",
       args: [currentInstallationId]
     });
+    let localCredits = 0;
+    let localFreeUsed = 0;
+    let localAdUsed = 0;
     if (currentRes.rows.length > 0) {
       const currentUser = mapRowToUser(currentRes.rows[0]);
-      if (currentUser.credits > 0) {
-        console.log(`[Account Link] Merging ${currentUser.credits} credits from ${currentInstallationId} -> ${targetUser.installation_id}`);
-        await client.execute({
-          sql: "UPDATE users SET credits = credits + ?, updated_at = ? WHERE installation_id = ?",
-          args: [currentUser.credits, now, targetUser.installation_id]
-        });
-        await client.execute({
-          sql: "UPDATE users SET credits = 0, updated_at = ? WHERE installation_id = ?",
-          args: [now, currentInstallationId]
-        });
-        targetUser.credits += currentUser.credits;
+      localCredits = currentUser.credits;
+      localFreeUsed = currentUser.free_used;
+      localAdUsed = currentUser.ad_used;
+    }
+    let hwFreeUsed = 0;
+    let hwAdUsed = 0;
+    if (deviceId && deviceId.trim().length > 0) {
+      const hwRes = await client.execute({
+        sql: "SELECT MAX(free_used) as max_free, MAX(ad_used) as max_ad FROM users WHERE device_id = ?",
+        args: [deviceId.trim()]
+      });
+      if (hwRes.rows.length > 0) {
+        hwFreeUsed = Number(hwRes.rows[0].max_free || 0);
+        hwAdUsed = Number(hwRes.rows[0].max_ad || 0);
       }
     }
+    const mergedFreeUsed = Math.max(targetUser.free_used, localFreeUsed, hwFreeUsed);
+    const mergedAdUsed = Math.max(targetUser.ad_used, localAdUsed, hwAdUsed);
+    if (localCredits > 0) {
+      console.log(`[Account Link] Merging ${localCredits} credits from ${currentInstallationId} -> ${targetUser.installation_id}`);
+      targetUser.credits += localCredits;
+    }
+    await client.execute({
+      sql: `UPDATE users 
+            SET credits = credits + ?,
+                free_used = ?,
+                ad_used = ?,
+                device_id = COALESCE(?, device_id),
+                updated_at = ? 
+            WHERE installation_id = ?`,
+      args: [
+        localCredits,
+        mergedFreeUsed,
+        mergedAdUsed,
+        deviceId ? deviceId.trim() : null,
+        now,
+        targetUser.installation_id
+      ]
+    });
+    targetUser.free_used = mergedFreeUsed;
+    targetUser.ad_used = mergedAdUsed;
     if (deviceId && deviceId.trim().length > 0) {
-      await client.execute({
-        sql: "UPDATE users SET device_id = ?, updated_at = ? WHERE installation_id = ?",
-        args: [deviceId.trim(), now, targetUser.installation_id]
-      });
       targetUser.device_id = deviceId.trim();
     }
+    await client.execute({
+      sql: "UPDATE users SET credits = 0, device_id = NULL, updated_at = ? WHERE installation_id = ?",
+      args: [now, currentInstallationId]
+    });
   }
   return targetUser;
 }
 function determineEntitlement(user) {
+  if (user.is_pro) {
+    if (user.pro_expires_at) {
+      const expTime = new Date(user.pro_expires_at).getTime();
+      if (!isNaN(expTime) && expTime > Date.now()) {
+        return "pro";
+      }
+    } else {
+      return "pro";
+    }
+  }
   if (user.free_used < 2) {
     return "free";
   }
@@ -11973,38 +12025,130 @@ function determineEntitlement(user) {
   }
   return "paywall";
 }
-async function consumeUserEntitlement(installationId, entitlement, deviceId) {
-  if (entitlement === "pro") {
-    return true;
+async function reserveEntitlement(installationId, deviceId, rcUserId) {
+  const user = await getOrCreateUser(installationId, rcUserId, deviceId);
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const targetId = user.installation_id;
+  if (user.is_pro) {
+    if (!user.pro_expires_at || new Date(user.pro_expires_at).getTime() > Date.now()) {
+      return { success: true, entitlement: "pro", user };
+    }
   }
+  if (user.free_used < 2) {
+    const res = await client.execute({
+      sql: `UPDATE users 
+            SET free_used = free_used + 1, updated_at = ? 
+            WHERE installation_id = ? AND free_used < 2`,
+      args: [now, targetId]
+    });
+    if (res.rowsAffected > 0) {
+      user.free_used += 1;
+      return { success: true, entitlement: "free", user };
+    }
+  }
+  if (user.free_used >= 2 && user.ad_used === 0) {
+    const res = await client.execute({
+      sql: `UPDATE users 
+            SET ad_used = 1, updated_at = ? 
+            WHERE installation_id = ? AND free_used >= 2 AND ad_used = 0`,
+      args: [now, targetId]
+    });
+    if (res.rowsAffected > 0) {
+      user.ad_used = 1;
+      return { success: true, entitlement: "ad", user };
+    }
+  }
+  const creditRes = await client.execute({
+    sql: `UPDATE users 
+          SET credits = credits - 1, updated_at = ? 
+          WHERE installation_id = ? AND credits > 0`,
+    args: [now, targetId]
+  });
+  if (creditRes.rowsAffected > 0) {
+    user.credits -= 1;
+    return { success: true, entitlement: "credit", user };
+  }
+  return {
+    success: false,
+    entitlement: "paywall",
+    user,
+    error: "No remaining free notes, ad allowance, or credits. Please purchase notes."
+  };
+}
+async function rollbackEntitlement(installationId, entitlement, deviceId) {
+  if (entitlement === "pro" || entitlement === "paywall") return;
   const user = await getOrCreateUser(installationId, void 0, deviceId);
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const targetId = user.installation_id;
-  if (entitlement === "free") {
-    if (user.free_used >= 2) return false;
-    await client.execute({
-      sql: "UPDATE users SET free_used = free_used + 1, updated_at = ? WHERE installation_id = ?",
-      args: [now, targetId]
-    });
-    return true;
+  try {
+    if (entitlement === "credit") {
+      await client.execute({
+        sql: "UPDATE users SET credits = credits + 1, updated_at = ? WHERE installation_id = ?",
+        args: [now, targetId]
+      });
+      console.log(`[Entitlement] Safely refunded credit to ${targetId}`);
+    } else if (entitlement === "free") {
+      await client.execute({
+        sql: "UPDATE users SET free_used = MAX(0, free_used - 1), updated_at = ? WHERE installation_id = ?",
+        args: [now, targetId]
+      });
+      console.log(`[Entitlement] Safely refunded free slot to ${targetId}`);
+    } else if (entitlement === "ad") {
+      await client.execute({
+        sql: "UPDATE users SET ad_used = 0, updated_at = ? WHERE installation_id = ?",
+        args: [now, targetId]
+      });
+      console.log(`[Entitlement] Safely refunded ad slot to ${targetId}`);
+    }
+  } catch (err) {
+    console.error(`[Entitlement] Rollback failed for ${targetId}:`, err);
   }
-  if (entitlement === "ad") {
-    if (user.ad_used !== 0) return false;
-    await client.execute({
-      sql: "UPDATE users SET ad_used = 1, updated_at = ? WHERE installation_id = ?",
-      args: [now, targetId]
-    });
-    return true;
+}
+async function recordVerifiedPurchase(transactionId, installationId, packageId, creditsAmount, deviceId, rcUserId) {
+  const user = await getOrCreateUser(installationId, rcUserId, deviceId);
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const targetId = user.installation_id;
+  const existing = await client.execute({
+    sql: "SELECT * FROM processed_purchases WHERE transaction_id = ? LIMIT 1",
+    args: [transactionId]
+  });
+  if (existing.rows.length > 0) {
+    console.warn(`[Purchases] Transaction ${transactionId} already processed. Rejecting duplicate.`);
+    return { success: true, alreadyProcessed: true, user };
   }
-  if (entitlement === "credit") {
-    if (user.credits <= 0) return false;
+  try {
     await client.execute({
-      sql: "UPDATE users SET credits = credits - 1, updated_at = ? WHERE installation_id = ?",
-      args: [now, targetId]
+      sql: `INSERT INTO processed_purchases (transaction_id, installation_id, package_id, credits_added, created_at)
+            VALUES (?, ?, ?, ?, ?)`,
+      args: [transactionId, targetId, packageId, creditsAmount, now]
     });
-    return true;
+  } catch (insertErr) {
+    if (insertErr?.message?.includes("UNIQUE") || insertErr?.message?.includes("constraint") || insertErr?.message?.includes("primary key")) {
+      console.warn(`[Purchases] Concurrent duplicate transaction ${transactionId} caught by DB constraint.`);
+      return { success: true, alreadyProcessed: true, user };
+    }
+    throw insertErr;
   }
-  return false;
+  await client.execute({
+    sql: `UPDATE users 
+          SET credits = credits + ?, rc_user_id = COALESCE(?, rc_user_id), updated_at = ? 
+          WHERE installation_id = ?`,
+    args: [creditsAmount, rcUserId || null, now, targetId]
+  });
+  const updatedUser = await getOrCreateUser(targetId, void 0, deviceId);
+  console.log(`[Purchases] Verified purchase ${transactionId}: added ${creditsAmount} credits to ${targetId}. Balance now: ${updatedUser.credits}`);
+  return { success: true, alreadyProcessed: false, user: updatedUser };
+}
+async function setProStatus(installationIdOrRcUserId, isPro, proExpiresAt) {
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const val = isPro ? 1 : 0;
+  await client.execute({
+    sql: `UPDATE users 
+          SET is_pro = ?, pro_expires_at = ?, updated_at = ? 
+          WHERE installation_id = ? OR rc_user_id = ?`,
+    args: [val, proExpiresAt || null, now, installationIdOrRcUserId, installationIdOrRcUserId]
+  });
+  console.log(`[Pro] Set is_pro=${val} for ${installationIdOrRcUserId}`);
 }
 async function addCreditsToUser(installationId, amount, rcUserId, deviceId) {
   const user = await getOrCreateUser(installationId, rcUserId, deviceId);
@@ -12017,6 +12161,35 @@ async function addCreditsToUser(installationId, amount, rcUserId, deviceId) {
     args: [amount, rcUserId || null, now, targetId]
   });
   return getOrCreateUser(targetId, void 0, deviceId);
+}
+async function grantAdminCredits(targetIdentifier, amount, deviceId) {
+  const clean = targetIdentifier.trim();
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const byKey = await client.execute({
+    sql: "SELECT * FROM users WHERE UPPER(account_key) = UPPER(?) LIMIT 1",
+    args: [clean]
+  });
+  if (byKey.rows.length > 0) {
+    const user = mapRowToUser(byKey.rows[0]);
+    await client.execute({
+      sql: "UPDATE users SET credits = credits + ?, updated_at = ? WHERE installation_id = ?",
+      args: [amount, now, user.installation_id]
+    });
+    return getOrCreateUser(user.installation_id, void 0, user.device_id || deviceId);
+  }
+  const byDevice = await client.execute({
+    sql: "SELECT * FROM users WHERE device_id = ? LIMIT 1",
+    args: [clean]
+  });
+  if (byDevice.rows.length > 0) {
+    const user = mapRowToUser(byDevice.rows[0]);
+    await client.execute({
+      sql: "UPDATE users SET credits = credits + ?, updated_at = ? WHERE installation_id = ?",
+      args: [amount, now, user.installation_id]
+    });
+    return getOrCreateUser(user.installation_id, void 0, user.device_id || deviceId);
+  }
+  return addCreditsToUser(clean, amount, void 0, deviceId);
 }
 async function logGenerationRecord(id, userId, place, number2, status, costInfo) {
   try {
@@ -13091,6 +13264,44 @@ function renderAdminDashboardHtml() {
       </div>
     </div>
 
+    <!-- Developer Test Credits Control -->
+    <div class="card" style="margin-top: 16px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <span style="font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--amber); letter-spacing: 1px; text-transform: uppercase;">
+          Grant Test Credits
+        </span>
+        <span style="font-size: 10px; color: var(--text-muted);">Developer Access</span>
+      </div>
+      <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">
+        Add test credits to your device by entering your <b>Account Key</b> (found in Settings &rarr; Account Key in the app) or Device ID.
+      </p>
+
+      <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+        <input 
+          type="text" 
+          id="grantTargetInput" 
+          placeholder="e.g. FIELD-XXXX-YYYY" 
+          style="flex: 2; background: rgba(0,0,0,0.3); border: 1px solid var(--card-border); color: var(--text); padding: 8px 10px; border-radius: 6px; font-family: var(--font-mono); font-size: 12px; text-transform: uppercase;"
+        />
+        <input 
+          type="number" 
+          id="grantAmountInput" 
+          value="20" 
+          min="1" 
+          max="100" 
+          style="flex: 1; max-width: 70px; background: rgba(0,0,0,0.3); border: 1px solid var(--card-border); color: var(--text); padding: 8px 10px; border-radius: 6px; font-family: var(--font-mono); font-size: 12px;"
+        />
+        <button 
+          onclick="handleGrantCredits()" 
+          id="grantCreditsBtn" 
+          style="background: var(--green); color: #141210; border: none; border-radius: 6px; font-family: var(--font-mono); font-weight: 700; font-size: 12px; padding: 8px 14px; cursor: pointer;"
+        >
+          GRANT
+        </button>
+      </div>
+      <div id="grantResultNotice" style="font-size: 11px; font-family: var(--font-mono); display: none;"></div>
+    </div>
+
     <!-- Top Destinations -->
     <div class="section-title">
       <span>Top Travel Destinations</span>
@@ -13377,6 +13588,52 @@ function renderAdminDashboardHtml() {
       }
     }
 
+    async function handleGrantCredits() {
+      const pin = getStoredPin();
+      const target = document.getElementById('grantTargetInput').value.trim();
+      const amount = parseInt(document.getElementById('grantAmountInput').value, 10) || 20;
+      const notice = document.getElementById('grantResultNotice');
+      const btn = document.getElementById('grantCreditsBtn');
+
+      if (!target) {
+        alert('Please enter your Account Key or Device ID.');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = '...';
+
+      try {
+        const res = await fetch('/v1/admin/credits', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + pin,
+          },
+          body: JSON.stringify({ target, amount }),
+        });
+
+        const data = await res.json();
+        if (res.ok && data.success) {
+          notice.style.display = 'block';
+          notice.style.color = 'var(--green)';
+          notice.textContent = '\u2713 Added ' + amount + ' credits to ' + (data.accountKey || target) + '! New balance: ' + data.credits + '. Tap "Sync Balance" in app.';
+          fetchStats();
+        } else {
+          notice.style.display = 'block';
+          notice.style.color = 'var(--red)';
+          notice.textContent = '\u2717 ' + (data.message || 'Failed to grant credits. Check PIN or Account Key.');
+        }
+      } catch (err) {
+        notice.style.display = 'block';
+        notice.style.color = 'var(--red)';
+        notice.textContent = '\u2717 Error: ' + err.message;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'GRANT';
+      }
+    }
+
     function handlePinSubmit() {
       const pin = document.getElementById('pinField').value.trim();
       if (!pin) return;
@@ -13490,15 +13747,27 @@ app.get("/terms", (c) => {
   }
   return c.text("Terms of Service not found", 404);
 });
+function verifyAdminAuth(c) {
+  const configuredAdminPin = process.env.ADMIN_PIN || process.env.ADMIN_KEY || "fields_sec_adm_2026_x89a1c";
+  if (!configuredAdminPin) return false;
+  const authHeader = c.req.header("Authorization");
+  const token = authHeader?.replace("Bearer ", "").trim();
+  const queryKey = c.req.query("key");
+  const provided = token || queryKey;
+  if (!provided) return false;
+  try {
+    const bufA = import_node_buffer.Buffer.from(provided);
+    const bufB = import_node_buffer.Buffer.from(configuredAdminPin);
+    return bufA.length === bufB.length && import_node_crypto.default.timingSafeEqual(bufA, bufB);
+  } catch {
+    return provided === configuredAdminPin;
+  }
+}
 app.get("/admin", (c) => {
   return c.html(renderAdminDashboardHtml());
 });
 app.get("/v1/admin/stats", async (c) => {
-  const adminSecret = process.env.ADMIN_PIN || process.env.ADMIN_KEY || "fields2026";
-  const authHeader = c.req.header("Authorization");
-  const token = authHeader?.replace("Bearer ", "").trim();
-  const queryKey = c.req.query("key");
-  if ((token || queryKey) !== adminSecret) {
+  if (!verifyAdminAuth(c)) {
     return c.json({ error: "UNAUTHORIZED", message: "Invalid admin PIN" }, 401);
   }
   try {
@@ -13509,11 +13778,7 @@ app.get("/v1/admin/stats", async (c) => {
   }
 });
 app.post("/v1/admin/settings", async (c) => {
-  const adminSecret = process.env.ADMIN_PIN || process.env.ADMIN_KEY || "fields2026";
-  const authHeader = c.req.header("Authorization");
-  const token = authHeader?.replace("Bearer ", "").trim();
-  const queryKey = c.req.query("key");
-  if ((token || queryKey) !== adminSecret) {
+  if (!verifyAdminAuth(c)) {
     return c.json({ error: "UNAUTHORIZED", message: "Invalid admin PIN" }, 401);
   }
   try {
@@ -13526,6 +13791,57 @@ app.post("/v1/admin/settings", async (c) => {
     return c.json({ success: true, key, value });
   } catch (err) {
     return c.json({ error: "SETTINGS_ERROR", message: err.message }, 500);
+  }
+});
+app.post("/v1/admin/credits", async (c) => {
+  if (!verifyAdminAuth(c)) {
+    return c.json({ error: "UNAUTHORIZED", message: "Invalid admin PIN" }, 401);
+  }
+  try {
+    const body = await c.req.json();
+    const { target, installationId, accountKey, deviceId, amount = 20 } = body;
+    const identifier = target || accountKey || installationId || deviceId;
+    if (!identifier) {
+      return c.json({ error: "MISSING_IDENTIFIER", message: "accountKey, installationId, or deviceId is required" }, 400);
+    }
+    const updatedUser = await grantAdminCredits(identifier, Number(amount) || 20, deviceId);
+    return c.json({
+      success: true,
+      installationId: updatedUser.installation_id,
+      accountKey: updatedUser.account_key,
+      deviceId: updatedUser.device_id,
+      credits: updatedUser.credits
+    });
+  } catch (err) {
+    return c.json({ error: "ADMIN_CREDIT_ERROR", message: err.message }, 500);
+  }
+});
+app.post("/v1/webhooks/revenuecat", async (c) => {
+  const whSecret = process.env.REVENUECAT_WEBHOOK_SECRET || process.env.ADMIN_PIN || "rc_wh_sec_f9814c81a90b4d6e927c";
+  const authHeader = c.req.header("Authorization");
+  const token = authHeader?.replace("Bearer ", "").trim();
+  if (!whSecret || token !== whSecret) {
+    return c.json({ error: "UNAUTHORIZED", message: "Invalid webhook authorization" }, 401);
+  }
+  try {
+    const body = await c.req.json();
+    const event = body.event || body;
+    const { type, app_user_id, product_id, transaction_id, id } = event;
+    const txId = transaction_id || id || `rc_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    console.log(`[RevenueCat Webhook] Event ${type} for user=${app_user_id}, product=${product_id}, tx=${txId}`);
+    if (type === "NON_RENEWING_PURCHASE") {
+      const creditsToAdd = product_id === "notes_20" ? 20 : 20;
+      await recordVerifiedPurchase(txId, app_user_id, product_id || "notes_20", creditsToAdd);
+    } else if (type === "INITIAL_PURCHASE" || type === "RENEWAL") {
+      const expiresAt = event.expiration_at_ms ? new Date(event.expiration_at_ms).toISOString() : null;
+      await setProStatus(app_user_id, true, expiresAt);
+    } else if (type === "CANCELLATION" || type === "EXPIRATION" || type === "REVOCATION") {
+      await setProStatus(app_user_id, false, null);
+    }
+    return c.json({ success: true, processed: true });
+  } catch (err) {
+    console.error("[RevenueCat Webhook] Error:", err);
+    return c.json({ error: "WEBHOOK_ERROR", message: err.message }, 500);
   }
 });
 app.get("/v1/me", async (c) => {
@@ -13547,17 +13863,50 @@ app.get("/v1/me", async (c) => {
     freeUsed: user.free_used,
     adUsed: Boolean(user.ad_used),
     credits: user.credits,
+    isPro: Boolean(user.is_pro),
     entitlement
   });
 });
 app.post("/v1/credits/sync", async (c) => {
   try {
     const body = await c.req.json();
-    const { installationId, deviceId, rcUserId, packageId = "notes_20", creditsToAdd = 20 } = body;
+    const { installationId, deviceId, rcUserId, packageId = "notes_20", creditsToAdd = 20, transactionId } = body;
     if (!installationId) {
       return c.json({ error: "MISSING_INSTALLATION_ID", message: "installationId is required" }, 400);
     }
-    const updatedUser = await addCreditsToUser(installationId, Number(creditsToAdd) || 20, rcUserId, deviceId);
+    const parsedCredits = Math.floor(Number(creditsToAdd));
+    if (isNaN(parsedCredits) || parsedCredits <= 0 || parsedCredits > 100) {
+      return c.json({ error: "INVALID_CREDIT_AMOUNT", message: "creditsToAdd must be a positive integer between 1 and 100" }, 400);
+    }
+    const isAdmin = verifyAdminAuth(c);
+    const isDev = isDeveloperDevice(deviceId, installationId);
+    if (transactionId && typeof transactionId === "string" && transactionId.trim().length > 0) {
+      const result = await recordVerifiedPurchase(
+        transactionId.trim(),
+        installationId,
+        packageId,
+        parsedCredits,
+        deviceId,
+        rcUserId
+      );
+      const entitlement2 = determineEntitlement(result.user);
+      return c.json({
+        success: true,
+        accountKey: result.user.account_key,
+        freeUsed: result.user.free_used,
+        adUsed: Boolean(result.user.ad_used),
+        credits: result.user.credits,
+        isPro: Boolean(result.user.is_pro),
+        entitlement: entitlement2
+      });
+    }
+    if (!isAdmin && !isDev) {
+      return c.json({
+        error: "VERIFICATION_REQUIRED",
+        message: "A valid store transactionId or RevenueCat verification is required to add credits."
+      }, 403);
+    }
+    const updatedUser = await grantAdminCredits(installationId, parsedCredits, deviceId);
     const entitlement = determineEntitlement(updatedUser);
     return c.json({
       success: true,
@@ -13565,16 +13914,30 @@ app.post("/v1/credits/sync", async (c) => {
       freeUsed: updatedUser.free_used,
       adUsed: Boolean(updatedUser.ad_used),
       credits: updatedUser.credits,
+      isPro: Boolean(updatedUser.is_pro),
       entitlement
     });
   } catch (err) {
     return c.json({ error: "SYNC_ERROR", message: err.message }, 500);
   }
 });
+var accountLinkRateLimitMap = /* @__PURE__ */ new Map();
 app.post("/v1/account/link", async (c) => {
+  const clientIp = c.req.header("x-forwarded-for")?.split(",")[0].trim() || c.req.header("x-real-ip") || "unknown";
+  let installationId = "";
   try {
     const body = await c.req.json();
-    const { installationId, accountKey, deviceId } = body;
+    installationId = body.installationId || "";
+    const { accountKey, deviceId } = body;
+    const rateLimitKey = `${clientIp}_${installationId}`;
+    const now = Date.now();
+    const limiter = accountLinkRateLimitMap.get(rateLimitKey);
+    if (limiter && now < limiter.resetAt && limiter.attempts >= 5) {
+      return c.json({
+        error: "RATE_LIMIT_EXCEEDED",
+        message: "Too many account link attempts. Please wait 15 minutes before trying again."
+      }, 429);
+    }
     if (!accountKey || typeof accountKey !== "string") {
       return c.json({ error: "MISSING_ACCOUNT_KEY", message: "Account key is required" }, 400);
     }
@@ -13583,6 +13946,7 @@ app.post("/v1/account/link", async (c) => {
     }
     const linkedUser = await linkAccountByKey(installationId, accountKey, deviceId);
     const entitlement = determineEntitlement(linkedUser);
+    accountLinkRateLimitMap.delete(rateLimitKey);
     console.log(`[Account Link] Linked install ${installationId} -> account ${linkedUser.account_key} (credits: ${linkedUser.credits})`);
     return c.json({
       success: true,
@@ -13596,15 +13960,24 @@ app.post("/v1/account/link", async (c) => {
       entitlement
     });
   } catch (err) {
+    const rateLimitKey = `${clientIp}_${installationId}`;
+    const now = Date.now();
+    const current = accountLinkRateLimitMap.get(rateLimitKey);
+    if (!current || now > current.resetAt) {
+      accountLinkRateLimitMap.set(rateLimitKey, { attempts: 1, resetAt: now + 15 * 60 * 1e3 });
+    } else {
+      current.attempts += 1;
+    }
     console.error("[Account Link] Error:", err);
     return c.json({ error: "LINK_ERROR", message: err.message || "Failed to link account key." }, 400);
   }
 });
+var keywordRateLimitMap = /* @__PURE__ */ new Map();
+var freeGenerationIpMap = /* @__PURE__ */ new Map();
 app.post("/v1/notes", async (c) => {
   const noteId = `fn_${Date.now()}_${import_node_crypto.default.randomBytes(4).toString("hex")}`;
   let installationId = "";
   let deviceId;
-  let entitlementClaim = "free";
   try {
     const contentType = c.req.header("Content-Type") || "";
     let imageBuffer;
@@ -13620,7 +13993,6 @@ app.post("/v1/notes", async (c) => {
       installationId = body["installationId"] || "";
       deviceId = body["deviceId"] || void 0;
       rcUserId = body["rcUserId"] || void 0;
-      entitlementClaim = body["entitlement"] || "free";
       place = body["place"] || "";
       number2 = body["number"] || "01";
       year = body["year"] || "";
@@ -13646,7 +14018,6 @@ app.post("/v1/notes", async (c) => {
       installationId = body.installationId || "";
       deviceId = body.deviceId || void 0;
       rcUserId = body.rcUserId;
-      entitlementClaim = body.entitlement || "free";
       place = body.place || "";
       number2 = body.number || "01";
       const kwRaw = body.keywords;
@@ -13677,20 +14048,47 @@ app.post("/v1/notes", async (c) => {
     if (!installationId) {
       return c.json({ error: "MISSING_INSTALLATION_ID", message: "installationId is required" }, 400);
     }
-    const user = await getOrCreateUser(installationId, rcUserId, deviceId);
-    const validEntitlement = determineEntitlement(user);
-    if (entitlementClaim !== "pro") {
-      if (validEntitlement === "paywall") {
+    if (!deviceId || typeof deviceId !== "string" || deviceId.trim().length < 6 || deviceId.length > 128) {
+      return c.json({ error: "MISSING_DEVICE_ID", message: "Valid persistent deviceId is required." }, 400);
+    }
+    const reservation = await reserveEntitlement(installationId, deviceId, rcUserId);
+    if (!reservation.success) {
+      return c.json({
+        error: "PAYWALL_REQUIRED",
+        message: reservation.error || "No remaining free notes, ad allowance, or credits. Please purchase notes.",
+        userState: {
+          freeUsed: reservation.user.free_used,
+          adUsed: Boolean(reservation.user.ad_used),
+          credits: reservation.user.credits,
+          isPro: Boolean(reservation.user.is_pro),
+          entitlement: "paywall"
+        }
+      }, 402);
+    }
+    const effectiveEntitlement = reservation.entitlement;
+    const clientIp = c.req.header("x-forwarded-for")?.split(",")[0].trim() || c.req.header("x-real-ip") || "unknown";
+    const isFreeTier = effectiveEntitlement === "free" || effectiveEntitlement === "ad";
+    if (isFreeTier && clientIp !== "unknown" && clientIp !== "127.0.0.1" && clientIp !== "::1") {
+      const now = Date.now();
+      const ipRecord = freeGenerationIpMap.get(clientIp);
+      if (ipRecord && now < ipRecord.resetAt && ipRecord.count >= 6) {
+        await rollbackEntitlement(installationId, effectiveEntitlement, deviceId);
         return c.json({
-          error: "PAYWALL_REQUIRED",
-          message: "No remaining free notes, ad allowance, or credits. Please purchase notes.",
+          error: "FREE_LIMIT_REACHED",
+          message: "Free note limit reached for this network. Please purchase a note pack or upgrade to Pro to continue.",
           userState: {
-            freeUsed: user.free_used,
-            adUsed: Boolean(user.ad_used),
-            credits: user.credits,
+            freeUsed: reservation.user.free_used - (effectiveEntitlement === "free" ? 1 : 0),
+            adUsed: effectiveEntitlement === "ad" ? false : Boolean(reservation.user.ad_used),
+            credits: reservation.user.credits,
+            isPro: Boolean(reservation.user.is_pro),
             entitlement: "paywall"
           }
-        }, 402);
+        }, 429);
+      }
+      if (!ipRecord || now > ipRecord.resetAt) {
+        freeGenerationIpMap.set(clientIp, { count: 1, resetAt: now + 24 * 60 * 60 * 1e3 });
+      } else {
+        ipRecord.count += 1;
       }
     }
     const prompt = buildGrokPrompt({
@@ -13701,37 +14099,38 @@ app.post("/v1/notes", async (c) => {
     });
     const serverActiveModel = await getSystemSetting("active_model", "grok-imagine-image-2.0");
     const effectiveModel = serverActiveModel || model || "grok-imagine-image-2.0";
-    console.log(`[Notes] Generating note ${noteId} for ${installationId} (dev: ${deviceId || "none"}) under ${entitlementClaim} with model ${effectiveModel}...`);
+    console.log(`[Notes] Generating note ${noteId} for ${installationId} under reserved "${effectiveEntitlement}" with model ${effectiveModel}...`);
     const isGeminiModel = effectiveModel?.toLowerCase().startsWith("gemini");
     let result;
-    if (isGeminiModel) {
-      try {
-        result = await generateGeminiImage({
+    try {
+      if (isGeminiModel) {
+        try {
+          result = await generateGeminiImage({
+            imageBuffer,
+            mimeType,
+            prompt,
+            model: effectiveModel
+          });
+        } catch (geminiErr) {
+          console.warn(`[Notes] Gemini model ${effectiveModel} failed (${geminiErr.message}). Falling back to Grok Imagine 2.0...`);
+          result = await generateFieldNoteImage({
+            imageBuffer,
+            mimeType,
+            prompt,
+            model: "grok-imagine-image-2.0"
+          });
+        }
+      } else {
+        result = await generateFieldNoteImage({
           imageBuffer,
           mimeType,
           prompt,
           model: effectiveModel
         });
-      } catch (geminiErr) {
-        console.warn(`[Notes] Gemini model ${effectiveModel} failed (${geminiErr.message}). Falling back to Grok Imagine 2.0...`);
-        result = await generateFieldNoteImage({
-          imageBuffer,
-          mimeType,
-          prompt,
-          model: "grok-imagine-image-2.0"
-        });
       }
-    } else {
-      result = await generateFieldNoteImage({
-        imageBuffer,
-        mimeType,
-        prompt,
-        model: effectiveModel
-      });
-    }
-    const consumed = await consumeUserEntitlement(installationId, entitlementClaim, deviceId);
-    if (!consumed) {
-      console.warn(`[Notes] Warning: Failed to consume entitlement for ${installationId}`);
+    } catch (genErr) {
+      await rollbackEntitlement(installationId, effectiveEntitlement, deviceId);
+      throw genErr;
     }
     await logGenerationRecord(noteId, installationId, place, number2, "success", result.modelUsed);
     const updatedUser = await getOrCreateUser(installationId, void 0, deviceId);
@@ -13745,6 +14144,7 @@ app.post("/v1/notes", async (c) => {
         freeUsed: updatedUser.free_used,
         adUsed: Boolean(updatedUser.ad_used),
         credits: updatedUser.credits,
+        isPro: Boolean(updatedUser.is_pro),
         entitlement: determineEntitlement(updatedUser)
       }
     });
@@ -13759,6 +14159,7 @@ app.post("/v1/notes", async (c) => {
         freeUsed: user.free_used,
         adUsed: Boolean(user.ad_used),
         credits: user.credits,
+        isPro: Boolean(user.is_pro),
         entitlement: determineEntitlement(user)
       }
     }, 500);
@@ -13766,6 +14167,22 @@ app.post("/v1/notes", async (c) => {
 });
 app.post("/v1/keywords/suggest", async (c) => {
   try {
+    const authHeader = c.req.header("Authorization");
+    const token = authHeader?.replace("Bearer ", "").trim();
+    const queryId = c.req.query("installationId");
+    const installationId = token || queryId;
+    if (installationId) {
+      const now = Date.now();
+      const current = keywordRateLimitMap.get(installationId);
+      if (!current || now > current.resetAt) {
+        keywordRateLimitMap.set(installationId, { count: 1, resetAt: now + 10 * 60 * 1e3 });
+      } else {
+        if (current.count >= 30) {
+          return c.json({ error: "RATE_LIMIT_EXCEEDED", message: "Too many keyword suggestions. Please wait a few minutes." }, 429);
+        }
+        current.count += 1;
+      }
+    }
     const contentType = c.req.header("Content-Type") || "";
     let imageBuffer = null;
     let mimeType = "image/jpeg";

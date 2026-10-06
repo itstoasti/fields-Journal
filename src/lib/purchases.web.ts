@@ -128,16 +128,16 @@ export async function buyLifetimePackage(): Promise<{
   isPro: boolean;
   error?: string;
 }> {
-  console.log('[Purchases Web] Simulating purchase of Lifetime package');
-  mockIsPro = true;
-  const info = await getCustomerInfo();
-  if (onCustomerInfoCallback) {
-    onCustomerInfoCallback(info, true);
-  }
-  return { success: true, isPro: true };
+  return {
+    success: false,
+    isPro: false,
+    error: 'Fields Pro subscription is available in the FIELDS mobile app for iOS and Android.',
+  };
 }
 
-export async function buyNotes20Package(): Promise<{ success: boolean; error?: string }> {
-  console.log('[Purchases Web] Simulating purchase of 20 notes');
-  return { success: true };
+export async function buyNotes20Package(): Promise<{ success: boolean; error?: string; transactionId?: string }> {
+  return {
+    success: false,
+    error: 'Note credit packs are available in the FIELDS mobile app for iOS and Android.',
+  };
 }

@@ -17,6 +17,7 @@ ios/
 *.zip
 field-notes-debug.*
 field-notes-release.*
+mapping*.txt
 
 # Environment files
 .env

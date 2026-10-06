@@ -10,6 +10,7 @@
     "build:web": "expo export -p web && cp public/index.html dist/index.html",
     "build:api": "npx esbuild server/api/index.ts --bundle --platform=node --target=node20 --outfile=api/index.js",
     "build": "npm run build:web && npm run build:api",
+    "grant:credits": "node server/scripts/grant_credits.cjs",
     "postinstall": "patch-package"
   },
   "dependencies": {

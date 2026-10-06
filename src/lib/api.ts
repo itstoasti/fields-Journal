@@ -136,7 +136,8 @@ export async function syncPurchasedCredits(
   installationId: string,
   creditsToAdd: number = 20,
   rcUserId?: string,
-  deviceId?: string
+  deviceId?: string,
+  transactionId?: string
 ): Promise<UserEntitlementState> {
   const baseUrl = getApiBaseUrl();
   const controller = new AbortController();
@@ -156,6 +157,7 @@ export async function syncPurchasedCredits(
         rcUserId,
         packageId: 'notes_20',
         creditsToAdd,
+        transactionId,
       }),
       signal: controller.signal,
     });
