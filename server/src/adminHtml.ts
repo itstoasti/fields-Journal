@@ -374,11 +374,26 @@ export function renderAdminDashboardHtml(): string {
     <!-- Top KPI Grid -->
     <div class="grid">
       <div class="card">
-        <div class="card-label">Total Installs</div>
-        <div id="statUsersTotal" class="card-value">-</div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <div class="card-label" style="margin-bottom: 0;">Play Store Installs</div>
+          <span class="badge-pill badge-green" style="font-size: 10px;">Android</span>
+        </div>
+        <div id="statAndroidTotal" class="card-value">-</div>
         <div class="card-meta">
-          <span>Today: <strong id="statUsersToday" style="color: var(--text);">-</strong></span>
-          <span>7d: <strong id="statUsers7d" style="color: var(--text);">-</strong></span>
+          <span>Today: <strong id="statAndroidToday" style="color: var(--text);">-</strong></span>
+          <span>3d: <strong id="statAndroid3d" style="color: var(--text);">-</strong></span>
+          <span>7d: <strong id="statAndroid7d" style="color: var(--text);">-</strong></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <div class="card-label" style="margin-bottom: 0;">Active Devices</div>
+          <span class="badge-pill badge-amber" style="font-size: 10px;">7d Active</span>
+        </div>
+        <div id="statAndroidActive" class="card-value">-</div>
+        <div class="card-meta">
+          <span>Checked-in devices</span>
         </div>
       </div>
 
@@ -388,6 +403,18 @@ export function renderAdminDashboardHtml(): string {
         <div class="card-meta">
           <span>Today: <strong id="statGensToday" style="color: var(--text);">-</strong></span>
           <span>Success: <span id="statSuccessRate" class="badge-pill badge-green">100%</span></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <div class="card-label" style="margin-bottom: 0;">Web Visitors</div>
+          <span class="badge-pill" style="font-size: 10px; background: rgba(255,255,255,0.08); color: var(--text-muted);">Web App</span>
+        </div>
+        <div id="statWebTotal" class="card-value">-</div>
+        <div class="card-meta">
+          <span>Today: <strong id="statWebToday" style="color: var(--text);">-</strong></span>
+          <span>7d: <strong id="statWeb7d" style="color: var(--text);">-</strong></span>
         </div>
       </div>
 
@@ -528,10 +555,21 @@ export function renderAdminDashboardHtml(): string {
     }
 
     function renderStats(data) {
-      document.getElementById('statUsersTotal').textContent = data.users.total;
-      document.getElementById('statUsersToday').textContent = '+' + data.users.last24h;
-      document.getElementById('statUsers7d').textContent = '+' + data.users.last7d;
+      // Android Play Store Metrics
+      const android = data.android || { total: data.users?.total || 0, last24h: 0, last3d: 0, last7d: 0, activeDevices: 0 };
+      document.getElementById('statAndroidTotal').textContent = android.total;
+      document.getElementById('statAndroidToday').textContent = '+' + android.last24h;
+      document.getElementById('statAndroid3d').textContent = '+' + android.last3d;
+      document.getElementById('statAndroid7d').textContent = '+' + android.last7d;
+      document.getElementById('statAndroidActive').textContent = android.activeDevices;
 
+      // Web Visitors
+      const web = data.web || { total: 0, last24h: 0, last7d: 0 };
+      document.getElementById('statWebTotal').textContent = web.total;
+      document.getElementById('statWebToday').textContent = '+' + web.last24h;
+      document.getElementById('statWeb7d').textContent = '+' + web.last7d;
+
+      // Generations
       document.getElementById('statGensTotal').textContent = data.generations.total;
       document.getElementById('statGensToday').textContent = '+' + data.generations.last24h;
       

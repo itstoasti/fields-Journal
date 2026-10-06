@@ -167,6 +167,17 @@ export async function getOrCreateUser(
         });
         existingByDevice.account_key = key;
       }
+
+      // Heartbeat: touch updated_at if > 15 minutes since last check-in
+      const lastDevUpdateMs = new Date(existingByDevice.updated_at).getTime();
+      if (isNaN(lastDevUpdateMs) || Date.now() - lastDevUpdateMs > 15 * 60 * 1000) {
+        await client.execute({
+          sql: 'UPDATE users SET updated_at = ? WHERE device_id = ?',
+          args: [now, deviceId.trim()],
+        });
+        existingByDevice.updated_at = now;
+      }
+
       return existingByDevice;
     }
   }
@@ -200,6 +211,12 @@ export async function getOrCreateUser(
       existing.account_key = key;
     }
 
+    // Heartbeat: touch updated_at if > 15 minutes since last check-in
+    const lastInstUpdateMs = new Date(existing.updated_at).getTime();
+    if (isNaN(lastInstUpdateMs) || Date.now() - lastInstUpdateMs > 15 * 60 * 1000) {
+      shouldUpdate = true;
+    }
+
     if (shouldUpdate) {
       await client.execute({
         sql: 'UPDATE users SET device_id = ?, rc_user_id = ?, updated_at = ? WHERE installation_id = ?',
@@ -207,6 +224,7 @@ export async function getOrCreateUser(
       });
       existing.device_id = newDeviceId;
       existing.rc_user_id = newRcUserId;
+      existing.updated_at = now;
     }
     return existing;
   }
@@ -395,6 +413,18 @@ export async function logGenerationRecord(
 
 export interface AdminStats {
   activeModel: string;
+  android: {
+    total: number;
+    last24h: number;
+    last3d: number;
+    last7d: number;
+    activeDevices: number;
+  };
+  web: {
+    total: number;
+    last24h: number;
+    last7d: number;
+  };
   users: {
     total: number;
     last24h: number;
@@ -458,32 +488,85 @@ export async function setSystemSetting(key: string, value: string): Promise<void
 export async function getAdminStats(): Promise<AdminStats> {
   const now = new Date();
   const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+  const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString();
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [activeModel, usersTotal, usersDay, usersWeek] = await Promise.all([
+  // Exclude synthetic developer probe scripts
+  const testUserFilter = "installation_id NOT LIKE 'test_%' AND installation_id NOT LIKE 'verify_%' AND installation_id != 'prod_verified' AND installation_id NOT LIKE '%probe%'";
+  const testGenFilter = "user_id NOT LIKE 'test_%' AND user_id NOT LIKE 'verify_%' AND user_id NOT LIKE '%probe%'";
+
+  const [
+    activeModel,
+    androidTotalRes,
+    androidDayRes,
+    androidThreeDayRes,
+    androidWeekRes,
+    androidActiveRes,
+    webTotalRes,
+    webDayRes,
+    webWeekRes,
+    usersTotal,
+    genTotal,
+    genDay,
+    genWeek,
+    topPlacesRes,
+    recentFeedRes,
+  ] = await Promise.all([
     getSystemSetting('active_model', 'grok-imagine-image-2.0'),
-    client.execute(
-      'SELECT COUNT(*) as c, SUM(free_used) as free_used, SUM(ad_used) as ads, SUM(credits) as credits, SUM(CASE WHEN credits > 0 THEN 1 ELSE 0 END) as paying FROM users'
-    ),
-    client.execute({ sql: 'SELECT COUNT(*) as c FROM users WHERE created_at >= ?', args: [dayAgo] }),
-    client.execute({ sql: 'SELECT COUNT(*) as c FROM users WHERE created_at >= ?', args: [weekAgo] }),
-  ]);
 
-  const [genTotal, genDay, genWeek] = await Promise.all([
-    client.execute(
-      'SELECT COUNT(*) as total, SUM(CASE WHEN status = \'success\' THEN 1 ELSE 0 END) as success, SUM(CASE WHEN status = \'failed\' THEN 1 ELSE 0 END) as failed FROM generations'
-    ),
-    client.execute({ sql: 'SELECT COUNT(*) as c FROM generations WHERE created_at >= ?', args: [dayAgo] }),
-    client.execute({ sql: 'SELECT COUNT(*) as c FROM generations WHERE created_at >= ?', args: [weekAgo] }),
-  ]);
+    // 1. Android App Devices (Google Play)
+    client.execute(`SELECT COUNT(DISTINCT device_id) as c FROM users WHERE device_id LIKE 'android_%' AND ${testUserFilter}`),
+    client.execute({ sql: `SELECT COUNT(DISTINCT device_id) as c FROM users WHERE device_id LIKE 'android_%' AND created_at >= ? AND ${testUserFilter}`, args: [dayAgo] }),
+    client.execute({ sql: `SELECT COUNT(DISTINCT device_id) as c FROM users WHERE device_id LIKE 'android_%' AND created_at >= ? AND ${testUserFilter}`, args: [threeDaysAgo] }),
+    client.execute({ sql: `SELECT COUNT(DISTINCT device_id) as c FROM users WHERE device_id LIKE 'android_%' AND created_at >= ? AND ${testUserFilter}`, args: [weekAgo] }),
+    // Active in last 7 days or engaged
+    client.execute({ sql: `SELECT COUNT(DISTINCT device_id) as c FROM users WHERE device_id LIKE 'android_%' AND (updated_at >= ? OR free_used > 0 OR ad_used > 0 OR credits > 0) AND ${testUserFilter}`, args: [weekAgo] }),
 
-  const [topPlacesRes, recentFeedRes] = await Promise.all([
-    client.execute(
-      'SELECT place, COUNT(*) as count FROM generations WHERE place IS NOT NULL AND place != \'\' GROUP BY place ORDER BY count DESC LIMIT 8'
-    ),
-    client.execute(
-      'SELECT id, user_id, place, number, status, cost_info, created_at FROM generations ORDER BY created_at DESC LIMIT 20'
-    ),
+    // 2. Web Visitors
+    client.execute(`SELECT COUNT(*) as c FROM users WHERE (device_id LIKE 'web_%' OR device_id IS NULL) AND ${testUserFilter}`),
+    client.execute({ sql: `SELECT COUNT(*) as c FROM users WHERE (device_id LIKE 'web_%' OR device_id IS NULL) AND created_at >= ? AND ${testUserFilter}`, args: [dayAgo] }),
+    client.execute({ sql: `SELECT COUNT(*) as c FROM users WHERE (device_id LIKE 'web_%' OR device_id IS NULL) AND created_at >= ? AND ${testUserFilter}`, args: [weekAgo] }),
+
+    // 3. Monetization totals across all real users
+    client.execute(`
+      SELECT 
+        COUNT(*) as c, 
+        SUM(free_used) as free_used, 
+        SUM(ad_used) as ads, 
+        SUM(credits) as credits, 
+        SUM(CASE WHEN credits > 0 THEN 1 ELSE 0 END) as paying 
+      FROM users WHERE ${testUserFilter}
+    `),
+
+    // 4. Generations (excluding developer test probes)
+    client.execute(`
+      SELECT 
+        COUNT(*) as total, 
+        SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success, 
+        SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed 
+      FROM generations WHERE ${testGenFilter}
+    `),
+    client.execute({ sql: `SELECT COUNT(*) as c FROM generations WHERE created_at >= ? AND ${testGenFilter}`, args: [dayAgo] }),
+    client.execute({ sql: `SELECT COUNT(*) as c FROM generations WHERE created_at >= ? AND ${testGenFilter}`, args: [weekAgo] }),
+
+    // 5. Top Places
+    client.execute(`
+      SELECT place, COUNT(*) as count 
+      FROM generations 
+      WHERE place IS NOT NULL AND place != '' AND ${testGenFilter} 
+      GROUP BY place 
+      ORDER BY count DESC 
+      LIMIT 8
+    `),
+
+    // 6. Recent generations
+    client.execute(`
+      SELECT id, user_id, place, number, status, cost_info, created_at 
+      FROM generations 
+      WHERE ${testGenFilter} 
+      ORDER BY created_at DESC 
+      LIMIT 20
+    `),
   ]);
 
   const uRow = usersTotal.rows[0] || {};
@@ -493,12 +576,34 @@ export async function getAdminStats(): Promise<AdminStats> {
   const successGens = Number(gRow.success || 0);
   const successRate = totalGens > 0 ? Math.round((successGens / totalGens) * 100) : 100;
 
+  const androidTotal = Number(androidTotalRes.rows[0]?.c || 0);
+  const androidDay = Number(androidDayRes.rows[0]?.c || 0);
+  const android3d = Number(androidThreeDayRes.rows[0]?.c || 0);
+  const androidWeek = Number(androidWeekRes.rows[0]?.c || 0);
+  const androidActive = Number(androidActiveRes.rows[0]?.c || 0);
+
+  const webTotal = Number(webTotalRes.rows[0]?.c || 0);
+  const webDay = Number(webDayRes.rows[0]?.c || 0);
+  const webWeek = Number(webWeekRes.rows[0]?.c || 0);
+
   return {
     activeModel: String(activeModel),
+    android: {
+      total: androidTotal,
+      last24h: androidDay,
+      last3d: android3d,
+      last7d: androidWeek,
+      activeDevices: androidActive,
+    },
+    web: {
+      total: webTotal,
+      last24h: webDay,
+      last7d: webWeek,
+    },
     users: {
-      total: Number(uRow.c || 0),
-      last24h: Number(usersDay.rows[0]?.c || 0),
-      last7d: Number(usersWeek.rows[0]?.c || 0),
+      total: androidTotal, // Point to real Android count for backward-compatible consumers
+      last24h: androidDay,
+      last7d: androidWeek,
       payingCount: Number(uRow.paying || 0),
       freeUsedTotal: Number(uRow.free_used || 0),
       adsWatchedTotal: Number(uRow.ads || 0),
