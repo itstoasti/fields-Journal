@@ -12010,10 +12010,12 @@ async function setSystemSetting(key, value) {
 async function getAdminStats() {
   const now = /* @__PURE__ */ new Date();
   const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1e3).toISOString();
+  const twoDaysAgo = new Date(now.getTime() - 48 * 60 * 60 * 1e3).toISOString();
   const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1e3).toISOString();
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1e3).toISOString();
-  const testUserFilter = "installation_id NOT LIKE 'test_%' AND installation_id NOT LIKE 'verify_%' AND installation_id != 'prod_verified' AND installation_id NOT LIKE '%probe%'";
-  const testGenFilter = "user_id NOT LIKE 'test_%' AND user_id NOT LIKE 'verify_%' AND user_id NOT LIKE '%probe%'";
+  const LAUNCH_DATE = "2026-10-01T00:00:00.000Z";
+  const testUserFilter = `created_at >= '${LAUNCH_DATE}' AND installation_id NOT LIKE 'test_%' AND installation_id NOT LIKE 'verify_%' AND installation_id != 'prod_verified' AND installation_id NOT LIKE '%probe%'`;
+  const testGenFilter = `created_at >= '${LAUNCH_DATE}' AND user_id NOT LIKE 'test_%' AND user_id NOT LIKE 'verify_%' AND user_id NOT LIKE '%probe%'`;
   const [
     activeModel,
     androidTotalRes,
@@ -12037,8 +12039,8 @@ async function getAdminStats() {
     client.execute({ sql: `SELECT COUNT(DISTINCT device_id) as c FROM users WHERE device_id LIKE 'android_%' AND created_at >= ? AND ${testUserFilter}`, args: [dayAgo] }),
     client.execute({ sql: `SELECT COUNT(DISTINCT device_id) as c FROM users WHERE device_id LIKE 'android_%' AND created_at >= ? AND ${testUserFilter}`, args: [threeDaysAgo] }),
     client.execute({ sql: `SELECT COUNT(DISTINCT device_id) as c FROM users WHERE device_id LIKE 'android_%' AND created_at >= ? AND ${testUserFilter}`, args: [weekAgo] }),
-    // Active in last 7 days or engaged
-    client.execute({ sql: `SELECT COUNT(DISTINCT device_id) as c FROM users WHERE device_id LIKE 'android_%' AND (updated_at >= ? OR free_used > 0 OR ad_used > 0 OR credits > 0) AND ${testUserFilter}`, args: [weekAgo] }),
+    // Active devices: checked in within the last 48 hours (matches Google Play installed active audience, excluding uninstalls)
+    client.execute({ sql: `SELECT COUNT(DISTINCT device_id) as c FROM users WHERE device_id LIKE 'android_%' AND updated_at >= ? AND ${testUserFilter}`, args: [twoDaysAgo] }),
     // 2. Web Visitors
     client.execute(`SELECT COUNT(*) as c FROM users WHERE (device_id LIKE 'web_%' OR device_id IS NULL) AND ${testUserFilter}`),
     client.execute({ sql: `SELECT COUNT(*) as c FROM users WHERE (device_id LIKE 'web_%' OR device_id IS NULL) AND created_at >= ? AND ${testUserFilter}`, args: [dayAgo] }),
@@ -12844,11 +12846,11 @@ function renderAdminDashboardHtml() {
       <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
           <div class="card-label" style="margin-bottom: 0;">Active Devices</div>
-          <span class="badge-pill badge-amber" style="font-size: 10px;">7d Active</span>
+          <span class="badge-pill badge-green" style="font-size: 10px;">Google Play</span>
         </div>
         <div id="statAndroidActive" class="card-value">-</div>
         <div class="card-meta">
-          <span>Checked-in devices</span>
+          <span>Active audience (retained)</span>
         </div>
       </div>
 

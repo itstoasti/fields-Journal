@@ -389,11 +389,11 @@ export function renderAdminDashboardHtml(): string {
       <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
           <div class="card-label" style="margin-bottom: 0;">Active Devices</div>
-          <span class="badge-pill badge-amber" style="font-size: 10px;">7d Active</span>
+          <span class="badge-pill badge-green" style="font-size: 10px;">Google Play</span>
         </div>
         <div id="statAndroidActive" class="card-value">-</div>
         <div class="card-meta">
-          <span>Checked-in devices</span>
+          <span>Active audience (retained)</span>
         </div>
       </div>
 

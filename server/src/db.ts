@@ -488,12 +488,14 @@ export async function setSystemSetting(key: string, value: string): Promise<void
 export async function getAdminStats(): Promise<AdminStats> {
   const now = new Date();
   const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+  const twoDaysAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString();
   const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString();
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const LAUNCH_DATE = '2026-10-01T00:00:00.000Z';
 
-  // Exclude synthetic developer probe scripts
-  const testUserFilter = "installation_id NOT LIKE 'test_%' AND installation_id NOT LIKE 'verify_%' AND installation_id != 'prod_verified' AND installation_id NOT LIKE '%probe%'";
-  const testGenFilter = "user_id NOT LIKE 'test_%' AND user_id NOT LIKE 'verify_%' AND user_id NOT LIKE '%probe%'";
+  // Strict filters: Only track data from October 1 onward, and exclude developer test scripts
+  const testUserFilter = `created_at >= '${LAUNCH_DATE}' AND installation_id NOT LIKE 'test_%' AND installation_id NOT LIKE 'verify_%' AND installation_id != 'prod_verified' AND installation_id NOT LIKE '%probe%'`;
+  const testGenFilter = `created_at >= '${LAUNCH_DATE}' AND user_id NOT LIKE 'test_%' AND user_id NOT LIKE 'verify_%' AND user_id NOT LIKE '%probe%'`;
 
   const [
     activeModel,
@@ -519,8 +521,8 @@ export async function getAdminStats(): Promise<AdminStats> {
     client.execute({ sql: `SELECT COUNT(DISTINCT device_id) as c FROM users WHERE device_id LIKE 'android_%' AND created_at >= ? AND ${testUserFilter}`, args: [dayAgo] }),
     client.execute({ sql: `SELECT COUNT(DISTINCT device_id) as c FROM users WHERE device_id LIKE 'android_%' AND created_at >= ? AND ${testUserFilter}`, args: [threeDaysAgo] }),
     client.execute({ sql: `SELECT COUNT(DISTINCT device_id) as c FROM users WHERE device_id LIKE 'android_%' AND created_at >= ? AND ${testUserFilter}`, args: [weekAgo] }),
-    // Active in last 7 days or engaged
-    client.execute({ sql: `SELECT COUNT(DISTINCT device_id) as c FROM users WHERE device_id LIKE 'android_%' AND (updated_at >= ? OR free_used > 0 OR ad_used > 0 OR credits > 0) AND ${testUserFilter}`, args: [weekAgo] }),
+    // Active devices: checked in within the last 48 hours (matches Google Play installed active audience, excluding uninstalls)
+    client.execute({ sql: `SELECT COUNT(DISTINCT device_id) as c FROM users WHERE device_id LIKE 'android_%' AND updated_at >= ? AND ${testUserFilter}`, args: [twoDaysAgo] }),
 
     // 2. Web Visitors
     client.execute(`SELECT COUNT(*) as c FROM users WHERE (device_id LIKE 'web_%' OR device_id IS NULL) AND ${testUserFilter}`),
