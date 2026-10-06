@@ -743,13 +743,16 @@ export function renderAdminDashboardHtml(): string {
           const isSuccess = item.status === 'success';
           const dotClass = isSuccess ? 'status-dot success' : 'status-dot failed';
           const modelClean = (item.costInfo || '').replace('grok-imagine-image-2.0', 'Grok 2.0').replace('gemini-2.5-flash-image', 'Gemini Flash');
+          const devTag = item.isDev 
+            ? ' <span style="font-size: 9px; padding: 1px 5px; border-radius: 4px; background: rgba(255, 196, 128, 0.2); color: var(--amber); border: 1px solid rgba(255, 196, 128, 0.4); margin-left: 6px; font-weight: 600;">INTERNAL DEV</span>' 
+            : '';
 
           return \`
             <div class="activity-item">
               <div class="activity-left">
                 <div class="\${dotClass}"></div>
                 <div>
-                  <div class="activity-title">\${item.place || 'Unknown Location'} · No. \${item.number || '01'}</div>
+                  <div class="activity-title">\${item.place || 'Current Location'} · No. \${item.number || '01'}\${devTag}</div>
                   <div class="activity-sub">\${isSuccess ? (modelClean || 'Success') : ('Failed: ' + (item.costInfo || 'Error'))}</div>
                 </div>
               </div>

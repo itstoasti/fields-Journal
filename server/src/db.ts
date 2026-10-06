@@ -17,9 +17,29 @@ export interface UserRecord {
   credits: number;
   created_at: string;
   updated_at: string;
+  is_developer?: number;
 }
 
 export type EntitlementStatus = 'free' | 'ad' | 'credit' | 'paywall' | 'pro';
+
+// Known internal/developer devices to exclude from public store customer metrics
+export const KNOWN_DEVELOPER_DEVICES = [
+  'android_fc341bad05cf8c5a', // Developer physical Android test device
+  'dev_ygv47mz4tj2x5zw31z1ez4gz', // Developer web/emulator
+];
+
+export function isDeveloperDevice(deviceId?: string | null, installationId?: string | null): boolean {
+  if (deviceId) {
+    const trimmed = deviceId.trim();
+    if (KNOWN_DEVELOPER_DEVICES.includes(trimmed)) return true;
+    if (trimmed.startsWith('dev_') || trimmed.startsWith('android_dev_') || trimmed.startsWith('ios_dev_')) return true;
+  }
+  if (installationId) {
+    const trimmedInst = installationId.trim();
+    if (trimmedInst.startsWith('dev_') || trimmedInst.startsWith('test_') || trimmedInst.startsWith('verify_') || trimmedInst.includes('probe')) return true;
+  }
+  return false;
+}
 
 // 1. Resolve connection config (Turso cloud or local SQLite file)
 const isTurso = Boolean(process.env.TURSO_DATABASE_URL);
@@ -80,6 +100,25 @@ export async function initDb(): Promise<void> {
       // Column already exists
     }
 
+    try {
+      await client.execute(`ALTER TABLE users ADD COLUMN is_developer INTEGER DEFAULT 0;`);
+    } catch {
+      // Column already exists
+    }
+
+    // Automatically tag known developer devices & prefixes as internal
+    await client.execute(`
+      UPDATE users 
+      SET is_developer = 1 
+      WHERE device_id IN ('android_fc341bad05cf8c5a', 'dev_ygv47mz4tj2x5zw31z1ez4gz')
+         OR device_id LIKE 'dev_%'
+         OR device_id LIKE 'android_dev_%'
+         OR device_id LIKE 'ios_dev_%'
+         OR installation_id LIKE 'test_%'
+         OR installation_id LIKE 'verify_%'
+         OR installation_id LIKE 'dev_%'
+    `);
+
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_users_device_id ON users (device_id);`);
     await client.execute(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_account_key ON users (account_key);`);
     console.log(`[Database] Initialized successfully (${isTurso ? 'Turso Cloud' : 'Local SQLite'})`);
@@ -113,6 +152,7 @@ function mapRowToUser(row: any): UserRecord {
     credits: Number(row.credits || 0),
     created_at: String(row.created_at || ''),
     updated_at: String(row.updated_at || ''),
+    is_developer: Number(row.is_developer || 0),
   };
 }
 
@@ -138,6 +178,15 @@ export async function getOrCreateUser(
 
     if (existingByDeviceRes.rows.length > 0) {
       const existingByDevice = mapRowToUser(existingByDeviceRes.rows[0]);
+
+      const isDev = isDeveloperDevice(deviceId, installationId) ? 1 : 0;
+      if (isDev && !existingByDevice.is_developer) {
+        await client.execute({
+          sql: 'UPDATE users SET is_developer = 1 WHERE device_id = ?',
+          args: [deviceId.trim()],
+        });
+        existingByDevice.is_developer = 1;
+      }
 
       if (existingByDevice.installation_id !== installationId) {
         console.log(`[Anti-Abuse] Persistent device recognized (${deviceId}). Re-linking install ${installationId} -> original user with ${existingByDevice.free_used} free used.`);
@@ -193,7 +242,11 @@ export async function getOrCreateUser(
     let shouldUpdate = false;
     let newDeviceId = existing.device_id;
     let newRcUserId = existing.rc_user_id;
+    const isDev = isDeveloperDevice(deviceId || existing.device_id, installationId) ? 1 : 0;
 
+    if (isDev && !existing.is_developer) {
+      shouldUpdate = true;
+    }
     if (deviceId && !existing.device_id) {
       newDeviceId = deviceId.trim();
       shouldUpdate = true;
@@ -218,23 +271,26 @@ export async function getOrCreateUser(
     }
 
     if (shouldUpdate) {
+      const devVal = (isDev || existing.is_developer) ? 1 : 0;
       await client.execute({
-        sql: 'UPDATE users SET device_id = ?, rc_user_id = ?, updated_at = ? WHERE installation_id = ?',
-        args: [newDeviceId, newRcUserId, now, installationId],
+        sql: 'UPDATE users SET device_id = ?, rc_user_id = ?, is_developer = ?, updated_at = ? WHERE installation_id = ?',
+        args: [newDeviceId, newRcUserId, devVal, now, installationId],
       });
       existing.device_id = newDeviceId;
       existing.rc_user_id = newRcUserId;
+      existing.is_developer = devVal;
       existing.updated_at = now;
     }
     return existing;
   }
 
   // 3. Insert brand new user with hardware device_id & unique account_key
+  const isDev = isDeveloperDevice(deviceId, installationId) ? 1 : 0;
   const accountKey = generateAccountKey();
   await client.execute({
-    sql: `INSERT INTO users (installation_id, device_id, rc_user_id, account_key, free_used, ad_used, credits, created_at, updated_at)
-          VALUES (?, ?, ?, ?, 0, 0, 0, ?, ?)`,
-    args: [installationId, deviceId ? deviceId.trim() : null, rcUserId || null, accountKey, now, now],
+    sql: `INSERT INTO users (installation_id, device_id, rc_user_id, account_key, free_used, ad_used, credits, created_at, updated_at, is_developer)
+          VALUES (?, ?, ?, ?, 0, 0, 0, ?, ?, ?)`,
+    args: [installationId, deviceId ? deviceId.trim() : null, rcUserId || null, accountKey, now, now, isDev],
   });
 
   return {
@@ -247,6 +303,7 @@ export async function getOrCreateUser(
     credits: 0,
     created_at: now,
     updated_at: now,
+    is_developer: isDev,
   };
 }
 
@@ -458,6 +515,7 @@ export interface AdminStats {
     status: string;
     costInfo: string | null;
     createdAt: string;
+    isDev?: boolean;
   }>;
 }
 
@@ -500,9 +558,32 @@ export async function getAdminStats(): Promise<AdminStats> {
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const LAUNCH_DATE = '2026-10-01T00:00:00.000Z';
 
-  // Strict filters: Only track data from October 1 onward, and exclude developer test scripts
-  const testUserFilter = `created_at >= '${LAUNCH_DATE}' AND installation_id NOT LIKE 'test_%' AND installation_id NOT LIKE 'verify_%' AND installation_id != 'prod_verified' AND installation_id NOT LIKE '%probe%'`;
-  const testGenFilter = `created_at >= '${LAUNCH_DATE}' AND user_id NOT LIKE 'test_%' AND user_id NOT LIKE 'verify_%' AND user_id NOT LIKE '%probe%'`;
+  const devDeviceListSql = KNOWN_DEVELOPER_DEVICES.map(d => `'${d}'`).join(',');
+
+  // Strict filters: Only track data from October 1 onward, and exclude developer test scripts & internal devices
+  const testUserFilter = `created_at >= '${LAUNCH_DATE}' 
+    AND (is_developer = 0 OR is_developer IS NULL)
+    AND (device_id NOT IN (${devDeviceListSql}) OR device_id IS NULL)
+    AND (device_id NOT LIKE 'dev_%' OR device_id IS NULL)
+    AND (device_id NOT LIKE 'android_dev_%' OR device_id IS NULL)
+    AND (device_id NOT LIKE 'ios_dev_%' OR device_id IS NULL)
+    AND installation_id NOT LIKE 'test_%' 
+    AND installation_id NOT LIKE 'verify_%' 
+    AND installation_id != 'prod_verified' 
+    AND installation_id NOT LIKE '%probe%'`;
+
+  const testGenFilter = `created_at >= '${LAUNCH_DATE}' 
+    AND user_id NOT LIKE 'test_%' 
+    AND user_id NOT LIKE 'verify_%' 
+    AND user_id NOT LIKE '%probe%'
+    AND user_id NOT IN (
+      SELECT installation_id FROM users 
+      WHERE is_developer = 1 
+         OR device_id IN (${devDeviceListSql}) 
+         OR device_id LIKE 'dev_%'
+         OR device_id LIKE 'android_dev_%'
+         OR device_id LIKE 'ios_dev_%'
+    )`;
 
   const [
     activeModel,
@@ -580,12 +661,24 @@ export async function getAdminStats(): Promise<AdminStats> {
       LIMIT 8
     `),
 
-    // 7. Recent generations
+    // 7. Recent generations (with is_developer indicator)
     client.execute(`
-      SELECT id, user_id, place, number, status, cost_info, created_at 
-      FROM generations 
-      WHERE ${testGenFilter} 
-      ORDER BY created_at DESC 
+      SELECT 
+        g.id, 
+        g.user_id, 
+        g.place, 
+        g.number, 
+        g.status, 
+        g.cost_info, 
+        g.created_at,
+        CASE WHEN (u.is_developer = 1 OR u.device_id IN (${devDeviceListSql}) OR u.device_id LIKE 'dev_%' OR g.user_id LIKE 'test_%') THEN 1 ELSE 0 END as is_dev
+      FROM generations g
+      LEFT JOIN users u ON g.user_id = u.installation_id
+      WHERE g.created_at >= '${LAUNCH_DATE}'
+        AND g.user_id NOT LIKE 'test_%' 
+        AND g.user_id NOT LIKE 'verify_%' 
+        AND g.user_id NOT LIKE '%probe%'
+      ORDER BY g.created_at DESC 
       LIMIT 20
     `),
   ]);
@@ -663,6 +756,7 @@ export async function getAdminStats(): Promise<AdminStats> {
       status: String(r.status),
       costInfo: r.cost_info ? String(r.cost_info) : null,
       createdAt: String(r.created_at),
+      isDev: Boolean(Number(r.is_dev || 0)),
     })),
   };
 }
