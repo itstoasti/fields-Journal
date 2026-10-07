@@ -554,7 +554,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   fanCardLeft: {
-    transform: [{ translateX: -38 }, { translateY: 6 }, { rotate: '-8.5deg' }],
+    transform: [{ translateX: -38 }, { translateY: 6 }, { rotate: '-9deg' }],
     shadowColor: colors.charcoal,
     shadowOffset: { width: -3, height: 6 },
     shadowOpacity: 0.2,
@@ -562,7 +562,7 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   fanCardRight: {
-    transform: [{ translateX: 38 }, { translateY: 6 }, { rotate: '8.5deg' }],
+    transform: [{ translateX: 38 }, { translateY: 6 }, { rotate: '9deg' }],
     shadowColor: colors.charcoal,
     shadowOffset: { width: 3, height: 6 },
     shadowOpacity: 0.2,
