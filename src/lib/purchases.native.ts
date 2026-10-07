@@ -3,7 +3,11 @@ import { Platform, NativeModules } from 'react-native';
 import { FieldAlert } from '../components/FieldAlert';
 
 export const REVENUECAT_API_KEY =
-  process.env.EXPO_PUBLIC_REVENUECAT_API_KEY || 'goog_SIioGMRmaGojibFnWhGHsUJkNkK';
+  Platform.select({
+    ios: process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY || 'appl_SIioGMRmaGojibFnWhGHsUJkNkK',
+    android: process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY || process.env.EXPO_PUBLIC_REVENUECAT_API_KEY || 'goog_SIioGMRmaGojibFnWhGHsUJkNkK',
+    default: process.env.EXPO_PUBLIC_REVENUECAT_API_KEY || '',
+  }) || '';
 
 export const ENTITLEMENT_PRO =
   process.env.EXPO_PUBLIC_RC_ENTITLEMENT_ID || 'fields_travel_journal_scrapebook_pro';
@@ -348,11 +352,20 @@ export async function presentRevenueCatPaywall(): Promise<{
     typeof RevenueCatUI.presentPaywall !== 'function' ||
     !NativeModules?.RNPaywalls
   ) {
-    console.log('[Purchases] Presenting development simulated paywall');
+    if (!__DEV__) {
+      FieldAlert.alert(
+        'Fields Pro',
+        'Unable to connect to the App Store. Please check your network connection or restore previous purchases from Settings.',
+        [{ text: 'OK' }]
+      );
+      return Promise.resolve({ result: 'ERROR', isPro: false });
+    }
+
+    console.log('[Purchases Dev] Presenting development testing paywall');
     return new Promise((resolve) => {
       FieldAlert.alert(
-        'Fields Pro (Dev Mode)',
-        'In a production store build, this displays the native animated RevenueCat Paywall.\n\nWould you like to simulate activating Fields Pro for testing?',
+        'Fields Pro',
+        'Development Environment: Would you like to activate Fields Pro for testing?',
         [
           {
             text: 'Cancel',
@@ -360,7 +373,7 @@ export async function presentRevenueCatPaywall(): Promise<{
             onPress: () => resolve({ result: 'CANCELLED', isPro: false }),
           },
           {
-            text: 'Simulate Pro',
+            text: 'Activate Pro',
             onPress: () => {
               if (onCustomerInfoCallback) {
                 onCustomerInfoCallback(
@@ -442,6 +455,7 @@ export async function presentRevenueCatPaywallIfNeeded(): Promise<{
  * Allows users to manage active subscriptions, view billing history, change tiers, or restore purchases.
  */
 export async function presentCustomerCenter(): Promise<void> {
+  const storeName = Platform.OS === 'ios' ? 'Apple App Store' : 'Google Play Store';
   if (
     !isRevenueCatNativeSupported() ||
     !RevenueCatUI ||
@@ -450,7 +464,7 @@ export async function presentCustomerCenter(): Promise<void> {
   ) {
     FieldAlert.alert(
       'Manage Subscription',
-      'In a production build, this opens the RevenueCat Customer Center.\n\nSubscribers can also manage or cancel their subscription directly in their Google Play Store or Apple App Store account settings.'
+      `You can manage or cancel your active subscription in your ${storeName} account settings.`
     );
     return;
   }
@@ -461,7 +475,7 @@ export async function presentCustomerCenter(): Promise<void> {
     console.warn('[Purchases] Error presenting Customer Center:', err);
     FieldAlert.alert(
       'Manage Subscription',
-      'You can manage or cancel your active subscription in your Google Play Store or Apple App Store account settings.'
+      `You can manage or cancel your active subscription in your ${storeName} account settings.`
     );
   }
 }

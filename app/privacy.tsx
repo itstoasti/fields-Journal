@@ -62,7 +62,7 @@ export default function PrivacyScreen() {
             DEVICE PERMISSIONS
           </TypewriterText>
           <TypewriterText size="sm" color={colors.charcoal} style={styles.paragraph}>
-            • <TypewriterText size="sm" bold color={colors.charcoal}>Photos:</TypewriterText> Used through the Android system photo picker to select images you specifically choose. We do not scan your entire library.
+            • <TypewriterText size="sm" bold color={colors.charcoal}>Photos:</TypewriterText> Used through the native system photo picker to select images you specifically choose. We do not scan your entire library.
           </TypewriterText>
           <TypewriterText size="sm" color={colors.charcoal} style={styles.paragraph}>
             • <TypewriterText size="sm" bold color={colors.charcoal}>Camera:</TypewriterText> Used only when you tap 'Camera' to take a new travel photo.
@@ -80,7 +80,7 @@ export default function PrivacyScreen() {
             • Google Mobile Ads (AdMob) is used solely for the optional rewarded video on Note 3.
           </TypewriterText>
           <TypewriterText size="sm" color={colors.charcoal} style={styles.paragraph}>
-            • In-app purchases are securely processed via Google Play and RevenueCat.
+            • In-app purchases are securely processed via the Apple App Store, Google Play, and RevenueCat.
           </TypewriterText>
           <TypewriterText size="sm" color={colors.charcoal} style={styles.paragraph}>
             • Paid users never see ads.

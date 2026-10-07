@@ -29,6 +29,7 @@ export default function SettingsScreen() {
   const accountKey = useAppStore((state) => state.accountKey);
   const linkAccountWithKey = useAppStore((state) => state.linkAccountWithKey);
   const clearAllNotes = useAppStore((state) => state.clearAllNotes);
+  const deleteAccountAndData = useAppStore((state) => state.deleteAccountAndData);
   const syncWithBackend = useAppStore((state) => state.syncWithBackend);
 
   useFocusEffect(
@@ -114,6 +115,31 @@ export default function SettingsScreen() {
           onPress: async () => {
             await clearAllNotes();
             FieldAlert.alert('Notes Cleared', 'All local note records have been removed.');
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteAccountAndData = () => {
+    FieldAlert.alert(
+      'Delete Account & Data',
+      'This will permanently delete your account, purchased credits, and all saved notes from this device and our servers. This action is irreversible.\n\nAre you sure you want to proceed?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Everything',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteAccountAndData();
+              FieldAlert.alert(
+                'Account Deleted',
+                'Your account and all associated data have been permanently removed.'
+              );
+            } catch (err: any) {
+              FieldAlert.alert('Error', err.message || 'Failed to complete account deletion.');
+            }
           },
         },
       ]
@@ -345,7 +371,7 @@ export default function SettingsScreen() {
           </View>
 
           <TypewriterText size="xs" color={colors.inkMuted} style={{ marginTop: 4, marginBottom: spacing.sm }}>
-            Use your anonymous Account Key to restore purchased credits across devices (Android, iPhone, or Web) or after clearing browser storage.
+            Use your anonymous Account Key to restore purchased credits across your devices or after clearing local app storage.
           </TypewriterText>
 
           <View style={styles.accountKeyBox}>
@@ -388,7 +414,7 @@ export default function SettingsScreen() {
         {/* Notebook Data Management */}
         <View style={styles.card}>
           <TypewriterText size="xs" bold color={colors.inkSecondary} letterSpacing={1.5}>
-            NOTEBOOK DATA
+            NOTEBOOK DATA & ACCOUNT
           </TypewriterText>
 
           <View style={styles.menuList}>
@@ -406,9 +432,21 @@ export default function SettingsScreen() {
 
             <Pressable style={styles.menuItem} onPress={handleClearAllNotes}>
               <View style={styles.menuItemLeft}>
-                <Ionicons name="trash-outline" size={20} color={colors.brickRed} />
-                <TypewriterText size="sm" color={colors.brickRed} style={styles.menuItemText}>
+                <Ionicons name="trash-outline" size={20} color={colors.charcoal} />
+                <TypewriterText size="sm" color={colors.charcoal} style={styles.menuItemText}>
                   Clear All Saved Notes
+                </TypewriterText>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.inkMuted} />
+            </Pressable>
+
+            <View style={styles.divider} />
+
+            <Pressable style={styles.menuItem} onPress={handleDeleteAccountAndData}>
+              <View style={styles.menuItemLeft}>
+                <Ionicons name="person-remove-outline" size={20} color={colors.brickRed} />
+                <TypewriterText size="sm" color={colors.brickRed} style={styles.menuItemText}>
+                  Delete Account & All Data
                 </TypewriterText>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.inkMuted} />

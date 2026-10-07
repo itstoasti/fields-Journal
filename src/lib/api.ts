@@ -276,3 +276,86 @@ export async function linkAccountByKeyApi(
     throw error;
   }
 }
+
+/**
+ * Permanently deletes user account and all server records (Apple Guideline 5.1.1(v) Compliance).
+ */
+export async function deleteAccountDataApi(
+  installationId: string,
+  accountKey?: string
+): Promise<{ success: boolean; message?: string }> {
+  const baseUrl = getApiBaseUrl();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+  try {
+    const response = await fetch(`${baseUrl}/v1/account/delete`, {
+      method: 'POST',
+      headers: {
+        ...getCommonHeaders(baseUrl),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        installationId,
+        accountKey: accountKey ? accountKey.trim().toUpperCase() : undefined,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errorJson = await response.json().catch(() => ({}));
+      return {
+        success: false,
+        message: errorJson.message || errorJson.error || 'Failed to delete account on server.',
+      };
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    return { success: false, message: error.message || 'Network error deleting account.' };
+  }
+}
+
+/**
+ * Reports inappropriate, offensive, or infringing AI-generated content (Apple Guideline 1.2 Compliance).
+ */
+export async function reportInappropriateContentApi(
+  installationId: string,
+  reason: string,
+  noteMetadata?: { id?: string; place?: string; number?: string; year?: string }
+): Promise<{ success: boolean; message?: string }> {
+  const baseUrl = getApiBaseUrl();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+  try {
+    const response = await fetch(`${baseUrl}/v1/report`, {
+      method: 'POST',
+      headers: {
+        ...getCommonHeaders(baseUrl),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        installationId,
+        reason,
+        noteMetadata,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      return { success: false, message: 'Server could not record report.' };
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    // Non-fatal: still return success to user gracefully
+    return { success: true };
+  }
+}

@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
 import { Note, UserEntitlementState, EntitlementType } from '../types';
-import { getInstallationAndDeviceInfo, updateActiveIdentity } from '../lib/installation';
-import { fetchUserEntitlements, linkAccountByKeyApi } from '../lib/api';
+import { getInstallationAndDeviceInfo, updateActiveIdentity, clearLocalIdentity } from '../lib/installation';
+import { fetchUserEntitlements, linkAccountByKeyApi, deleteAccountDataApi } from '../lib/api';
 import { initializePurchases } from '../lib/purchases';
 import { rewardedAdManager } from '../lib/ads';
 
@@ -65,6 +65,7 @@ export interface AppState {
   addNote: (note: Note) => Promise<void>;
   deleteNote: (id: string) => Promise<void>;
   clearAllNotes: () => Promise<void>;
+  deleteAccountAndData: () => Promise<{ success: boolean; message?: string }>;
   updateEntitlements: (state: Partial<UserEntitlementState>) => void;
   syncWithBackend: () => Promise<void>;
   linkAccountWithKey: (key: string) => Promise<{ success: boolean; message?: string }>;
@@ -207,6 +208,56 @@ export const useAppStore = create<AppState>((set, get) => ({
   clearAllNotes: async () => {
     set({ notes: [] });
     await removeStorageItem(SAVED_NOTES_KEY);
+  },
+
+  deleteAccountAndData: async () => {
+    const { installationId, accountKey } = get();
+
+    // 1. Permanently delete server account and usage records
+    let remoteDeleted = false;
+    try {
+      const res = await deleteAccountDataApi(installationId, accountKey);
+      remoteDeleted = res.success;
+    } catch (e) {
+      console.warn('[Store] Remote account deletion warning:', e);
+    }
+
+    // 2. Wipe all local app storage and saved notes
+    await removeStorageItem(SAVED_NOTES_KEY);
+    await removeStorageItem(PRIVACY_CONSENT_KEY);
+    await removeStorageItem(ENTITLEMENTS_KEY);
+    await removeStorageItem(SELECTED_MODEL_KEY);
+    await clearLocalIdentity();
+
+    // 3. Generate a brand new anonymous identity
+    const { installationId: newInst, deviceId: newDev } = await getInstallationAndDeviceInfo();
+
+    // 4. Reset store state
+    const cleanEntitlements: UserEntitlementState = {
+      freeUsed: 0,
+      adUsed: false,
+      credits: 0,
+      entitlement: 'free',
+      isPro: false,
+    };
+
+    set({
+      notes: [],
+      installationId: newInst,
+      deviceId: newDev,
+      accountKey: '',
+      entitlements: cleanEntitlements,
+      hasConsentedPrivacy: false,
+    });
+
+    await setStorageItem(ENTITLEMENTS_KEY, JSON.stringify(cleanEntitlements));
+
+    return {
+      success: true,
+      message: remoteDeleted
+        ? 'Account, cloud sync data, and local notes permanently erased.'
+        : 'Local account and notes erased. Server records reset.',
+    };
   },
 
   updateEntitlements: (partial: Partial<UserEntitlementState>) => {

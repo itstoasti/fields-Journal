@@ -11766,6 +11766,15 @@ async function initDb() {
       );
     `);
     await client.execute(`
+      CREATE TABLE IF NOT EXISTS reports (
+        id TEXT PRIMARY KEY,
+        installation_id TEXT,
+        reason TEXT,
+        note_metadata TEXT,
+        created_at TEXT NOT NULL
+      );
+    `);
+    await client.execute(`
       UPDATE users 
       SET is_developer = 1 
       WHERE device_id IN ('android_fc341bad05cf8c5a', 'dev_ygv47mz4tj2x5zw31z1ez4gz')
@@ -12002,6 +12011,29 @@ async function linkAccountByKey(currentInstallationId, rawAccountKey, deviceId) 
     });
   }
   return targetUser;
+}
+async function deleteUserAccount(installationId, accountKey) {
+  if (accountKey && accountKey.trim().length > 0) {
+    const normalizedKey = accountKey.trim().toUpperCase();
+    await client.execute({
+      sql: "DELETE FROM users WHERE UPPER(account_key) = ? OR installation_id = ?",
+      args: [normalizedKey, installationId]
+    });
+  } else {
+    await client.execute({
+      sql: "DELETE FROM users WHERE installation_id = ?",
+      args: [installationId]
+    });
+  }
+  return true;
+}
+async function logContentReport(installationId, reason, noteMetadata) {
+  const id = `report_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  await client.execute({
+    sql: "INSERT INTO reports (id, installation_id, reason, note_metadata, created_at) VALUES (?, ?, ?, ?, ?)",
+    args: [id, installationId, reason, noteMetadata ? JSON.stringify(noteMetadata) : null, now]
+  });
 }
 function determineEntitlement(user) {
   if (user.is_pro) {
@@ -13970,6 +14002,33 @@ app.post("/v1/account/link", async (c) => {
     }
     console.error("[Account Link] Error:", err);
     return c.json({ error: "LINK_ERROR", message: err.message || "Failed to link account key." }, 400);
+  }
+});
+app.post("/v1/account/delete", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { installationId, accountKey } = body;
+    if (!installationId) {
+      return c.json({ error: "MISSING_INSTALLATION_ID", message: "installationId is required" }, 400);
+    }
+    await deleteUserAccount(installationId, accountKey);
+    console.log(`[Account Delete] Permanently deleted account for installation=${installationId}, key=${accountKey || "none"}`);
+    return c.json({ success: true, message: "Account and associated server records permanently deleted." });
+  } catch (err) {
+    console.error("[Account Delete] Error:", err);
+    return c.json({ error: "DELETE_ERROR", message: err.message || "Failed to delete account." }, 500);
+  }
+});
+app.post("/v1/report", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { installationId, reason, noteMetadata } = body;
+    await logContentReport(installationId || "anonymous", reason || "inappropriate_output", noteMetadata);
+    console.log(`[Content Report] Flagged output report received from installation=${installationId}: ${reason || "unspecified"}`);
+    return c.json({ success: true, message: "Report received and queued for review." });
+  } catch (err) {
+    console.error("[Content Report] Error:", err);
+    return c.json({ error: "REPORT_ERROR", message: err.message || "Failed to log report." }, 500);
   }
 });
 var keywordRateLimitMap = /* @__PURE__ */ new Map();

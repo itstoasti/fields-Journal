@@ -125,6 +125,16 @@ export async function initDb(): Promise<void> {
       );
     `);
 
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS reports (
+        id TEXT PRIMARY KEY,
+        installation_id TEXT,
+        reason TEXT,
+        note_metadata TEXT,
+        created_at TEXT NOT NULL
+      );
+    `);
+
     // Automatically tag known developer devices as internal
     await client.execute(`
       UPDATE users 
@@ -428,6 +438,41 @@ export async function linkAccountByKey(
   }
 
   return targetUser;
+}
+
+/**
+ * Permanently deletes user record and associated identity data (Apple Guideline 5.1.1(v) Compliance).
+ */
+export async function deleteUserAccount(installationId: string, accountKey?: string): Promise<boolean> {
+  if (accountKey && accountKey.trim().length > 0) {
+    const normalizedKey = accountKey.trim().toUpperCase();
+    await client.execute({
+      sql: 'DELETE FROM users WHERE UPPER(account_key) = ? OR installation_id = ?',
+      args: [normalizedKey, installationId],
+    });
+  } else {
+    await client.execute({
+      sql: 'DELETE FROM users WHERE installation_id = ?',
+      args: [installationId],
+    });
+  }
+  return true;
+}
+
+/**
+ * Logs user content reports for inappropriate or offensive outputs (Apple Guideline 1.2 Compliance).
+ */
+export async function logContentReport(
+  installationId: string,
+  reason: string,
+  noteMetadata?: any
+): Promise<void> {
+  const id = `report_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const now = new Date().toISOString();
+  await client.execute({
+    sql: 'INSERT INTO reports (id, installation_id, reason, note_metadata, created_at) VALUES (?, ?, ?, ?, ?)',
+    args: [id, installationId, reason, noteMetadata ? JSON.stringify(noteMetadata) : null, now],
+  });
 }
 
 export function determineEntitlement(user: UserRecord): EntitlementStatus {

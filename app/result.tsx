@@ -18,6 +18,7 @@ import { PaperContainer, TypewriterText, StampButton, FieldAlert } from '../src/
 import { colors, layout, spacing } from '../src/theme';
 import { saveToDeviceGallery } from '../src/lib/image';
 import { useAppStore } from '../src/store/useAppStore';
+import { reportInappropriateContentApi } from '../src/lib/api';
 import { Note } from '../src/types';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -36,6 +37,7 @@ export default function ResultScreen() {
 
   const notes = useAppStore((state) => state.notes);
   const deleteNote = useAppStore((state) => state.deleteNote);
+  const installationId = useAppStore((state) => state.installationId);
 
   // Build the array of notes for swipeable horizontal carousel
   const displayNotes: Note[] = useMemo(() => {
@@ -180,6 +182,34 @@ export default function ResultScreen() {
     router.replace((Platform.OS === 'web' ? '/app' : '/') as any);
   };
 
+  const handleReportPress = () => {
+    FieldAlert.alert(
+      'Report Image',
+      'If this AI-generated note contains inappropriate, offensive, or infringing imagery, you can flag it for review.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Report Output',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await reportInappropriateContentApi(installationId || 'unknown', 'inappropriate_output', {
+                id: activeNote.id,
+                place: activeNote.place,
+                number: activeNote.number,
+                year: activeNote.year,
+              });
+            } catch {}
+            FieldAlert.alert(
+              'Report Submitted',
+              'Thank you for keeping Fields safe. This result has been reported for review.'
+            );
+          },
+        },
+      ]
+    );
+  };
+
   const handleDeletePress = () => {
     FieldAlert.alert(
       'Delete Field Note?',
@@ -231,15 +261,27 @@ export default function ResultScreen() {
           </TypewriterText>
         </View>
 
-        <Pressable
-          onPress={handleDeletePress}
-          style={styles.deleteButton}
-          hitSlop={14}
-          accessibilityRole="button"
-          accessibilityLabel="Delete note"
-        >
-          <Ionicons name="trash-outline" size={22} color={colors.oxblood} />
-        </Pressable>
+        <View style={styles.topBarRight}>
+          <Pressable
+            onPress={handleReportPress}
+            style={styles.headerIconButton}
+            hitSlop={14}
+            accessibilityRole="button"
+            accessibilityLabel="Report inappropriate image"
+          >
+            <Ionicons name="flag-outline" size={19} color={colors.inkMuted} />
+          </Pressable>
+
+          <Pressable
+            onPress={handleDeletePress}
+            style={styles.headerIconButton}
+            hitSlop={14}
+            accessibilityRole="button"
+            accessibilityLabel="Delete note"
+          >
+            <Ionicons name="trash-outline" size={21} color={colors.oxblood} />
+          </Pressable>
+        </View>
       </View>
 
       {/* Main Horizontal Swipeable FlatList */}
@@ -388,10 +430,15 @@ const styles = StyleSheet.create({
   titleBox: {
     alignItems: 'center',
   },
-  deleteButton: {
-    width: 44,
+  topBarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  headerIconButton: {
+    width: 38,
     height: 44,
-    alignItems: 'flex-end',
+    alignItems: 'center',
     justifyContent: 'center',
   },
   posterWrapper: {

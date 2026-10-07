@@ -225,3 +225,25 @@ export async function getInstallationAndDeviceInfo(): Promise<{
   ]);
   return { installationId, deviceId };
 }
+
+/**
+ * Permanently removes all stored identity keys from device storage.
+ */
+export async function clearLocalIdentity(): Promise<void> {
+  if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+    localStorage.removeItem(INSTALLATION_KEY);
+    localStorage.removeItem(PERSISTENT_DEVICE_KEY);
+    localStorage.removeItem(ACCOUNT_KEY);
+    return;
+  }
+
+  try {
+    await SecureStore.deleteItemAsync(INSTALLATION_KEY);
+  } catch {}
+  try {
+    await SecureStore.deleteItemAsync(PERSISTENT_DEVICE_KEY);
+  } catch {}
+  try {
+    await SecureStore.deleteItemAsync(ACCOUNT_KEY);
+  } catch {}
+}

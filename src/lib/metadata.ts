@@ -25,25 +25,22 @@ async function reverseGeocode(latitude: number, longitude: number): Promise<{
   // 1. Native geocoder (on-device, zero latency)
   if (Platform.OS !== 'web') {
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        const results = await Location.reverseGeocodeAsync({ latitude, longitude });
-        if (results && results.length > 0) {
-          const item = results[0];
-          const city = item.city || item.subregion || '';
-          const district = item.district || item.name || '';
-          const region = item.region || '';
-          const country = item.country || '';
+      const results = await Location.reverseGeocodeAsync({ latitude, longitude });
+      if (results && results.length > 0) {
+        const item = results[0];
+        const city = item.city || item.subregion || '';
+        const district = item.district || item.name || '';
+        const region = item.region || '';
+        const country = item.country || '';
 
-          const place = formatPlace(city, district, region, country);
-          if (place) {
-            console.log(`[Metadata] ✅ Native geocode → ${place}`);
-            return { place, city, district, region, country };
-          }
+        const place = formatPlace(city, district, region, country);
+        if (place) {
+          console.log(`[Metadata] ✅ Native geocode → ${place}`);
+          return { place, city, district, region, country };
         }
       }
     } catch (err) {
-      console.warn('[Metadata] Native geocode failed:', err);
+      console.warn('[Metadata] Native geocode failed, falling back to OSM:', err);
     }
   }
 

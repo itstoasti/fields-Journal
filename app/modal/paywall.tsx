@@ -424,7 +424,7 @@ export default function PaywallModal() {
             <View style={styles.legalLinksRow}>
               <Pressable onPress={handleRestore} disabled={isRestoring}>
                 <TypewriterText size="xs" color={colors.inkMuted} style={styles.legalLink}>
-                  Restore Purchases
+                  Restore
                 </TypewriterText>
               </Pressable>
               <TypewriterText size="xs" color={colors.inkMuted} style={styles.legalDot}>
@@ -433,6 +433,14 @@ export default function PaywallModal() {
               <Pressable onPress={() => Linking.openURL(`${getApiBaseUrl()}/terms`)}>
                 <TypewriterText size="xs" color={colors.inkMuted} style={styles.legalLink}>
                   Terms of Use
+                </TypewriterText>
+              </Pressable>
+              <TypewriterText size="xs" color={colors.inkMuted} style={styles.legalDot}>
+                ·
+              </TypewriterText>
+              <Pressable onPress={() => Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')}>
+                <TypewriterText size="xs" color={colors.inkMuted} style={styles.legalLink}>
+                  Apple EULA
                 </TypewriterText>
               </Pressable>
               <TypewriterText size="xs" color={colors.inkMuted} style={styles.legalDot}>
@@ -774,6 +782,8 @@ const styles = StyleSheet.create({
   },
   legalLinksRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
     alignItems: 'center',
     gap: spacing.xs,
   },
