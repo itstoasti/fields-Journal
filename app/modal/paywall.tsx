@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -8,15 +8,13 @@ import {
   Linking,
   ScrollView,
   Image,
-  NativeSyntheticEvent,
-  NativeScrollEvent,
   Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { TypewriterText, StampButton } from '../../src/components';
-import { colors, layout, spacing } from '../../src/theme';
+import { colors, fonts, layout, spacing } from '../../src/theme';
 import { useAppStore } from '../../src/store/useAppStore';
 import {
   buyLifetimePackage,
@@ -27,52 +25,30 @@ import { syncPurchasedCredits, getApiBaseUrl } from '../../src/lib/api';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const MODAL_PADDING = spacing.lg;
-const CARD_WIDTH = Math.min(SCREEN_WIDTH - MODAL_PADDING * 2 - 16, 320);
-const CARD_GAP = 12;
 
-// Authentic sample Field Note outputs bundled locally
-const SAMPLE_PLATES = [
-  {
-    id: 'kyoto',
-    title: 'Kyoto Old District',
-    number: 'No. 01',
-    description: '3 spot inks · Pagoda linocut · Aged paper',
-    image: require('../../assets/posters/poster_kyoto.jpg'),
-  },
-  {
-    id: 'yosemite',
-    title: 'Yosemite Valley',
-    number: 'No. 02',
-    description: 'Pine green & terracotta · Half Dome stamp',
-    image: require('../../assets/posters/poster_yosemite.jpg'),
-  },
-  {
-    id: 'amalfi',
-    title: 'Amalfi Coast',
-    number: 'No. 03',
-    description: 'Cobalt & ochre · Positano cliffside print',
-    image: require('../../assets/posters/poster_amalfi.jpg'),
-  },
-];
+// Card dimensions for the fanned-out fine-art hero
+const CARD_WIDTH = Math.min(SCREEN_WIDTH * 0.52, 205);
+const CARD_HEIGHT = CARD_WIDTH * (3 / 4);
+
+const POSTER_KYOTO = require('../../assets/posters/poster_kyoto.jpg');
+const POSTER_YOSEMITE = require('../../assets/posters/poster_yosemite.jpg');
+const POSTER_AMALFI = require('../../assets/posters/poster_amalfi.jpg');
 
 export default function PaywallModal() {
   const router = useRouter();
   const installationId = useAppStore((state) => state.installationId);
   const updateEntitlements = useAppStore((state) => state.updateEntitlements);
 
-  const [activeSlide, setActiveSlide] = useState(0);
+  const [topCard, setTopCard] = useState<'kyoto' | 'yosemite' | 'amalfi'>('kyoto');
   const [selectedPlan, setSelectedPlan] = useState<'lifetime' | 'pack20'>('lifetime');
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
 
-  const carouselRef = useRef<ScrollView>(null);
-
-  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const offsetX = event.nativeEvent.contentOffset.x;
-    const index = Math.round(offsetX / (CARD_WIDTH + CARD_GAP));
-    if (index >= 0 && index < SAMPLE_PLATES.length && index !== activeSlide) {
-      setActiveSlide(index);
-    }
+  const handleCardTap = (card: 'kyoto' | 'yosemite' | 'amalfi') => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch {}
+    setTopCard(card);
   };
 
   const handleSelectPlan = (plan: 'lifetime' | 'pack20') => {
@@ -186,16 +162,9 @@ export default function PaywallModal() {
             <Ionicons name="close" size={20} color={colors.inkSecondary} />
           </Pressable>
 
-          <View style={styles.titleGroup}>
-            <TypewriterText size="sm" bold color={colors.charcoal} letterSpacing={2}>
-              FIELD NOTES
-            </TypewriterText>
-            <View style={styles.proBadge}>
-              <TypewriterText size="xs" bold color={colors.oxblood}>
-                PRO ARCHIVE
-              </TypewriterText>
-            </View>
-          </View>
+          <TypewriterText size="sm" bold color={colors.charcoal} letterSpacing={2}>
+            EXPAND YOUR JOURNAL
+          </TypewriterText>
 
           <Pressable
             onPress={handleRestore}
@@ -205,7 +174,7 @@ export default function PaywallModal() {
             accessibilityLabel="Restore purchases"
           >
             <TypewriterText size="xs" color={colors.inkSecondary} style={styles.restoreLink}>
-              {isRestoring ? 'Checking...' : 'Restore'}
+              {isRestoring ? 'Restoring...' : 'Restore'}
             </TypewriterText>
           </Pressable>
         </View>
@@ -217,114 +186,118 @@ export default function PaywallModal() {
           showsVerticalScrollIndicator={false}
           bounces={true}
         >
-          {/* Hero Exhibition Carousel */}
-          <View style={styles.heroBox}>
-            <View style={styles.heroHeaderRow}>
-              <TypewriterText size="xs" color={colors.inkSecondary} bold letterSpacing={1}>
-                ACTUAL FIELD NOTE OUTPUTS
-              </TypewriterText>
-              <View style={styles.counterPill}>
-                <TypewriterText size="xs" bold color={colors.oxblood}>
-                  {activeSlide + 1} OF {SAMPLE_PLATES.length}
-                </TypewriterText>
-              </View>
-            </View>
-
-            {/* Horizontal Snap Carousel */}
-            <ScrollView
-              ref={carouselRef}
-              horizontal
-              pagingEnabled={false}
-              snapToInterval={CARD_WIDTH + CARD_GAP}
-              snapToAlignment="center"
-              decelerationRate="fast"
-              showsHorizontalScrollIndicator={false}
-              onScroll={handleScroll}
-              scrollEventThrottle={16}
-              contentContainerStyle={styles.carouselContainer}
+          {/* Fanned-Out Fine-Art Prints Hero */}
+          <View style={styles.fanHeroContainer}>
+            {/* Left Card: Yosemite Valley (Rotated -8deg) */}
+            <Pressable
+              onPress={() => handleCardTap('yosemite')}
+              style={[
+                styles.fanCard,
+                styles.fanCardLeft,
+                { zIndex: topCard === 'yosemite' ? 30 : 10 },
+              ]}
             >
-              {SAMPLE_PLATES.map((item, idx) => (
-                <View
-                  key={item.id}
-                  style={[
-                    styles.plateCard,
-                    idx === SAMPLE_PLATES.length - 1 && { marginRight: 0 },
-                  ]}
-                >
-                  <Image source={item.image} style={styles.plateImage} resizeMode="contain" />
-                </View>
-              ))}
-            </ScrollView>
+              <Image source={POSTER_YOSEMITE} style={styles.cardImage} resizeMode="cover" />
+            </Pressable>
 
-            {/* Carousel Pagination & Caption */}
-            <View style={styles.carouselFooter}>
-              <View style={styles.dotsRow}>
-                {SAMPLE_PLATES.map((_, i) => (
-                  <View
-                    key={i}
-                    style={[
-                      styles.dot,
-                      i === activeSlide ? styles.activeDot : styles.inactiveDot,
-                    ]}
-                  />
-                ))}
-              </View>
-              <TypewriterText size="xs" color={colors.inkSecondary}>
-                {SAMPLE_PLATES[activeSlide].title} · {SAMPLE_PLATES[activeSlide].number}
+            {/* Right Card: Amalfi Coast (Rotated +8deg) */}
+            <Pressable
+              onPress={() => handleCardTap('amalfi')}
+              style={[
+                styles.fanCard,
+                styles.fanCardRight,
+                { zIndex: topCard === 'amalfi' ? 30 : 20 },
+              ]}
+            >
+              <Image source={POSTER_AMALFI} style={styles.cardImage} resizeMode="cover" />
+            </Pressable>
+
+            {/* Center Card: Kyoto Old District */}
+            <Pressable
+              onPress={() => handleCardTap('kyoto')}
+              style={[
+                styles.fanCard,
+                styles.fanCardCenter,
+                { zIndex: topCard === 'kyoto' ? 30 : 25 },
+              ]}
+            >
+              <Image source={POSTER_KYOTO} style={styles.cardImage} resizeMode="cover" />
+            </Pressable>
+          </View>
+
+          {/* Sub-badge */}
+          <View style={styles.subBadgeRow}>
+            <View style={styles.subBadgePill}>
+              <TypewriterText size="xs" bold color={colors.charcoal} letterSpacing={1}>
+                ✦ 4:3 FINE ART DUAL-PLATES · HAND-PRESSED ✦
               </TypewriterText>
             </View>
           </View>
 
-          {/* Headline & Value Hook */}
+          {/* Headline & Editorial Hook */}
           <View style={styles.headlineBox}>
-            <TypewriterText size="xl" bold color={colors.charcoal} letterSpacing={1.5} style={styles.headline}>
-              PRESERVE EVERY JOURNEY
+            <TypewriterText size="xl" bold color={colors.charcoal} style={styles.headline}>
+              Every Journey Deserves a Timeless Print
             </TypewriterText>
-            <TypewriterText size="sm" color={colors.inkSecondary} style={styles.subtitle}>
-              Turn photos into hand-pressed 4:3 dual-panel field plates with custom carved rubber stamp art.
+            <TypewriterText size="xs" color={colors.inkSecondary} style={styles.subtitle}>
+              Transform your travel photos into bespoke hand-pressed linocut field notes.
             </TypewriterText>
           </View>
 
-          {/* Value Props Box */}
-          <View style={styles.featuresBox}>
+          {/* Feature Value Props (Stamp Badges) */}
+          <View style={styles.featuresList}>
             <View style={styles.featureItem}>
-              <TypewriterText size="sm" bold color={colors.oxblood} style={styles.featureBullet}>
-                ✦
-              </TypewriterText>
+              <View style={styles.stampIconBox}>
+                <TypewriterText size="xs">📜</TypewriterText>
+              </View>
               <View style={styles.featureTextWrapper}>
                 <TypewriterText size="xs" bold color={colors.charcoal}>
-                  Bespoke Carved Stamp per Photo
+                  Unlimited Hand-Pressed Notes
                 </TypewriterText>
-                <TypewriterText size="xs" color={colors.inkSecondary} style={styles.featureDesc}>
-                  Every scene extracts 2–4 spot inks into a custom linocut rubber stamp.
+                <TypewriterText size="xs" color={colors.inkSecondary} style={styles.featureSub}>
+                  Press unlimited travel memories without credit limits.
                 </TypewriterText>
               </View>
             </View>
 
             <View style={styles.featureItem}>
-              <TypewriterText size="sm" bold color={colors.oxblood} style={styles.featureBullet}>
-                ✦
-              </TypewriterText>
+              <View style={styles.stampIconBox}>
+                <TypewriterText size="xs">🖼️</TypewriterText>
+              </View>
               <View style={styles.featureTextWrapper}>
                 <TypewriterText size="xs" bold color={colors.charcoal}>
-                  Archival 4:3 Fine Art Dual-Plate
+                  Archival 4K Print Exports
                 </TypewriterText>
-                <TypewriterText size="xs" color={colors.inkSecondary} style={styles.featureDesc}>
-                  Preserves your original photo alongside typewriter field notes and entry number.
+                <TypewriterText size="xs" color={colors.inkSecondary} style={styles.featureSub}>
+                  Full 4:3 dual-panel layout ready to frame or export.
                 </TypewriterText>
               </View>
             </View>
 
             <View style={styles.featureItem}>
-              <TypewriterText size="sm" bold color={colors.oxblood} style={styles.featureBullet}>
-                ✦
-              </TypewriterText>
+              <View style={styles.stampIconBox}>
+                <TypewriterText size="xs">🎨</TypewriterText>
+              </View>
               <View style={styles.featureTextWrapper}>
                 <TypewriterText size="xs" bold color={colors.charcoal}>
-                  Zero Subscriptions Ever
+                  Full Spot-Ink Mineral Pigments
                 </TypewriterText>
-                <TypewriterText size="xs" color={colors.inkSecondary} style={styles.featureDesc}>
-                  Pure one-time purchase. No monthly fees, renewals, or surprises.
+                <TypewriterText size="xs" color={colors.inkSecondary} style={styles.featureSub}>
+                  Bespoke carved rubber stamp illustration for each photo.
+                </TypewriterText>
+              </View>
+            </View>
+
+            <View style={styles.featureItem}>
+              <View style={styles.stampIconBox}>
+                <TypewriterText size="xs">🔒</TypewriterText>
+              </View>
+              <View style={styles.featureTextWrapper}>
+                <TypewriterText size="xs" bold color={colors.charcoal}>
+                  Pay Once, Own Forever
+                </TypewriterText>
+                <TypewriterText size="xs" color={colors.inkSecondary} style={styles.featureSub}>
+                  Zero subscriptions. No recurring monthly charges.
                 </TypewriterText>
               </View>
             </View>
@@ -332,7 +305,7 @@ export default function PaywallModal() {
 
           {/* Plan Selection Cards */}
           <View style={styles.plansContainer}>
-            {/* Card 1: Lifetime Collector (Featured) */}
+            {/* Card 1: Lifetime Explorer Pass (Featured) */}
             <Pressable
               style={[
                 styles.planCard,
@@ -343,7 +316,7 @@ export default function PaywallModal() {
               {/* Badge */}
               <View style={styles.bestValueBadge}>
                 <TypewriterText size="xs" bold color="#FFFFFF" letterSpacing={1}>
-                  BEST VALUE · UNLIMITED
+                  BEST VALUE · PAY ONCE
                 </TypewriterText>
               </View>
 
@@ -359,10 +332,10 @@ export default function PaywallModal() {
                   </View>
                   <View style={styles.planInfo}>
                     <TypewriterText size="sm" bold color={colors.charcoal}>
-                      Lifetime Collector
+                      Lifetime Explorer Pass
                     </TypewriterText>
                     <TypewriterText size="xs" color={colors.inkSecondary} style={styles.planSub}>
-                      Unlimited notes forever · Never buy credits
+                      Pay once, own forever · Unlimited notes
                     </TypewriterText>
                   </View>
                 </View>
@@ -423,8 +396,8 @@ export default function PaywallModal() {
             <StampButton
               title={
                 selectedPlan === 'lifetime'
-                  ? 'UNLOCK LIFETIME ACCESS — $29.99'
-                  : 'BUY 20 NOTES PACK — $2.99'
+                  ? 'CLAIM LIFETIME ACCESS — $29.99'
+                  : 'GET 20 FIELD NOTES — $2.99'
               }
               onPress={handleMainCTA}
               variant="primary"
@@ -443,10 +416,15 @@ export default function PaywallModal() {
 
           {/* Legal Footer */}
           <View style={styles.legalFooter}>
-            <TypewriterText size="xs" color={colors.inkMuted} style={styles.legalNotice}>
-              One-time purchase · Family Sharing supported
-            </TypewriterText>
             <View style={styles.legalLinksRow}>
+              <Pressable onPress={handleRestore} disabled={isRestoring}>
+                <TypewriterText size="xs" color={colors.inkMuted} style={styles.legalLink}>
+                  Restore Purchases
+                </TypewriterText>
+              </Pressable>
+              <TypewriterText size="xs" color={colors.inkMuted} style={styles.legalDot}>
+                ·
+              </TypewriterText>
               <Pressable onPress={() => Linking.openURL(`${getApiBaseUrl()}/terms`)}>
                 <TypewriterText size="xs" color={colors.inkMuted} style={styles.legalLink}>
                   Terms of Use
@@ -471,7 +449,7 @@ export default function PaywallModal() {
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(28, 25, 23, 0.72)',
+    backgroundColor: 'rgba(28, 25, 23, 0.75)',
     justifyContent: 'flex-end',
   },
   overlayPress: {
@@ -479,16 +457,16 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     backgroundColor: colors.paper,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: SCREEN_HEIGHT * 0.92,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    maxHeight: SCREEN_HEIGHT * 0.94,
     borderTopWidth: 1,
     borderColor: colors.paperBorder,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 16,
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 20,
     overflow: 'hidden',
   },
   notch: {
@@ -506,8 +484,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: MODAL_PADDING,
     paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.paperBorder,
   },
   closeButton: {
     width: 32,
@@ -517,16 +493,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  titleGroup: {
-    alignItems: 'center',
-    gap: 2,
-  },
-  proBadge: {
-    backgroundColor: 'rgba(136, 48, 37, 0.1)',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 4,
-  },
   restoreLink: {
     textDecorationLine: 'underline',
   },
@@ -535,120 +501,119 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: MODAL_PADDING,
-    paddingTop: spacing.md,
+    paddingTop: spacing.xs,
     paddingBottom: Platform.OS === 'ios' ? spacing.xxl : spacing.xl,
   },
 
-  // Hero Section
-  heroBox: {
-    backgroundColor: colors.paperDark,
-    borderRadius: 16,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.paperBorder,
-    marginBottom: spacing.md,
-  },
-  heroHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  // Fanned Hero Section
+  fanHeroContainer: {
+    height: 175,
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    justifyContent: 'center',
+    position: 'relative',
+    marginVertical: spacing.xs,
   },
-  counterPill: {
-    backgroundColor: 'rgba(136, 48, 37, 0.12)',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  carouselContainer: {
-    alignItems: 'center',
-    gap: CARD_GAP,
-    paddingVertical: 4,
-  },
-  plateCard: {
+  fanCard: {
+    position: 'absolute',
     width: CARD_WIDTH,
-    aspectRatio: layout.posterAspectRatio,
+    height: CARD_HEIGHT,
     borderRadius: 8,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: colors.paperBorder,
+    borderColor: '#D8CEBE',
     overflow: 'hidden',
-    shadowColor: colors.charcoal,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 4,
   },
-  plateImage: {
+  fanCardLeft: {
+    transform: [{ translateX: -38 }, { translateY: 6 }, { rotate: '-8.5deg' }],
+    shadowColor: colors.charcoal,
+    shadowOffset: { width: -3, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  fanCardRight: {
+    transform: [{ translateX: 38 }, { translateY: 6 }, { rotate: '8.5deg' }],
+    shadowColor: colors.charcoal,
+    shadowOffset: { width: 3, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  fanCardCenter: {
+    width: CARD_WIDTH + 10,
+    height: (CARD_WIDTH + 10) * (3 / 4),
+    transform: [{ translateX: 0 }, { translateY: -4 }, { rotate: '0deg' }],
+    borderWidth: 1.5,
+    borderColor: '#C8BCAB',
+    shadowColor: colors.charcoal,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  cardImage: {
     width: '100%',
     height: '100%',
   },
-  carouselFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+
+  subBadgeRow: {
     alignItems: 'center',
-    marginTop: spacing.sm,
-    paddingTop: 4,
+    marginBottom: spacing.sm,
   },
-  dotsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  dot: {
-    height: 5,
-    borderRadius: 2.5,
-  },
-  activeDot: {
-    width: 20,
-    backgroundColor: colors.charcoal,
-  },
-  inactiveDot: {
-    width: 6,
-    backgroundColor: colors.inkLight,
+  subBadgePill: {
+    backgroundColor: '#E8DFC9',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#D5C8AF',
   },
 
   // Headline
   headlineBox: {
     alignItems: 'center',
-    textAlign: 'center',
     marginBottom: spacing.md,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: spacing.xs,
   },
   headline: {
     textAlign: 'center',
+    fontSize: 22,
+    lineHeight: 28,
     marginBottom: 4,
   },
   subtitle: {
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: 17,
     maxWidth: 320,
   },
 
-  // Features Box
-  featuresBox: {
-    backgroundColor: '#FAF7F0',
-    borderRadius: 12,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.paperBorder,
+  // Features List
+  featuresList: {
     gap: spacing.sm,
     marginBottom: spacing.md,
+    paddingHorizontal: 2,
   },
   featureItem: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
+    alignItems: 'center',
+    gap: spacing.md,
   },
-  featureBullet: {
-    marginTop: 1,
+  stampIconBox: {
+    width: 30,
+    height: 30,
+    borderRadius: 6,
+    backgroundColor: '#E8DFC9',
+    borderWidth: 1,
+    borderColor: '#D2C5AC',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   featureTextWrapper: {
     flex: 1,
     gap: 1,
   },
-  featureDesc: {
-    lineHeight: 16,
+  featureSub: {
+    lineHeight: 15,
   },
 
   // Plans Container
@@ -657,19 +622,19 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   planCard: {
-    borderRadius: 14,
+    borderRadius: 16,
     padding: spacing.md,
     position: 'relative',
   },
   planCardSelected: {
     backgroundColor: '#FAF6EE',
     borderWidth: 2,
-    borderColor: colors.charcoal,
-    shadowColor: colors.charcoal,
+    borderColor: colors.oxblood,
+    shadowColor: colors.oxblood,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 3,
   },
   planCardUnselected: {
     backgroundColor: '#FAF7F0',
@@ -682,9 +647,14 @@ const styles = StyleSheet.create({
     top: -10,
     right: 14,
     backgroundColor: colors.oxblood,
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: 12,
+    shadowColor: colors.oxblood,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
   },
   planContentRow: {
     flexDirection: 'row',
@@ -707,13 +677,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   radioCircleActive: {
-    borderColor: colors.charcoal,
+    borderColor: colors.oxblood,
   },
   radioInnerDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: colors.charcoal,
+    backgroundColor: colors.oxblood,
   },
   planInfo: {
     flex: 1,
@@ -729,10 +699,11 @@ const styles = StyleSheet.create({
   // Actions
   actionSection: {
     gap: spacing.xs,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
   ctaButton: {
-    minHeight: 52,
+    minHeight: 54,
+    backgroundColor: colors.oxblood,
   },
   dismissRow: {
     alignItems: 'center',
@@ -745,11 +716,7 @@ const styles = StyleSheet.create({
   // Legal
   legalFooter: {
     alignItems: 'center',
-    gap: 4,
     marginTop: spacing.xs,
-  },
-  legalNotice: {
-    textAlign: 'center',
   },
   legalLinksRow: {
     flexDirection: 'row',
