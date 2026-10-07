@@ -259,31 +259,7 @@ export default function PaywallModal() {
               </TypewriterText>
             </View>
 
-            {/* Benefit 1: Unlimited */}
-            <View style={styles.benefitRow}>
-              <View style={styles.iconBadge}>
-                <Ionicons name="infinite" size={18} color={colors.oxblood} />
-              </View>
-              <View style={styles.benefitTextCol}>
-                <View style={styles.benefitTitleRow}>
-                  <TypewriterText size="xs" bold color={colors.charcoal}>
-                    Unlimited Creations for Life
-                  </TypewriterText>
-                  <View style={styles.tagPill}>
-                    <TypewriterText size="xs" bold color="#FFFFFF">
-                      UNLIMITED
-                    </TypewriterText>
-                  </View>
-                </View>
-                <TypewriterText size="xs" color={colors.inkSecondary} style={styles.benefitCopy}>
-                  Never ration credits again. Press entire vacations, weekend road trips, and daily adventures without limits.
-                </TypewriterText>
-              </View>
-            </View>
-
-            <View style={styles.benefitDivider} />
-
-            {/* Benefit 2: Bespoke Linocut */}
+            {/* Benefit 1: Bespoke Linocut */}
             <View style={styles.benefitRow}>
               <View style={styles.iconBadge}>
                 <Ionicons name="color-palette" size={17} color={colors.oxblood} />
@@ -300,7 +276,7 @@ export default function PaywallModal() {
 
             <View style={styles.benefitDivider} />
 
-            {/* Benefit 3: Archival Prints */}
+            {/* Benefit 2: Archival Prints */}
             <View style={styles.benefitRow}>
               <View style={styles.iconBadge}>
                 <Ionicons name="image" size={17} color={colors.oxblood} />
@@ -317,7 +293,7 @@ export default function PaywallModal() {
 
             <View style={styles.benefitDivider} />
 
-            {/* Benefit 4: Zero Subscriptions */}
+            {/* Benefit 3: Zero Subscriptions */}
             <View style={styles.benefitRow}>
               <View style={styles.iconBadge}>
                 <Ionicons name="shield-checkmark" size={17} color={colors.oxblood} />
@@ -489,7 +465,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.paper,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    maxHeight: SCREEN_HEIGHT * 0.94,
+    maxHeight: SCREEN_HEIGHT * 0.96,
     borderTopWidth: 1,
     borderColor: colors.paperBorder,
     shadowColor: '#000',
@@ -532,16 +508,16 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: MODAL_PADDING,
     paddingTop: spacing.xs,
-    paddingBottom: Platform.OS === 'ios' ? spacing.xxl : spacing.xl,
+    paddingBottom: Platform.OS === 'ios' ? spacing.sm + 2 : spacing.sm,
   },
 
   // Fanned Hero Section
   fanHeroContainer: {
-    height: 175,
+    height: 160,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    marginVertical: spacing.xs,
+    marginVertical: 2,
   },
   fanCard: {
     position: 'absolute',
@@ -692,13 +668,13 @@ const styles = StyleSheet.create({
   benefitDivider: {
     height: 1,
     backgroundColor: '#F3ECE0',
-    marginVertical: spacing.sm,
+    marginVertical: 6,
   },
 
   // Plans Container
   plansContainer: {
     gap: spacing.sm,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   planCard: {
     borderRadius: 16,
