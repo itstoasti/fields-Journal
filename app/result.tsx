@@ -6,7 +6,6 @@ import {
   Dimensions,
   Pressable,
   Animated,
-  Modal,
   FlatList,
   NativeSyntheticEvent,
   NativeScrollEvent,
@@ -15,7 +14,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { Ionicons } from '@expo/vector-icons';
-import { PaperContainer, TypewriterText, StampButton } from '../src/components';
+import { PaperContainer, TypewriterText, StampButton, FieldAlert } from '../src/components';
 import { colors, layout, spacing } from '../src/theme';
 import { saveToDeviceGallery } from '../src/lib/image';
 import { useAppStore } from '../src/store/useAppStore';
@@ -102,7 +101,6 @@ export default function ResultScreen() {
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('POSTER SAVED TO GALLERY');
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const toastAnim = useRef(new Animated.Value(0)).current;
 
   // Scroll to initial index on mount
@@ -182,8 +180,22 @@ export default function ResultScreen() {
     router.replace((Platform.OS === 'web' ? '/app' : '/') as any);
   };
 
+  const handleDeletePress = () => {
+    FieldAlert.alert(
+      'Delete Field Note?',
+      'This will remove this record from your local notebook.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: handleConfirmDelete,
+        },
+      ]
+    );
+  };
+
   const handleConfirmDelete = async () => {
-    setShowDeleteModal(false);
     if (activeNote.id) {
       await deleteNote(activeNote.id);
     }
@@ -220,7 +232,7 @@ export default function ResultScreen() {
         </View>
 
         <Pressable
-          onPress={() => setShowDeleteModal(true)}
+          onPress={handleDeletePress}
           style={styles.deleteButton}
           hitSlop={14}
           accessibilityRole="button"
@@ -354,40 +366,6 @@ export default function ResultScreen() {
           />
         </View>
       </View>
-
-      {/* Custom Branded Delete Confirmation Modal */}
-      <Modal
-        visible={showDeleteModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowDeleteModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <TypewriterText size="md" bold color={colors.charcoal} style={{ marginBottom: spacing.xs }}>
-              DELETE FIELD NOTE?
-            </TypewriterText>
-            <TypewriterText size="xs" color={colors.inkSecondary} style={{ marginBottom: spacing.lg, textAlign: 'center' }}>
-              This will remove this record from your local notebook.
-            </TypewriterText>
-
-            <View style={styles.modalButtonsRow}>
-              <StampButton
-                title="Cancel"
-                onPress={() => setShowDeleteModal(false)}
-                variant="secondary"
-                style={styles.modalBtn}
-              />
-              <StampButton
-                title="Delete"
-                onPress={handleConfirmDelete}
-                variant="danger"
-                style={styles.modalBtn}
-              />
-            </View>
-          </View>
-        </View>
-      </Modal>
     </PaperContainer>
   );
 }
@@ -495,30 +473,6 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   actionBtn: {
-    flex: 1,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(44, 36, 32, 0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
-  },
-  modalCard: {
-    width: '100%',
-    backgroundColor: colors.paper,
-    borderWidth: 2,
-    borderColor: colors.charcoal,
-    borderRadius: 8,
-    padding: spacing.xl,
-    alignItems: 'center',
-  },
-  modalButtonsRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    width: '100%',
-  },
-  modalBtn: {
     flex: 1,
   },
 });

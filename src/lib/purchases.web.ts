@@ -1,4 +1,4 @@
-import { Alert } from 'react-native';
+import { FieldAlert } from '../components/FieldAlert';
 
 export const REVENUECAT_API_KEY =
   process.env.EXPO_PUBLIC_REVENUECAT_API_KEY || 'test_kejmcZYQWmrefaSizVLCGOzPWDB';
@@ -97,7 +97,7 @@ export async function presentRevenueCatPaywall(): Promise<{
   isPro: boolean;
 }> {
   console.log('[Purchases Web] Simulating presentRevenueCatPaywall');
-  Alert.alert('RevenueCat Paywall', 'Simulating RevenueCat Pro subscription on Web / Mock.');
+  FieldAlert.alert('RevenueCat Paywall', 'Simulating RevenueCat Pro subscription on Web / Mock.');
   mockIsPro = true;
   const info = await getCustomerInfo();
   if (onCustomerInfoCallback) {
@@ -117,7 +117,7 @@ export async function presentRevenueCatPaywallIfNeeded(): Promise<{
 }
 
 export async function presentCustomerCenter(): Promise<void> {
-  Alert.alert(
+  FieldAlert.alert(
     'Customer Center',
     'Simulating RevenueCat Customer Center. Manage subscriptions, billing, and cancellations.'
   );

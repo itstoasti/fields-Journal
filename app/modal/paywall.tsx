@@ -3,7 +3,6 @@ import {
   View,
   StyleSheet,
   Pressable,
-  Alert,
   Dimensions,
   Linking,
   ScrollView,
@@ -13,7 +12,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { TypewriterText, StampButton } from '../../src/components';
+import { TypewriterText, StampButton, FieldAlert } from '../../src/components';
 import { colors, fonts, layout, spacing } from '../../src/theme';
 import { useAppStore } from '../../src/store/useAppStore';
 import {
@@ -65,17 +64,17 @@ export default function PaywallModal() {
       const { success, isPro, error } = await buyLifetimePackage();
       if (isPro || success) {
         updateEntitlements({ isPro: true, entitlement: 'pro' });
-        Alert.alert(
+        FieldAlert.alert(
           'Fields Pro Unlocked',
           'Thank you for supporting Fields! You now have lifetime unlimited field note stamps.',
           [{ text: 'Start Creating', onPress: () => router.back() }]
         );
       } else if (error !== 'cancelled') {
-        Alert.alert('Purchase', error || 'Unable to complete purchase.');
+        FieldAlert.alert('Purchase', error || 'Unable to complete purchase.');
       }
     } catch (err: any) {
       console.warn('[Paywall] Lifetime purchase error:', err);
-      Alert.alert('Purchase', err?.message || 'Payment failed.');
+      FieldAlert.alert('Purchase', err?.message || 'Payment failed.');
     } finally {
       setIsPurchasing(false);
     }
@@ -95,15 +94,15 @@ export default function PaywallModal() {
           result.transactionId
         );
         updateEntitlements(updatedState);
-        Alert.alert('Thank You', '20 Field Note credits have been added to your notebook.', [
+        FieldAlert.alert('Thank You', '20 Field Note credits have been added to your notebook.', [
           { text: 'OK', onPress: () => router.back() },
         ]);
       } else if (result.error !== 'cancelled') {
-        Alert.alert('Purchase', result.error || 'Unable to complete purchase.');
+        FieldAlert.alert('Purchase', result.error || 'Unable to complete purchase.');
       }
     } catch (err: any) {
       console.warn('[Paywall] Purchase error:', err);
-      Alert.alert('Purchase', err.message || 'Payment failed.');
+      FieldAlert.alert('Purchase', err.message || 'Payment failed.');
     } finally {
       setIsPurchasing(false);
     }
@@ -123,16 +122,16 @@ export default function PaywallModal() {
       const result = await restorePurchases();
       if (result.isPro) {
         updateEntitlements({ isPro: true, entitlement: 'pro' });
-        Alert.alert('Purchases Restored', 'Your Fields Pro access has been verified and restored.', [
+        FieldAlert.alert('Purchases Restored', 'Your Fields Pro access has been verified and restored.', [
           { text: 'OK', onPress: () => router.back() },
         ]);
       } else if (result.success) {
-        Alert.alert('Purchases Restored', 'Purchases checked. No active Pro access found.');
+        FieldAlert.alert('Purchases Restored', 'Purchases checked. No active Pro access found.');
       } else {
-        Alert.alert('Restore Purchases', result.error || 'Could not restore purchases.');
+        FieldAlert.alert('Restore Purchases', result.error || 'Could not restore purchases.');
       }
     } catch (e: any) {
-      Alert.alert('Restore Purchases', e.message || 'Restore failed.');
+      FieldAlert.alert('Restore Purchases', e.message || 'Restore failed.');
     } finally {
       setIsRestoring(false);
     }

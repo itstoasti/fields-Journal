@@ -1,5 +1,6 @@
 import Constants, { ExecutionEnvironment } from 'expo-constants';
-import { Alert, Platform, NativeModules } from 'react-native';
+import { Platform, NativeModules } from 'react-native';
+import { FieldAlert } from '../components/FieldAlert';
 
 export const REVENUECAT_API_KEY =
   process.env.EXPO_PUBLIC_REVENUECAT_API_KEY || 'goog_SIioGMRmaGojibFnWhGHsUJkNkK';
@@ -349,7 +350,7 @@ export async function presentRevenueCatPaywall(): Promise<{
   ) {
     console.log('[Purchases] Presenting development simulated paywall');
     return new Promise((resolve) => {
-      Alert.alert(
+      FieldAlert.alert(
         'Fields Pro (Dev Mode)',
         'In a production store build, this displays the native animated RevenueCat Paywall.\n\nWould you like to simulate activating Fields Pro for testing?',
         [
@@ -447,7 +448,7 @@ export async function presentCustomerCenter(): Promise<void> {
     typeof RevenueCatUI.presentCustomerCenter !== 'function' ||
     !NativeModules?.RNCustomerCenter
   ) {
-    Alert.alert(
+    FieldAlert.alert(
       'Manage Subscription',
       'In a production build, this opens the RevenueCat Customer Center.\n\nSubscribers can also manage or cancel their subscription directly in their Google Play Store or Apple App Store account settings.'
     );
@@ -458,7 +459,7 @@ export async function presentCustomerCenter(): Promise<void> {
     await RevenueCatUI.presentCustomerCenter();
   } catch (err) {
     console.warn('[Purchases] Error presenting Customer Center:', err);
-    Alert.alert(
+    FieldAlert.alert(
       'Manage Subscription',
       'You can manage or cancel your active subscription in your Google Play Store or Apple App Store account settings.'
     );

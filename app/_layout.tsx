@@ -3,7 +3,7 @@ import { View, Image, StyleSheet, Animated, Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useAppStore } from '../src/store/useAppStore';
-import { TypewriterText, PwaInstallBanner } from '../src/components';
+import { TypewriterText, PwaInstallBanner, FieldAlertHost } from '../src/components';
 import { colors, spacing } from '../src/theme';
 
 export default function RootLayout() {
@@ -75,6 +75,9 @@ export default function RootLayout() {
           }}
         />
       </Stack>
+
+      {/* Global Field Notes Artisanal Alert Dialog */}
+      <FieldAlertHost />
 
       {/* PWA iOS Add to Home Screen & Install Prompt */}
       <PwaInstallBanner />

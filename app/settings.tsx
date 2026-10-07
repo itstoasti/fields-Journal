@@ -4,15 +4,15 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  Alert,
   Linking,
   Platform,
   Modal,
   TextInput,
+  Dimensions,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { PaperContainer, TypewriterText, StampButton } from '../src/components';
+import { PaperContainer, TypewriterText, StampButton, FieldAlert } from '../src/components';
 import { colors, fonts, fontSizes, layout, spacing } from '../src/theme';
 import { useAppStore } from '../src/store/useAppStore';
 import {
@@ -49,12 +49,12 @@ export default function SettingsScreen() {
     try {
       await syncWithBackend();
       const current = useAppStore.getState().entitlements;
-      Alert.alert(
+      FieldAlert.alert(
         'Account Synced',
         `Live Server Status:\n• Credits Remaining: ${current.credits}\n• Free Notes Used: ${current.freeUsed}/2\n• Rewarded Ad Note Used: ${current.adUsed ? 'Yes' : 'No'}`
       );
     } catch (e: any) {
-      Alert.alert('Sync Error', e.message || 'Could not connect to backend server.');
+      FieldAlert.alert('Sync Error', e.message || 'Could not connect to backend server.');
     } finally {
       setIsSyncing(false);
     }
@@ -65,7 +65,7 @@ export default function SettingsScreen() {
       const { isPro } = await presentRevenueCatPaywall();
       if (isPro) {
         useAppStore.getState().updateEntitlements({ isPro: true, entitlement: 'pro' });
-        Alert.alert('Fields Pro', 'You are now subscribed to Fields Pro! Enjoy unlimited travel notes.');
+        FieldAlert.alert('Fields Pro', 'You are now subscribed to Fields Pro! Enjoy unlimited travel notes.');
       }
     } catch (e: any) {
       console.warn('[Settings] Pro paywall error:', e);
@@ -89,21 +89,21 @@ export default function SettingsScreen() {
       }
       await syncWithBackend();
       if (result.isPro) {
-        Alert.alert('Purchases Restored', 'Your Fields Pro subscription has been verified and restored.');
+        FieldAlert.alert('Purchases Restored', 'Your Fields Pro subscription has been verified and restored.');
       } else if (result.success) {
-        Alert.alert('Purchases Restored', 'Purchases checked. Restored any active entitlements.');
+        FieldAlert.alert('Purchases Restored', 'Purchases checked. Restored any active entitlements.');
       } else {
-        Alert.alert('Restore Purchases', result.error || 'No previous purchases found.');
+        FieldAlert.alert('Restore Purchases', result.error || 'No previous purchases found.');
       }
     } catch (err: any) {
-      Alert.alert('Restore Purchases', err.message || 'Error restoring purchases.');
+      FieldAlert.alert('Restore Purchases', err.message || 'Error restoring purchases.');
     } finally {
       setIsRestoring(false);
     }
   };
 
   const handleClearAllNotes = () => {
-    Alert.alert(
+    FieldAlert.alert(
       'Delete Local Notes',
       'Are you sure you want to delete all locally saved notes? This action cannot be undone.',
       [
@@ -113,7 +113,7 @@ export default function SettingsScreen() {
           style: 'destructive',
           onPress: async () => {
             await clearAllNotes();
-            Alert.alert('Notes Cleared', 'All local note records have been removed.');
+            FieldAlert.alert('Notes Cleared', 'All local note records have been removed.');
           },
         },
       ]
@@ -127,14 +127,14 @@ export default function SettingsScreen() {
   const handleOpenWebPrivacy = () => {
     const baseUrl = getApiBaseUrl();
     Linking.openURL(`${baseUrl}/privacy`).catch(() => {
-      Alert.alert('Notice', 'Unable to open Privacy Policy web page.');
+      FieldAlert.alert('Notice', 'Unable to open Privacy Policy web page.');
     });
   };
 
   const handleOpenWebTerms = () => {
     const baseUrl = getApiBaseUrl();
     Linking.openURL(`${baseUrl}/terms`).catch(() => {
-      Alert.alert('Notice', 'Unable to open Terms of Service web page.');
+      FieldAlert.alert('Notice', 'Unable to open Terms of Service web page.');
     });
   };
 
@@ -145,13 +145,13 @@ export default function SettingsScreen() {
     }
     const baseUrl = getApiBaseUrl();
     Linking.openURL(`${baseUrl}/about`).catch(() => {
-      Alert.alert('Notice', 'Unable to open About page.');
+      FieldAlert.alert('Notice', 'Unable to open About page.');
     });
   };
 
   const handleCopyKey = async () => {
     if (!accountKey) {
-      Alert.alert('Notice', 'Generating your account key, please wait a moment...');
+      FieldAlert.alert('Notice', 'Generating your account key, please wait a moment...');
       return;
     }
     let success = false;
@@ -174,14 +174,14 @@ export default function SettingsScreen() {
       setIsCopied(true);
       setTimeout(() => setIsCopied(false), 2500);
     } else {
-      Alert.alert('Your Account Key', accountKey);
+      FieldAlert.alert('Your Account Key', accountKey);
     }
   };
 
   const handleLinkAccount = async () => {
     const clean = inputKey.trim().toUpperCase();
     if (!clean) {
-      Alert.alert('Notice', 'Please enter your Account Key.');
+      FieldAlert.alert('Notice', 'Please enter your Account Key.');
       return;
     }
     setIsLinking(true);
@@ -190,12 +190,12 @@ export default function SettingsScreen() {
     if (result.success) {
       setShowLinkModal(false);
       setInputKey('');
-      Alert.alert(
+      FieldAlert.alert(
         'Account Linked',
         'Your purchased credits and account status are now linked and active on this device.'
       );
     } else {
-      Alert.alert('Link Error', result.message || 'Could not link this Account Key.');
+      FieldAlert.alert('Link Error', result.message || 'Could not link this Account Key.');
     }
   };
 
@@ -487,19 +487,41 @@ export default function SettingsScreen() {
         visible={showLinkModal}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowLinkModal(false)}
+        onRequestClose={() => {
+          if (!isLinking) {
+            setShowLinkModal(false);
+            setInputKey('');
+          }
+        }}
       >
         <View style={styles.modalOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFillObject}
+            onPress={() => {
+              if (!isLinking) {
+                setShowLinkModal(false);
+                setInputKey('');
+              }
+            }}
+          />
           <View style={styles.modalCard}>
-            <View style={styles.modalHeaderIcon}>
-              <Ionicons name="key-outline" size={28} color={colors.brickRed} />
+            <View style={styles.modalBadgeRow}>
+              <View style={styles.modalBadgePill}>
+                <TypewriterText size="xs" bold color={colors.charcoal} letterSpacing={1.2}>
+                  ✦ ACCOUNT KEY ✦
+                </TypewriterText>
+              </View>
             </View>
-            <TypewriterText size="md" bold color={colors.charcoal} style={{ textAlign: 'center', marginBottom: 6 }}>
-              Link Account Key
+
+            <TypewriterText size="md" bold color={colors.charcoal} letterSpacing={1.5} style={styles.modalTitle}>
+              LINK ACCOUNT
             </TypewriterText>
-            <TypewriterText size="xs" color={colors.inkMuted} style={styles.modalDesc}>
-              Enter your master Account Key (e.g. FIELD-ABCD-1234) from your other device to transfer your purchased credits and unify your account.
-            </TypewriterText>
+
+            <View style={styles.modalDescBox}>
+              <TypewriterText size="xs" color={colors.inkSecondary} style={styles.modalDesc}>
+                Enter your master Account Key (e.g. FIELD-ABCD-1234) from your other device to transfer your credits and unify notebooks.
+              </TypewriterText>
+            </View>
 
             <TextInput
               style={styles.keyInput}
@@ -683,33 +705,54 @@ const styles = StyleSheet.create({
     borderColor: '#81C784',
   },
   modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(28, 25, 23, 0.72)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    zIndex: 99999,
   },
   modalCard: {
-    width: '100%',
-    maxWidth: 420,
-    backgroundColor: colors.paperCard,
-    borderRadius: layout.cardRadius,
+    width: Math.min(340, Dimensions.get('window').width - spacing.xl * 2),
+    backgroundColor: colors.paper,
+    borderWidth: 2,
+    borderColor: colors.charcoal,
+    borderRadius: 16,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
+    shadowColor: colors.charcoal,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.28,
+    shadowRadius: 16,
+    elevation: 16,
+  },
+  modalBadgeRow: {
+    alignItems: 'center',
+    marginBottom: spacing.xs + 2,
+  },
+  modalBadgePill: {
+    backgroundColor: '#E5DFC9',
+    borderColor: '#D0C4AF',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 2,
+  },
+  modalTitle: {
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  modalDescBox: {
+    backgroundColor: colors.paperDark,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.paperBorder,
-    padding: spacing.xl,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  modalHeaderIcon: {
-    alignItems: 'center',
-    marginBottom: spacing.xs,
+    padding: spacing.sm + 2,
+    marginBottom: spacing.md,
   },
   modalDesc: {
     textAlign: 'center',
-    marginBottom: spacing.md,
     lineHeight: 18,
   },
   keyInput: {
@@ -717,23 +760,23 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.base,
     letterSpacing: 1.5,
     borderWidth: 1,
-    borderColor: colors.paperBorder,
-    borderRadius: layout.borderRadius,
-    backgroundColor: colors.paper,
+    borderColor: colors.charcoal,
+    borderRadius: 8,
+    backgroundColor: colors.paperDark,
     paddingHorizontal: spacing.md,
     paddingVertical: 10,
     color: colors.charcoal,
     textAlign: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   modalButtonsRow: {
     flexDirection: 'row',
     gap: spacing.sm,
-    justifyContent: 'flex-end',
+    width: '100%',
   },
   modalBtn: {
     flex: 1,
-    minHeight: 42,
+    minHeight: 46,
   },
   footerInfo: {
     alignItems: 'center',

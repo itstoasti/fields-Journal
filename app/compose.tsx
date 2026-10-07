@@ -5,7 +5,6 @@ import {
   ScrollView,
   TextInput,
   Pressable,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Dimensions,
@@ -19,6 +18,7 @@ import {
   TypewriterText,
   StampButton,
   PhotoTape,
+  FieldAlert,
 } from '../src/components';
 import { colors, fonts, fontSizes, spacing } from '../src/theme';
 import { useAppStore } from '../src/store/useAppStore';
@@ -133,7 +133,7 @@ export default function ComposeScreen() {
   const handleAutoDetectKeywords = async (photoOverride?: string, placeOverride?: string) => {
     const photoToUse = photoOverride || selectedPhotoUri;
     if (!photoToUse) {
-      Alert.alert('Select Photo', 'Please select a photo first to suggest keywords.');
+      FieldAlert.alert('Select Photo', 'Please select a photo first to suggest keywords.');
       return;
     }
 
@@ -209,7 +209,7 @@ export default function ComposeScreen() {
         await applyExtractedMetadata(result);
       }
     } catch (error: any) {
-      Alert.alert('Photo Picker', error.message || 'Could not select photo.');
+      FieldAlert.alert('Photo Picker', error.message || 'Could not select photo.');
     }
   };
 
@@ -224,7 +224,7 @@ export default function ComposeScreen() {
         await applyExtractedMetadata(result);
       }
     } catch (error: any) {
-      Alert.alert('Camera', error.message || 'Could not open camera.');
+      FieldAlert.alert('Camera', error.message || 'Could not open camera.');
     }
   };
 
@@ -290,7 +290,7 @@ export default function ComposeScreen() {
         },
         onError: (errMsg) => {
           setIsAdLoading(false);
-          Alert.alert('Notice', errMsg, [
+          FieldAlert.alert('Notice', errMsg, [
             { text: 'Try Again', onPress: () => rewardedAdManager.preloadAd() },
             { text: 'Buy Notes', onPress: () => router.push('/modal/paywall') },
             { text: 'Cancel', style: 'cancel' },
@@ -306,14 +306,14 @@ export default function ComposeScreen() {
 
   const handlePressAction = async () => {
     if (!selectedPhotoUri) {
-      Alert.alert('Photo Required', 'Please select a photo from your library or camera first.');
+      FieldAlert.alert('Photo Required', 'Please select a photo from your library or camera first.');
       return;
     }
 
     // Safeguard: If photo has no detected year, confirm with user before spending a credit
     if (!year.trim()) {
       const currentYearStr = new Date().getFullYear().toString();
-      Alert.alert(
+      FieldAlert.alert(
         'Confirm Year',
         `No capture date was detected on this photo. Would you like to use ${currentYearStr} or enter the year it was taken?`,
         [
