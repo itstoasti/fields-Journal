@@ -244,60 +244,90 @@ export default function PaywallModal() {
             </TypewriterText>
           </View>
 
-          {/* Feature Value Props (Stamp Badges) */}
-          <View style={styles.featuresList}>
-            <View style={styles.featureItem}>
-              <View style={styles.stampIconBox}>
-                <TypewriterText size="xs">📜</TypewriterText>
-              </View>
-              <View style={styles.featureTextWrapper}>
-                <TypewriterText size="xs" bold color={colors.charcoal}>
-                  Unlimited Hand-Pressed Notes
+          {/* High-Converting Benefits Card */}
+          <View style={styles.benefitsCard}>
+            {/* Header Tag */}
+            <View style={styles.benefitsHeader}>
+              <View style={styles.benefitsBadge}>
+                <Ionicons name="sparkles" size={12} color={colors.oxblood} style={{ marginRight: 4 }} />
+                <TypewriterText size="xs" bold color={colors.oxblood} letterSpacing={1}>
+                  WHY TRAVELERS UPGRADE
                 </TypewriterText>
-                <TypewriterText size="xs" color={colors.inkSecondary} style={styles.featureSub}>
-                  Press unlimited travel memories without credit limits.
+              </View>
+              <TypewriterText size="xs" color={colors.inkSecondary} style={styles.benefitsGuarantee}>
+                Full Studio Edition
+              </TypewriterText>
+            </View>
+
+            {/* Benefit 1: Unlimited */}
+            <View style={styles.benefitRow}>
+              <View style={styles.iconBadge}>
+                <Ionicons name="infinite" size={18} color={colors.oxblood} />
+              </View>
+              <View style={styles.benefitTextCol}>
+                <View style={styles.benefitTitleRow}>
+                  <TypewriterText size="xs" bold color={colors.charcoal}>
+                    Unlimited Creations for Life
+                  </TypewriterText>
+                  <View style={styles.tagPill}>
+                    <TypewriterText size="xs" bold color="#FFFFFF">
+                      UNLIMITED
+                    </TypewriterText>
+                  </View>
+                </View>
+                <TypewriterText size="xs" color={colors.inkSecondary} style={styles.benefitCopy}>
+                  Never ration credits again. Press entire vacations, weekend road trips, and daily adventures without limits.
                 </TypewriterText>
               </View>
             </View>
 
-            <View style={styles.featureItem}>
-              <View style={styles.stampIconBox}>
-                <TypewriterText size="xs">🖼️</TypewriterText>
+            <View style={styles.benefitDivider} />
+
+            {/* Benefit 2: Bespoke Linocut */}
+            <View style={styles.benefitRow}>
+              <View style={styles.iconBadge}>
+                <Ionicons name="color-palette" size={17} color={colors.oxblood} />
               </View>
-              <View style={styles.featureTextWrapper}>
+              <View style={styles.benefitTextCol}>
                 <TypewriterText size="xs" bold color={colors.charcoal}>
-                  Archival 4K Print Exports
+                  Bespoke Hand-Carved Stamp Art
                 </TypewriterText>
-                <TypewriterText size="xs" color={colors.inkSecondary} style={styles.featureSub}>
-                  Full 4:3 dual-panel layout ready to frame or export.
+                <TypewriterText size="xs" color={colors.inkSecondary} style={styles.benefitCopy}>
+                  Not a generic filter. Every photo is individually analyzed to carve a multi-color rubber stamp unique to your scene.
                 </TypewriterText>
               </View>
             </View>
 
-            <View style={styles.featureItem}>
-              <View style={styles.stampIconBox}>
-                <TypewriterText size="xs">🎨</TypewriterText>
+            <View style={styles.benefitDivider} />
+
+            {/* Benefit 3: Archival Prints */}
+            <View style={styles.benefitRow}>
+              <View style={styles.iconBadge}>
+                <Ionicons name="image" size={17} color={colors.oxblood} />
               </View>
-              <View style={styles.featureTextWrapper}>
+              <View style={styles.benefitTextCol}>
                 <TypewriterText size="xs" bold color={colors.charcoal}>
-                  Full Spot-Ink Mineral Pigments
+                  Museum-Grade 4K Dual-Plates
                 </TypewriterText>
-                <TypewriterText size="xs" color={colors.inkSecondary} style={styles.featureSub}>
-                  Bespoke carved rubber stamp illustration for each photo.
+                <TypewriterText size="xs" color={colors.inkSecondary} style={styles.benefitCopy}>
+                  Archival 4:3 prints complete with location & typewriter notes. Calibrated for fine-art framing or camera roll export.
                 </TypewriterText>
               </View>
             </View>
 
-            <View style={styles.featureItem}>
-              <View style={styles.stampIconBox}>
-                <TypewriterText size="xs">🔒</TypewriterText>
+            <View style={styles.benefitDivider} />
+
+            {/* Benefit 4: Zero Subscriptions */}
+            <View style={styles.benefitRow}>
+              <View style={styles.iconBadge}>
+                <Ionicons name="shield-checkmark" size={17} color={colors.oxblood} />
               </View>
-              <View style={styles.featureTextWrapper}>
+              <View style={styles.benefitTextCol}>
                 <TypewriterText size="xs" bold color={colors.charcoal}>
-                  Pay Once, Own Forever
+                  Pay Once · Never a Subscription
                 </TypewriterText>
-                <TypewriterText size="xs" color={colors.inkSecondary} style={styles.featureSub}>
-                  Zero subscriptions. No recurring monthly charges.
+                <TypewriterText size="xs" color={colors.inkSecondary} style={styles.benefitCopy}>
+                  We hate monthly subscriptions too. One single payment secures unlimited access and all future updates forever.
                 </TypewriterText>
               </View>
             </View>
@@ -587,33 +617,82 @@ const styles = StyleSheet.create({
     maxWidth: 320,
   },
 
-  // Features List
-  featuresList: {
-    gap: spacing.sm,
+  // High-Converting Benefits Card
+  benefitsCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: '#DED5C5',
+    padding: spacing.md,
     marginBottom: spacing.md,
-    paddingHorizontal: 2,
+    shadowColor: colors.charcoal,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  featureItem: {
+  benefitsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+    paddingBottom: spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0E8DC',
   },
-  stampIconBox: {
-    width: 30,
-    height: 30,
+  benefitsBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(156, 61, 40, 0.08)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 6,
-    backgroundColor: '#E8DFC9',
     borderWidth: 1,
-    borderColor: '#D2C5AC',
+    borderColor: 'rgba(156, 61, 40, 0.18)',
+  },
+  benefitsGuarantee: {
+    fontStyle: 'italic',
+  },
+  benefitRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    paddingVertical: 2,
+  },
+  iconBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: 'rgba(156, 61, 40, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(156, 61, 40, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 1,
   },
-  featureTextWrapper: {
+  benefitTextCol: {
     flex: 1,
-    gap: 1,
+    gap: 2,
   },
-  featureSub: {
-    lineHeight: 15,
+  benefitTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  tagPill: {
+    backgroundColor: colors.oxblood,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  benefitCopy: {
+    lineHeight: 16,
+    color: colors.inkSecondary,
+  },
+  benefitDivider: {
+    height: 1,
+    backgroundColor: '#F3ECE0',
+    marginVertical: spacing.sm,
   },
 
   // Plans Container
