@@ -18,6 +18,7 @@ import {
 } from '../src/components';
 import { colors, spacing } from '../src/theme';
 import { useAppStore } from '../src/store/useAppStore';
+import { trackEvent, AnalyticsEvents } from '../src/lib/analytics';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -30,18 +31,22 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       syncWithBackend();
+      trackEvent(AnalyticsEvents.SCREEN_VIEW, { screen: 'home' });
     }, [syncWithBackend])
   );
 
   const handleNewNote = () => {
+    trackEvent(AnalyticsEvents.COMPOSE_OPENED);
     router.push('/compose');
   };
 
   const handleOpenSettings = () => {
+    trackEvent(AnalyticsEvents.SETTINGS_OPENED);
     router.push('/settings');
   };
 
   const handleOpenNote = (note: any) => {
+    trackEvent(AnalyticsEvents.NOTE_OPENED, { noteId: note.id });
     router.push({
       pathname: '/result',
       params: {

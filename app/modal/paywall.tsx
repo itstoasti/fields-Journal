@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -21,6 +21,7 @@ import {
   restorePurchases,
 } from '../../src/lib/purchases';
 import { syncPurchasedCredits, getApiBaseUrl } from '../../src/lib/api';
+import { trackEvent, AnalyticsEvents } from '../../src/lib/analytics';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const MODAL_PADDING = spacing.lg;
@@ -37,6 +38,10 @@ export default function PaywallModal() {
   const router = useRouter();
   const installationId = useAppStore((state) => state.installationId);
   const updateEntitlements = useAppStore((state) => state.updateEntitlements);
+
+  useEffect(() => {
+    trackEvent(AnalyticsEvents.PAYWALL_SHOWN);
+  }, []);
 
   const [topCard, setTopCard] = useState<'kyoto' | 'yosemite' | 'amalfi'>('kyoto');
   const [selectedPlan, setSelectedPlan] = useState<'lifetime' | 'pack20'>('lifetime');

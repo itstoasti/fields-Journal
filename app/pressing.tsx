@@ -8,6 +8,8 @@ import {
   Easing,
   Platform,
   LayoutChangeEvent,
+  Pressable,
+  ScrollView,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -17,6 +19,74 @@ import { useAppStore } from '../src/store/useAppStore';
 import { preparePhotoForGeneration, savePosterLocally } from '../src/lib/image';
 import { submitGenerateNote } from '../src/lib/api';
 import { Note } from '../src/types';
+import { trackEvent, AnalyticsEvents } from '../src/lib/analytics';
+
+interface FormattedError {
+  badge: string;
+  badgeVariant: 'warning' | 'notice' | 'timeout';
+  title: string;
+  message: string;
+  tip?: string;
+  isModeration: boolean;
+  rawDetails?: string;
+}
+
+function parsePressingError(err: any): FormattedError {
+  const rawMsg = String(err?.rawError || err?.message || err || '');
+  const isModeration =
+    err?.code === 'CONTENT_MODERATED' ||
+    rawMsg.includes('content-moderated') ||
+    rawMsg.includes('content moderation') ||
+    rawMsg.includes('rejected by content moderation');
+
+  const isTimeout =
+    err?.code === 'TIMEOUT' ||
+    err?.name === 'AbortError' ||
+    rawMsg.includes('timed out') ||
+    rawMsg.includes('timeout') ||
+    rawMsg.includes('504');
+
+  if (isModeration) {
+    return {
+      badge: '⚠ SAFETY GUARDRAIL',
+      badgeVariant: 'warning',
+      title: err?.title || 'Photo Could Not Be Pressed',
+      message:
+        'The AI printing press flagged this image under its automated safety guidelines. This commonly occurs with close-up photos of young children or recognized cartoon & branded clothing (like Disney).',
+      tip:
+        err?.tip ||
+        'Try a wider landscape shot, an environmental scene (like exploring a trail or trees), or a photo without cartoon graphics on clothing.',
+      isModeration: true,
+      rawDetails: rawMsg,
+    };
+  }
+
+  if (isTimeout) {
+    return {
+      badge: '⏱ PRESS TIMEOUT',
+      badgeVariant: 'timeout',
+      title: err?.title || 'The Press Timed Out',
+      message:
+        'Carving this intricate linocut plate took longer than expected and the studio connection timed out.',
+      tip: err?.tip || 'Check your internet connection and tap Retry to run the press again.',
+      isModeration: false,
+      rawDetails: rawMsg,
+    };
+  }
+
+  return {
+    badge: '⚠ STUDIO BULLETIN',
+    badgeVariant: 'warning',
+    title: err?.title || 'Pressing Interrupted',
+    message:
+      err?.message && !err.message.includes('API returned') && !err.message.includes('{')
+        ? err.message
+        : 'Our printing press ran into an unexpected hiccup while processing this image.',
+    tip: err?.tip || 'Tap Retry to run the press again, or choose a different photograph.',
+    isModeration: false,
+    rawDetails: rawMsg,
+  };
+}
 
 interface PressStage {
   label: string;
@@ -77,7 +147,8 @@ export default function PressingScreen() {
   const updateEntitlements = useAppStore((state) => state.updateEntitlements);
 
   const [phase, setPhase] = useState<'working' | 'error'>('working');
-  const [errorMessage, setErrorMessage] = useState<string>('');
+  const [errorDetails, setErrorDetails] = useState<FormattedError | null>(null);
+  const [showTechnicalDetails, setShowTechnicalDetails] = useState<boolean>(false);
   const [elapsedSec, setElapsedSec] = useState<number>(0);
   const [dotCount, setDotCount] = useState<number>(1);
   const [frameHeight, setFrameHeight] = useState<number>(240);
@@ -245,7 +316,15 @@ export default function PressingScreen() {
   const runGeneration = async () => {
     try {
       setPhase('working');
-      setErrorMessage('');
+      setErrorDetails(null);
+      setShowTechnicalDetails(false);
+
+      trackEvent(AnalyticsEvents.PRESSING_STARTED, {
+        place: params.place || '',
+        number: params.number || '01',
+        entitlement: params.entitlement || 'free',
+        model: selectedModel,
+      });
 
       // Step 1: Prepare and downscale photo
       const processed = await preparePhotoForGeneration(params.photoUri);
@@ -310,6 +389,12 @@ export default function PressingScreen() {
         updateEntitlements(response.userState);
       }
 
+      trackEvent(AnalyticsEvents.PRESSING_SUCCESS, {
+        noteId: newNote.id,
+        elapsedSec,
+        model: selectedModel,
+      });
+
       // Step 7: Navigate to Result
       router.replace({
         pathname: '/result',
@@ -324,8 +409,16 @@ export default function PressingScreen() {
       });
     } catch (err: any) {
       console.error('[Pressing] Error during generation:', err);
+      const formatted = parsePressingError(err);
+      trackEvent(AnalyticsEvents.PRESSING_FAILED, {
+        isModeration: formatted.isModeration,
+        isTimeout: formatted.badgeVariant === 'timeout',
+        rawError: formatted.rawDetails,
+        elapsedSec,
+      });
       setPhase('error');
-      setErrorMessage(err.message || 'An unexpected error occurred.');
+      setErrorDetails(formatted);
+      setShowTechnicalDetails(false);
       if (Platform.OS !== 'web') {
         try {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -335,7 +428,8 @@ export default function PressingScreen() {
   };
 
   const handleRetry = () => {
-    setErrorMessage('');
+    setErrorDetails(null);
+    setShowTechnicalDetails(false);
     setElapsedSec(0);
     lastStageRef.current = 0;
     progressAnim.setValue(0.06);
@@ -375,189 +469,303 @@ export default function PressingScreen() {
 
   return (
     <PaperContainer contentStyle={styles.container}>
-      {/* Top Quiet Label */}
-      <View style={styles.topStatus}>
-        <TypewriterText size="xs" color={colors.inkSecondary} letterSpacing={2}>
-          FIELD PRESS NO. {params.number || '01'}
-        </TypewriterText>
-      </View>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          phase === 'working' && styles.scrollContentWorking,
+        ]}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
+        {/* Top Quiet Label */}
+        <View style={styles.topStatus}>
+          <TypewriterText size="xs" color={colors.inkSecondary} letterSpacing={2}>
+            FIELD PRESS NO. {params.number || '01'}
+          </TypewriterText>
+        </View>
 
-      {/* Main Visual: Original Photo with active platen breathing & inking roller sweep */}
-      <View style={styles.plateContainer}>
-        <Animated.View
-          style={[
-            styles.photoFrame,
-            phase === 'working' && {
-              transform: [{ scale: pressScaleAnim }],
-            },
-          ]}
-          onLayout={onFrameLayout}
-        >
-          {Platform.OS === 'web' ? (
-            <img
-              src={params.photoUri}
-              alt="Source travel photo"
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                borderRadius: 1,
-                display: 'block',
-              }}
-            />
-          ) : (
-            <Image
-              source={{ uri: params.photoUri }}
-              style={styles.sourceImage}
-              resizeMode="cover"
-            />
-          )}
-
-          {phase === 'working' && (
-            <>
-              {/* Subtle ink wash overlay */}
-              <Animated.View
-                style={[
-                  styles.pressOverlay,
-                  {
-                    opacity: pulseOverlayAnim,
-                  },
-                ]}
+        {/* Main Visual: Original Photo with active platen breathing & inking roller sweep */}
+        <View style={styles.plateContainer}>
+          <Animated.View
+            style={[
+              styles.photoFrame,
+              phase === 'working' && {
+                transform: [{ scale: pressScaleAnim }],
+              },
+            ]}
+            onLayout={onFrameLayout}
+          >
+            {Platform.OS === 'web' ? (
+              <img
+                src={params.photoUri}
+                alt="Source travel photo"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  borderRadius: 1,
+                  display: 'block',
+                }}
               />
+            ) : (
+              <Image
+                source={{ uri: params.photoUri }}
+                style={styles.sourceImage}
+                resizeMode="cover"
+              />
+            )}
 
-              {/* Active Inking Roller Line moving down the plate */}
-              <Animated.View
-                style={[
-                  styles.rollerSweep,
-                  {
-                    transform: [{ translateY: rollerTranslateY }],
-                  },
-                ]}
-              >
-                <View style={styles.rollerGlow} />
-                <View style={styles.rollerLine} />
-              </Animated.View>
-            </>
-          )}
-        </Animated.View>
-
-        {/* Dynamic Activity Indicators */}
-        <View style={styles.statusBox}>
-          {phase === 'working' && (
-            <>
-              {/* Progress Meter Bar */}
-              <View style={styles.progressTrack}>
+            {phase === 'working' && (
+              <>
+                {/* Subtle ink wash overlay */}
                 <Animated.View
                   style={[
-                    styles.progressBarFill,
-                    { width: progressWidthPercent },
+                    styles.pressOverlay,
+                    {
+                      opacity: pulseOverlayAnim,
+                    },
                   ]}
                 />
-              </View>
 
-              {/* Stage Pips */}
-              <View style={styles.stagePipsRow}>
-                {STAGES.map((_, idx) => {
-                  const isDone = idx < currentStageIndex;
-                  const isCurrent = idx === currentStageIndex;
-                  return (
-                    <View
-                      key={idx}
-                      style={[
-                        styles.stagePip,
-                        isDone && styles.stagePipDone,
-                        isCurrent && styles.stagePipCurrent,
-                      ]}
-                    />
-                  );
-                })}
-              </View>
-
-              {/* Stage Title with dancing dots */}
-              <TypewriterText size="base" bold color={colors.charcoal} style={styles.phaseText}>
-                {currentStage.label}{dotsString}
-              </TypewriterText>
-
-              {/* Stage Subtext */}
-              <TypewriterText size="xs" color={colors.inkSecondary} style={styles.phaseSubtext}>
-                {currentStage.subtext}
-              </TypewriterText>
-
-              {/* Live Heartbeat & Elapsed Timer Badge */}
-              <View style={styles.heartbeatBadge}>
+                {/* Active Inking Roller Line moving down the plate */}
                 <Animated.View
-                  style={[styles.heartbeatDot, { opacity: dotPulseAnim }]}
-                />
-                <TypewriterText size="xs" color={colors.inkSecondary} letterSpacing={1.2}>
-                  PRESSING ACTIVE · {formatTimer(elapsedSec)}
+                  style={[
+                    styles.rollerSweep,
+                    {
+                      transform: [{ translateY: rollerTranslateY }],
+                    },
+                  ]}
+                >
+                  <View style={styles.rollerGlow} />
+                  <View style={styles.rollerLine} />
+                </Animated.View>
+              </>
+            )}
+          </Animated.View>
+
+          {/* Dynamic Activity Indicators */}
+          <View style={styles.statusBox}>
+            {phase === 'working' && (
+              <>
+                {/* Progress Meter Bar */}
+                <View style={styles.progressTrack}>
+                  <Animated.View
+                    style={[
+                      styles.progressBarFill,
+                      { width: progressWidthPercent },
+                    ]}
+                  />
+                </View>
+
+                {/* Stage Pips */}
+                <View style={styles.stagePipsRow}>
+                  {STAGES.map((_, idx) => {
+                    const isDone = idx < currentStageIndex;
+                    const isCurrent = idx === currentStageIndex;
+                    return (
+                      <View
+                        key={idx}
+                        style={[
+                          styles.stagePip,
+                          isDone && styles.stagePipDone,
+                          isCurrent && styles.stagePipCurrent,
+                        ]}
+                      />
+                    );
+                  })}
+                </View>
+
+                {/* Stage Title with dancing dots */}
+                <TypewriterText size="base" bold color={colors.charcoal} style={styles.phaseText}>
+                  {currentStage.label}{dotsString}
                 </TypewriterText>
-              </View>
 
-              {/* Reassurance Message for longer operations */}
-              <Animated.View
-                style={[
-                  styles.reassuranceBox,
-                  { opacity: reassuranceOpacity },
-                ]}
-              >
-                <TypewriterText size="xs" color={colors.ochre} style={styles.reassuranceText}>
-                  {elapsedSec >= 28
-                    ? 'Final artisanal touches… almost ready'
-                    : 'Intricate linocut relief in progress… taking extra care with details'}
+                {/* Stage Subtext */}
+                <TypewriterText size="xs" color={colors.inkSecondary} style={styles.phaseSubtext}>
+                  {currentStage.subtext}
                 </TypewriterText>
-              </Animated.View>
-            </>
-          )}
 
-          {phase === 'error' && (
-            <View style={styles.errorBox}>
-              <TypewriterText size="sm" bold color={colors.error} style={styles.phaseText}>
-                Pressing Interrupted
-              </TypewriterText>
-              <TypewriterText size="xs" color={colors.charcoal} style={styles.errorSubtext}>
-                {errorMessage}
-              </TypewriterText>
-              <TypewriterText size="xs" color={colors.inkSecondary} style={styles.errorNote}>
-                Your free slot / credits were not deducted.
-              </TypewriterText>
+                {/* Live Heartbeat & Elapsed Timer Badge */}
+                <View style={styles.heartbeatBadge}>
+                  <Animated.View
+                    style={[styles.heartbeatDot, { opacity: dotPulseAnim }]}
+                  />
+                  <TypewriterText size="xs" color={colors.inkSecondary} letterSpacing={1.2}>
+                    PRESSING ACTIVE · {formatTimer(elapsedSec)}
+                  </TypewriterText>
+                </View>
 
-              <View style={styles.errorButtonsRow}>
-                <StampButton
-                  title="Retry"
-                  onPress={handleRetry}
-                  variant="primary"
-                  style={styles.errorButton}
-                />
-                <StampButton
-                  title="Back"
-                  onPress={handleCancel}
-                  variant="secondary"
-                  style={styles.errorButton}
-                />
+                {/* Reassurance Message for longer operations */}
+                <Animated.View
+                  style={[
+                    styles.reassuranceBox,
+                    { opacity: reassuranceOpacity },
+                  ]}
+                >
+                  <TypewriterText size="xs" color={colors.ochre} style={styles.reassuranceText}>
+                    {elapsedSec >= 28
+                      ? 'Final artisanal touches… almost ready'
+                      : 'Intricate linocut relief in progress… taking extra care with details'}
+                  </TypewriterText>
+                </Animated.View>
+              </>
+            )}
+
+            {phase === 'error' && errorDetails && (
+              <View style={styles.errorBox}>
+                {/* Badge Pill */}
+                <View
+                  style={[
+                    styles.errorBadgePill,
+                    errorDetails.badgeVariant === 'warning'
+                      ? styles.errorBadgeWarning
+                      : styles.errorBadgeNotice,
+                  ]}
+                >
+                  <TypewriterText
+                    size="xs"
+                    bold
+                    color={
+                      errorDetails.badgeVariant === 'warning'
+                        ? colors.oxblood
+                        : colors.charcoal
+                    }
+                    letterSpacing={1.2}
+                  >
+                    {errorDetails.badge}
+                  </TypewriterText>
+                </View>
+
+                {/* Title */}
+                <TypewriterText
+                  size="sm"
+                  bold
+                  color={colors.charcoal}
+                  letterSpacing={1.2}
+                  style={styles.errorTitle}
+                >
+                  {errorDetails.title.toUpperCase()}
+                </TypewriterText>
+
+                {/* Friendly message */}
+                <TypewriterText
+                  size="xs"
+                  color={colors.inkSecondary}
+                  style={styles.errorDescription}
+                >
+                  {errorDetails.message}
+                </TypewriterText>
+
+                {/* Archival Inset Tip Box */}
+                {Boolean(errorDetails.tip) && (
+                  <View style={styles.tipBox}>
+                    <View style={styles.tipHeaderRow}>
+                      <TypewriterText size="xs" bold color={colors.ochre} letterSpacing={0.8}>
+                        💡 FIELD GUIDE TIP
+                      </TypewriterText>
+                    </View>
+                    <TypewriterText size="xs" color={colors.charcoal} style={styles.tipText}>
+                      {errorDetails.tip}
+                    </TypewriterText>
+                  </View>
+                )}
+
+                {/* 100% Refunded Reassurance Seal */}
+                <View style={styles.refundSeal}>
+                  <TypewriterText size="xs" bold color={colors.deepGreen} letterSpacing={0.5}>
+                    ✦ 100% PRESERVED · Credits / slots were not deducted ✦
+                  </TypewriterText>
+                </View>
+
+                {/* Buttons Row */}
+                <View style={styles.errorButtonsRow}>
+                  {errorDetails.isModeration ? (
+                    <>
+                      <StampButton
+                        title="Choose Different Photo"
+                        onPress={handleCancel}
+                        variant="primary"
+                        style={styles.errorButtonPrimary}
+                      />
+                      <StampButton
+                        title="Retry"
+                        onPress={handleRetry}
+                        variant="secondary"
+                        style={styles.errorButtonSecondary}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <StampButton
+                        title="Retry Press"
+                        onPress={handleRetry}
+                        variant="primary"
+                        style={styles.errorButtonPrimary}
+                      />
+                      <StampButton
+                        title="Back"
+                        onPress={handleCancel}
+                        variant="secondary"
+                        style={styles.errorButtonSecondary}
+                      />
+                    </>
+                  )}
+                </View>
+
+                {/* Collapsible Technical Details for Debugging / Support */}
+                {Boolean(errorDetails.rawDetails) && (
+                  <View style={styles.techDetailsContainer}>
+                    <Pressable
+                      onPress={() => setShowTechnicalDetails((prev) => !prev)}
+                      style={styles.techDetailsToggle}
+                      hitSlop={8}
+                    >
+                      <TypewriterText size="xs" color={colors.inkMuted}>
+                        {showTechnicalDetails ? '▴ Hide Technical Details' : '▾ View Technical Details'}
+                      </TypewriterText>
+                    </Pressable>
+
+                    {showTechnicalDetails && (
+                      <View style={styles.techDetailsBox}>
+                        <TypewriterText size="xs" color={colors.inkSecondary} style={styles.techDetailsCode}>
+                          {errorDetails.rawDetails}
+                        </TypewriterText>
+                      </View>
+                    )}
+                  </View>
+                )}
               </View>
-            </View>
-          )}
+            )}
+          </View>
         </View>
-      </View>
 
-      {/* Footer watermark / metadata */}
-      <View style={styles.footer}>
-        <TypewriterText size="xs" color={colors.inkMuted} letterSpacing={1}>
-          {params.place || 'Field Observation'} · {params.year || '2026'}
-        </TypewriterText>
-      </View>
+        {/* Footer watermark / metadata */}
+        <View style={styles.footer}>
+          <TypewriterText size="xs" color={colors.inkMuted} letterSpacing={1}>
+            {params.place || 'Field Observation'} · {params.year || '2026'}
+          </TypewriterText>
+        </View>
+      </ScrollView>
     </PaperContainer>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
     paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
     justifyContent: 'space-between',
-    paddingVertical: spacing.xl,
+  },
+  scrollContentWorking: {
+    justifyContent: 'space-between',
   },
   topStatus: {
     alignItems: 'center',
+    marginBottom: spacing.xs,
   },
   plateContainer: {
     alignItems: 'center',
@@ -692,28 +900,94 @@ const styles = StyleSheet.create({
   errorBox: {
     alignItems: 'center',
     width: '100%',
+    paddingTop: spacing.xs,
   },
-  errorSubtext: {
+  errorBadgePill: {
+    paddingHorizontal: 12,
+    paddingVertical: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: spacing.xs + 2,
+  },
+  errorBadgeWarning: {
+    backgroundColor: '#F7EBE8',
+    borderColor: '#E8CFC9',
+  },
+  errorBadgeNotice: {
+    backgroundColor: '#E5DFC9',
+    borderColor: '#D0C4AF',
+  },
+  errorTitle: {
     textAlign: 'center',
-    marginTop: spacing.xs,
     marginBottom: spacing.xs,
-    paddingHorizontal: spacing.md,
   },
-  errorNote: {
+  errorDescription: {
     textAlign: 'center',
-    fontStyle: 'italic',
+    lineHeight: 18,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.xs,
+  },
+  tipBox: {
+    width: '100%',
+    backgroundColor: '#ECE4D4',
+    borderWidth: 1,
+    borderColor: '#D8CCA8',
+    borderRadius: 8,
+    padding: spacing.sm + 2,
+    marginBottom: spacing.sm,
+  },
+  tipHeaderRow: {
+    marginBottom: 4,
+  },
+  tipText: {
+    lineHeight: 17,
+  },
+  refundSeal: {
+    backgroundColor: 'rgba(45, 74, 62, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(45, 74, 62, 0.22)',
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 6,
     marginBottom: spacing.md,
   },
   errorButtonsRow: {
     flexDirection: 'row',
     gap: spacing.sm,
     width: '100%',
-    marginTop: spacing.sm,
   },
-  errorButton: {
+  errorButtonPrimary: {
+    flex: 1.5,
+    minHeight: 46,
+  },
+  errorButtonSecondary: {
     flex: 1,
+    minHeight: 46,
+  },
+  techDetailsContainer: {
+    marginTop: spacing.md,
+    alignItems: 'center',
+    width: '100%',
+  },
+  techDetailsToggle: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  techDetailsBox: {
+    marginTop: spacing.xs,
+    width: '100%',
+    backgroundColor: '#E5DFC9',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#D0C4AF',
+    padding: spacing.sm,
+  },
+  techDetailsCode: {
+    fontSize: 10,
+    lineHeight: 14,
   },
   footer: {
     alignItems: 'center',
+    marginTop: spacing.md,
   },
 });

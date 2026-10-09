@@ -135,6 +135,19 @@ export async function initDb(): Promise<void> {
       );
     `);
 
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS app_events (
+        id TEXT PRIMARY KEY,
+        installation_id TEXT NOT NULL,
+        device_id TEXT,
+        event_name TEXT NOT NULL,
+        platform TEXT NOT NULL,
+        app_version TEXT,
+        metadata TEXT,
+        created_at TEXT NOT NULL
+      );
+    `);
+
     // Automatically tag known developer devices as internal
     await client.execute(`
       UPDATE users 
@@ -145,6 +158,9 @@ export async function initDb(): Promise<void> {
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_users_device_id ON users (device_id);`);
     await client.execute(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_account_key ON users (account_key);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_purchases_inst ON processed_purchases (installation_id);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_events_name ON app_events (event_name);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_events_created ON app_events (created_at);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_events_device ON app_events (device_id);`);
     console.log(`[Database] Initialized successfully (${isTurso ? 'Turso Cloud' : 'Local SQLite'})`);
   } catch (err) {
     console.error('[Database] Schema initialization warning:', err);
@@ -780,6 +796,57 @@ export async function logGenerationRecord(
   }
 }
 
+export interface AppEventRecord {
+  id?: string;
+  installationId: string;
+  deviceId?: string | null;
+  eventName: string;
+  platform?: string;
+  appVersion?: string;
+  metadata?: Record<string, any> | string;
+  createdAt?: string;
+}
+
+export async function logAppEvent(event: AppEventRecord): Promise<void> {
+  try {
+    const id = event.id || `evt_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const now = event.createdAt || new Date().toISOString();
+    const metaStr = typeof event.metadata === 'object' ? JSON.stringify(event.metadata) : (event.metadata || '{}');
+    const platform = (event.platform || 'unknown').toLowerCase();
+
+    await client.execute({
+      sql: `INSERT INTO app_events (id, installation_id, device_id, event_name, platform, app_version, metadata, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        id,
+        event.installationId,
+        event.deviceId || null,
+        event.eventName,
+        platform,
+        event.appVersion || null,
+        metaStr,
+        now,
+      ],
+    });
+
+    if (event.deviceId) {
+      await client.execute({
+        sql: `UPDATE users SET updated_at = ? WHERE device_id = ?`,
+        args: [now, event.deviceId],
+      }).catch(() => {});
+    }
+  } catch (err) {
+    console.warn('[Database] Failed to log app event:', err);
+  }
+}
+
+export async function logBatchAppEvents(events: AppEventRecord[]): Promise<void> {
+  if (!events || events.length === 0) return;
+  for (const evt of events) {
+    await logAppEvent(evt);
+  }
+}
+
 export interface AdminStats {
   activeModel: string;
   android: {
@@ -818,6 +885,23 @@ export interface AdminStats {
     failed: number;
     successRate: number;
   };
+  funnel: {
+    appOpens: number;
+    composeOpened: number;
+    photoSelected: number;
+    pressClicked: number;
+    pressingStarted: number;
+    generatedSuccess: number;
+    generatedFailed: number;
+    conversionRate: number;
+    biggestDropoff: string;
+    biggestDropoffPct: number;
+  };
+  engagement: {
+    dau: number;
+    wau: number;
+    totalSessions: number;
+  };
   topDestinations: Array<{ place: string; count: number }>;
   recentActivity: Array<{
     id: string;
@@ -828,6 +912,15 @@ export interface AdminStats {
     costInfo: string | null;
     createdAt: string;
     isDev?: boolean;
+  }>;
+  recentEvents: Array<{
+    id: string;
+    installationId: string;
+    deviceId: string | null;
+    eventName: string;
+    platform: string;
+    metadata: any;
+    createdAt: string;
   }>;
 }
 
@@ -897,6 +990,16 @@ export async function getAdminStats(): Promise<AdminStats> {
          OR device_id LIKE 'ios_dev_%'
     )`;
 
+  const testEventFilter = `created_at >= '${LAUNCH_DATE}' 
+    AND (device_id NOT IN (${devDeviceListSql}) OR device_id IS NULL)
+    AND (device_id NOT LIKE 'dev_%' OR device_id IS NULL)
+    AND (device_id NOT LIKE 'android_dev_%' OR device_id IS NULL)
+    AND (device_id NOT LIKE 'ios_dev_%' OR device_id IS NULL)
+    AND installation_id NOT LIKE 'test_%' 
+    AND installation_id NOT LIKE 'verify_%' 
+    AND installation_id != 'prod_verified' 
+    AND installation_id NOT LIKE '%probe%'`;
+
   const [
     activeModel,
     androidTotalRes,
@@ -918,6 +1021,10 @@ export async function getAdminStats(): Promise<AdminStats> {
     genWeek,
     topPlacesRes,
     recentFeedRes,
+    eventsSummaryRes,
+    appOpensDayRes,
+    appOpensWeekRes,
+    eventsFeedRes,
   ] = await Promise.all([
     getSystemSetting('active_model', 'grok-imagine-image-2.0'),
 
@@ -993,6 +1100,45 @@ export async function getAdminStats(): Promise<AdminStats> {
       ORDER BY g.created_at DESC 
       LIMIT 20
     `),
+
+    // 8. Funnel event counts by event name
+    client.execute(`
+      SELECT 
+        event_name, 
+        COUNT(DISTINCT device_id) as unique_devices,
+        COUNT(*) as total_hits
+      FROM app_events 
+      WHERE ${testEventFilter}
+      GROUP BY event_name
+    `).catch(() => ({ rows: [] })),
+
+    // 9. Active Users (DAU from app_open events in last 24h)
+    client.execute({
+      sql: `SELECT COUNT(DISTINCT device_id) as c FROM app_events WHERE event_name = 'app_open' AND created_at >= ? AND ${testEventFilter}`,
+      args: [dayAgo],
+    }).catch(() => ({ rows: [{ c: 0 }] })),
+
+    // 10. Active Users (WAU from app_open events in last 7d)
+    client.execute({
+      sql: `SELECT COUNT(DISTINCT device_id) as c FROM app_events WHERE event_name = 'app_open' AND created_at >= ? AND ${testEventFilter}`,
+      args: [weekAgo],
+    }).catch(() => ({ rows: [{ c: 0 }] })),
+
+    // 11. Recent user telemetry events
+    client.execute(`
+      SELECT 
+        id, 
+        installation_id, 
+        device_id, 
+        event_name, 
+        platform, 
+        metadata, 
+        created_at
+      FROM app_events
+      WHERE ${testEventFilter}
+      ORDER BY created_at DESC 
+      LIMIT 30
+    `).catch(() => ({ rows: [] })),
   ]);
 
   const uRow = usersTotal.rows[0] || {};
@@ -1017,6 +1163,49 @@ export async function getAdminStats(): Promise<AdminStats> {
   const webTotal = Number(webTotalRes.rows[0]?.c || 0);
   const webDay = Number(webDayRes.rows[0]?.c || 0);
   const webWeek = Number(webWeekRes.rows[0]?.c || 0);
+
+  // Compute Funnel Metrics
+  const eventCounts: Record<string, number> = {};
+  const eventHits: Record<string, number> = {};
+  for (const r of ((eventsSummaryRes as any)?.rows || [])) {
+    const name = String(r.event_name);
+    eventCounts[name] = Number(r.unique_devices || 0);
+    eventHits[name] = Number(r.total_hits || 0);
+  }
+
+  const appOpens = Math.max(eventCounts['app_open'] || 0, androidTotal + iosTotal);
+  const composeOpened = eventCounts['compose_opened'] || 0;
+  const photoSelected = eventCounts['photo_selected'] || 0;
+  const pressClicked = eventCounts['press_clicked'] || 0;
+  const pressingStarted = Math.max(eventCounts['pressing_started'] || 0, totalGens);
+  const generatedSuccess = Math.max(eventCounts['pressing_success'] || 0, successGens);
+  const generatedFailed = Math.max(eventCounts['pressing_failed'] || 0, Number(gRow.failed || 0));
+
+  // Determine biggest dropoff
+  const dropoffSteps = [
+    { name: 'Home Screen → Tapped "New Note"', from: appOpens, to: composeOpened },
+    { name: 'Compose Screen → Selected Photo', from: composeOpened, to: photoSelected },
+    { name: 'Photo Selected → Clicked "Press"', from: photoSelected, to: pressClicked },
+    { name: 'Clicked Press → Started Processing', from: pressClicked, to: pressingStarted },
+    { name: 'Processing → Successfully Created', from: pressingStarted, to: generatedSuccess },
+  ];
+
+  let biggestDropoffName = 'None';
+  let biggestDropoffPct = 0;
+  for (const step of dropoffSteps) {
+    if (step.from > 0) {
+      const dropPct = Math.round(((step.from - step.to) / step.from) * 100);
+      if (dropPct > biggestDropoffPct && dropPct > 0) {
+        biggestDropoffPct = dropPct;
+        biggestDropoffName = step.name;
+      }
+    }
+  }
+
+  const conversionRate = appOpens > 0 ? Math.round((generatedSuccess / appOpens) * 100) : 0;
+  const dau = Math.max(Number((appOpensDayRes as any)?.rows[0]?.c || 0), androidActive);
+  const wau = Math.max(Number((appOpensWeekRes as any)?.rows[0]?.c || 0), androidWeek + iosWeek);
+  const totalSessions = Number(eventHits['app_open'] || 0) + androidTotal + iosTotal;
 
   return {
     activeModel: String(activeModel),
@@ -1056,6 +1245,23 @@ export async function getAdminStats(): Promise<AdminStats> {
       failed: Number(gRow.failed || 0),
       successRate,
     },
+    funnel: {
+      appOpens,
+      composeOpened,
+      photoSelected,
+      pressClicked,
+      pressingStarted,
+      generatedSuccess,
+      generatedFailed,
+      conversionRate,
+      biggestDropoff: biggestDropoffName,
+      biggestDropoffPct,
+    },
+    engagement: {
+      dau,
+      wau,
+      totalSessions,
+    },
     topDestinations: topPlacesRes.rows.map((r: any) => ({
       place: String(r.place),
       count: Number(r.count),
@@ -1070,5 +1276,22 @@ export async function getAdminStats(): Promise<AdminStats> {
       createdAt: String(r.created_at),
       isDev: Boolean(Number(r.is_dev || 0)),
     })),
+    recentEvents: ((eventsFeedRes as any)?.rows || []).map((r: any) => {
+      let meta: any = {};
+      try {
+        meta = JSON.parse(String(r.metadata || '{}'));
+      } catch {
+        meta = r.metadata;
+      }
+      return {
+        id: String(r.id),
+        installationId: String(r.installation_id),
+        deviceId: r.device_id ? String(r.device_id) : null,
+        eventName: String(r.event_name),
+        platform: String(r.platform || 'unknown'),
+        metadata: meta,
+        createdAt: String(r.created_at),
+      };
+    }),
   };
 }

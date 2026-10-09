@@ -29,6 +29,47 @@ export async function generateFieldNoteImage(options: GrokGenerationOptions): Pr
   return await executeXaiCall(options, requestedModel, apiKey);
 }
 
+export class GrokApiError extends Error {
+  status: number;
+  code?: string;
+  isModeration: boolean;
+  rawResponse: string;
+
+  constructor(status: number, rawResponse: string) {
+    let parsedCode: string | undefined;
+    let isMod = false;
+    try {
+      const json = JSON.parse(rawResponse);
+      parsedCode = json.code;
+      if (
+        json.code?.includes('moderated') ||
+        json.error?.toLowerCase().includes('moderation') ||
+        json.error?.toLowerCase().includes('moderated')
+      ) {
+        isMod = true;
+      }
+    } catch {
+      if (
+        rawResponse.toLowerCase().includes('moderated') ||
+        rawResponse.toLowerCase().includes('moderation')
+      ) {
+        isMod = true;
+      }
+    }
+
+    const message = isMod
+      ? 'Generated image rejected by content moderation safety filter.'
+      : `xAI API returned status ${status}: ${rawResponse}`;
+
+    super(message);
+    this.name = 'GrokApiError';
+    this.status = status;
+    this.code = parsedCode;
+    this.isModeration = isMod;
+    this.rawResponse = rawResponse;
+  }
+}
+
 async function executeXaiCall(
   options: GrokGenerationOptions,
   requestedModel: string,
@@ -72,7 +113,7 @@ async function executeXaiCall(
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Unknown error');
-      throw new Error(`xAI API returned status ${response.status}: ${errorText}`);
+      throw new GrokApiError(response.status, errorText);
     }
 
     const data = await response.json();
@@ -104,7 +145,9 @@ async function executeXaiCall(
   } catch (error: any) {
     clearTimeout(timeoutId);
     if (error.name === 'AbortError') {
-      throw new Error('xAI generation timed out after 60 seconds');
+      const timeoutErr: any = new Error('xAI generation timed out after 50 seconds');
+      timeoutErr.code = 'TIMEOUT';
+      throw timeoutErr;
     }
     throw error;
   }

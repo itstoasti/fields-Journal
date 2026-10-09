@@ -11775,6 +11775,18 @@ async function initDb() {
       );
     `);
     await client.execute(`
+      CREATE TABLE IF NOT EXISTS app_events (
+        id TEXT PRIMARY KEY,
+        installation_id TEXT NOT NULL,
+        device_id TEXT,
+        event_name TEXT NOT NULL,
+        platform TEXT NOT NULL,
+        app_version TEXT,
+        metadata TEXT,
+        created_at TEXT NOT NULL
+      );
+    `);
+    await client.execute(`
       UPDATE users 
       SET is_developer = 1 
       WHERE device_id IN ('android_fc341bad05cf8c5a', 'dev_ygv47mz4tj2x5zw31z1ez4gz')
@@ -11782,6 +11794,9 @@ async function initDb() {
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_users_device_id ON users (device_id);`);
     await client.execute(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_account_key ON users (account_key);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_purchases_inst ON processed_purchases (installation_id);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_events_name ON app_events (event_name);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_events_created ON app_events (created_at);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_events_device ON app_events (device_id);`);
     console.log(`[Database] Initialized successfully (${isTurso ? "Turso Cloud" : "Local SQLite"})`);
   } catch (err) {
     console.error("[Database] Schema initialization warning:", err);
@@ -12234,6 +12249,43 @@ async function logGenerationRecord(id, userId, place, number2, status, costInfo)
     console.warn("[Database] Failed to log generation record:", err);
   }
 }
+async function logAppEvent(event) {
+  try {
+    const id = event.id || `evt_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const now = event.createdAt || (/* @__PURE__ */ new Date()).toISOString();
+    const metaStr = typeof event.metadata === "object" ? JSON.stringify(event.metadata) : event.metadata || "{}";
+    const platform = (event.platform || "unknown").toLowerCase();
+    await client.execute({
+      sql: `INSERT INTO app_events (id, installation_id, device_id, event_name, platform, app_version, metadata, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        id,
+        event.installationId,
+        event.deviceId || null,
+        event.eventName,
+        platform,
+        event.appVersion || null,
+        metaStr,
+        now
+      ]
+    });
+    if (event.deviceId) {
+      await client.execute({
+        sql: `UPDATE users SET updated_at = ? WHERE device_id = ?`,
+        args: [now, event.deviceId]
+      }).catch(() => {
+      });
+    }
+  } catch (err) {
+    console.warn("[Database] Failed to log app event:", err);
+  }
+}
+async function logBatchAppEvents(events) {
+  if (!events || events.length === 0) return;
+  for (const evt of events) {
+    await logAppEvent(evt);
+  }
+}
 async function getSystemSetting(key, defaultValue) {
   try {
     const res = await client.execute({
@@ -12292,6 +12344,15 @@ async function getAdminStats() {
          OR device_id LIKE 'android_dev_%'
          OR device_id LIKE 'ios_dev_%'
     )`;
+  const testEventFilter = `created_at >= '${LAUNCH_DATE}' 
+    AND (device_id NOT IN (${devDeviceListSql}) OR device_id IS NULL)
+    AND (device_id NOT LIKE 'dev_%' OR device_id IS NULL)
+    AND (device_id NOT LIKE 'android_dev_%' OR device_id IS NULL)
+    AND (device_id NOT LIKE 'ios_dev_%' OR device_id IS NULL)
+    AND installation_id NOT LIKE 'test_%' 
+    AND installation_id NOT LIKE 'verify_%' 
+    AND installation_id != 'prod_verified' 
+    AND installation_id NOT LIKE '%probe%'`;
   const [
     activeModel,
     androidTotalRes,
@@ -12312,7 +12373,11 @@ async function getAdminStats() {
     genDay,
     genWeek,
     topPlacesRes,
-    recentFeedRes
+    recentFeedRes,
+    eventsSummaryRes,
+    appOpensDayRes,
+    appOpensWeekRes,
+    eventsFeedRes
   ] = await Promise.all([
     getSystemSetting("active_model", "grok-imagine-image-2.0"),
     // 1. Android App Devices (Google Play)
@@ -12380,7 +12445,42 @@ async function getAdminStats() {
         AND g.user_id NOT LIKE '%probe%'
       ORDER BY g.created_at DESC 
       LIMIT 20
-    `)
+    `),
+    // 8. Funnel event counts by event name
+    client.execute(`
+      SELECT 
+        event_name, 
+        COUNT(DISTINCT device_id) as unique_devices,
+        COUNT(*) as total_hits
+      FROM app_events 
+      WHERE ${testEventFilter}
+      GROUP BY event_name
+    `).catch(() => ({ rows: [] })),
+    // 9. Active Users (DAU from app_open events in last 24h)
+    client.execute({
+      sql: `SELECT COUNT(DISTINCT device_id) as c FROM app_events WHERE event_name = 'app_open' AND created_at >= ? AND ${testEventFilter}`,
+      args: [dayAgo]
+    }).catch(() => ({ rows: [{ c: 0 }] })),
+    // 10. Active Users (WAU from app_open events in last 7d)
+    client.execute({
+      sql: `SELECT COUNT(DISTINCT device_id) as c FROM app_events WHERE event_name = 'app_open' AND created_at >= ? AND ${testEventFilter}`,
+      args: [weekAgo]
+    }).catch(() => ({ rows: [{ c: 0 }] })),
+    // 11. Recent user telemetry events
+    client.execute(`
+      SELECT 
+        id, 
+        installation_id, 
+        device_id, 
+        event_name, 
+        platform, 
+        metadata, 
+        created_at
+      FROM app_events
+      WHERE ${testEventFilter}
+      ORDER BY created_at DESC 
+      LIMIT 30
+    `).catch(() => ({ rows: [] }))
   ]);
   const uRow = usersTotal.rows[0] || {};
   const gRow = genTotal.rows[0] || {};
@@ -12400,6 +12500,42 @@ async function getAdminStats() {
   const webTotal = Number(webTotalRes.rows[0]?.c || 0);
   const webDay = Number(webDayRes.rows[0]?.c || 0);
   const webWeek = Number(webWeekRes.rows[0]?.c || 0);
+  const eventCounts = {};
+  const eventHits = {};
+  for (const r of eventsSummaryRes?.rows || []) {
+    const name = String(r.event_name);
+    eventCounts[name] = Number(r.unique_devices || 0);
+    eventHits[name] = Number(r.total_hits || 0);
+  }
+  const appOpens = Math.max(eventCounts["app_open"] || 0, androidTotal + iosTotal);
+  const composeOpened = eventCounts["compose_opened"] || 0;
+  const photoSelected = eventCounts["photo_selected"] || 0;
+  const pressClicked = eventCounts["press_clicked"] || 0;
+  const pressingStarted = Math.max(eventCounts["pressing_started"] || 0, totalGens);
+  const generatedSuccess = Math.max(eventCounts["pressing_success"] || 0, successGens);
+  const generatedFailed = Math.max(eventCounts["pressing_failed"] || 0, Number(gRow.failed || 0));
+  const dropoffSteps = [
+    { name: 'Home Screen \u2192 Tapped "New Note"', from: appOpens, to: composeOpened },
+    { name: "Compose Screen \u2192 Selected Photo", from: composeOpened, to: photoSelected },
+    { name: 'Photo Selected \u2192 Clicked "Press"', from: photoSelected, to: pressClicked },
+    { name: "Clicked Press \u2192 Started Processing", from: pressClicked, to: pressingStarted },
+    { name: "Processing \u2192 Successfully Created", from: pressingStarted, to: generatedSuccess }
+  ];
+  let biggestDropoffName = "None";
+  let biggestDropoffPct = 0;
+  for (const step of dropoffSteps) {
+    if (step.from > 0) {
+      const dropPct = Math.round((step.from - step.to) / step.from * 100);
+      if (dropPct > biggestDropoffPct && dropPct > 0) {
+        biggestDropoffPct = dropPct;
+        biggestDropoffName = step.name;
+      }
+    }
+  }
+  const conversionRate = appOpens > 0 ? Math.round(generatedSuccess / appOpens * 100) : 0;
+  const dau = Math.max(Number(appOpensDayRes?.rows[0]?.c || 0), androidActive);
+  const wau = Math.max(Number(appOpensWeekRes?.rows[0]?.c || 0), androidWeek + iosWeek);
+  const totalSessions = Number(eventHits["app_open"] || 0) + androidTotal + iosTotal;
   return {
     activeModel: String(activeModel),
     android: {
@@ -12439,6 +12575,23 @@ async function getAdminStats() {
       failed: Number(gRow.failed || 0),
       successRate
     },
+    funnel: {
+      appOpens,
+      composeOpened,
+      photoSelected,
+      pressClicked,
+      pressingStarted,
+      generatedSuccess,
+      generatedFailed,
+      conversionRate,
+      biggestDropoff: biggestDropoffName,
+      biggestDropoffPct
+    },
+    engagement: {
+      dau,
+      wau,
+      totalSessions
+    },
     topDestinations: topPlacesRes.rows.map((r) => ({
       place: String(r.place),
       count: Number(r.count)
@@ -12452,7 +12605,24 @@ async function getAdminStats() {
       costInfo: r.cost_info ? String(r.cost_info) : null,
       createdAt: String(r.created_at),
       isDev: Boolean(Number(r.is_dev || 0))
-    }))
+    })),
+    recentEvents: (eventsFeedRes?.rows || []).map((r) => {
+      let meta = {};
+      try {
+        meta = JSON.parse(String(r.metadata || "{}"));
+      } catch {
+        meta = r.metadata;
+      }
+      return {
+        id: String(r.id),
+        installationId: String(r.installation_id),
+        deviceId: r.device_id ? String(r.device_id) : null,
+        eventName: String(r.event_name),
+        platform: String(r.platform || "unknown"),
+        metadata: meta,
+        createdAt: String(r.created_at)
+      };
+    })
   };
 }
 
@@ -12513,6 +12683,34 @@ async function generateFieldNoteImage(options) {
   const requestedModel = options.model || DEFAULT_MODEL;
   return await executeXaiCall(options, requestedModel, apiKey);
 }
+var GrokApiError = class extends Error {
+  status;
+  code;
+  isModeration;
+  rawResponse;
+  constructor(status, rawResponse) {
+    let parsedCode;
+    let isMod = false;
+    try {
+      const json = JSON.parse(rawResponse);
+      parsedCode = json.code;
+      if (json.code?.includes("moderated") || json.error?.toLowerCase().includes("moderation") || json.error?.toLowerCase().includes("moderated")) {
+        isMod = true;
+      }
+    } catch {
+      if (rawResponse.toLowerCase().includes("moderated") || rawResponse.toLowerCase().includes("moderation")) {
+        isMod = true;
+      }
+    }
+    const message = isMod ? "Generated image rejected by content moderation safety filter." : `xAI API returned status ${status}: ${rawResponse}`;
+    super(message);
+    this.name = "GrokApiError";
+    this.status = status;
+    this.code = parsedCode;
+    this.isModeration = isMod;
+    this.rawResponse = rawResponse;
+  }
+};
 async function executeXaiCall(options, requestedModel, apiKey) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -12544,7 +12742,7 @@ async function executeXaiCall(options, requestedModel, apiKey) {
     clearTimeout(timeoutId);
     if (!response.ok) {
       const errorText = await response.text().catch(() => "Unknown error");
-      throw new Error(`xAI API returned status ${response.status}: ${errorText}`);
+      throw new GrokApiError(response.status, errorText);
     }
     const data = await response.json();
     const imageObj = data.data?.[0];
@@ -12568,7 +12766,9 @@ async function executeXaiCall(options, requestedModel, apiKey) {
   } catch (error) {
     clearTimeout(timeoutId);
     if (error.name === "AbortError") {
-      throw new Error("xAI generation timed out after 60 seconds");
+      const timeoutErr = new Error("xAI generation timed out after 50 seconds");
+      timeoutErr.code = "TIMEOUT";
+      throw timeoutErr;
     }
     throw error;
   }
@@ -13019,6 +13219,118 @@ function renderAdminDashboardHtml() {
       font-size: 11px;
     }
 
+    /* Funnel Styles */
+    .funnel-container {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 10px;
+    }
+
+    .funnel-step {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .funnel-step-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+    }
+
+    .funnel-step-title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    .funnel-step-meta {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .funnel-step-count {
+      color: var(--amber);
+      font-weight: 700;
+    }
+
+    .funnel-bar-bg {
+      width: 100%;
+      height: 7px;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 6px;
+    }
+
+    .funnel-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      background: linear-gradient(90deg, #FFC480, #F59E0B);
+      transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .funnel-bottleneck {
+      background: rgba(248, 113, 113, 0.08);
+      border: 1px solid rgba(248, 113, 113, 0.25);
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-top: 14px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .funnel-bottleneck-icon {
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .funnel-bottleneck-title {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--red);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+
+    .funnel-bottleneck-text {
+      font-size: 12px;
+      color: var(--text);
+      line-height: 1.4;
+    }
+
+    /* Stream Feed Switcher */
+    .stream-tab-bar {
+      display: flex;
+      gap: 6px;
+    }
+
+    .stream-tab {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid var(--card-border);
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .stream-tab.active {
+      background: var(--amber-dim);
+      color: var(--amber);
+      border-color: rgba(255, 196, 128, 0.4);
+    }
+
     /* Activity Stream */
     .activity-list {
       display: flex;
@@ -13250,6 +13562,55 @@ function renderAdminDashboardHtml() {
           </div>
         </div>
       </div>
+
+      <!-- User Engagement & Retention Overview -->
+      <div class="card full-width">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <div class="card-label" style="margin-bottom: 0;">Audience Engagement & Retention</div>
+          <span class="badge-pill badge-green" style="font-size: 10px;">Live Telemetry</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; margin-top: 6px;">
+          <div>
+            <div style="font-size: 11px; color: var(--text-muted);">DAU (24h)</div>
+            <div id="statDau" style="font-family: var(--font-mono); font-size: 20px; font-weight: 700; color: var(--text);">-</div>
+          </div>
+          <div>
+            <div style="font-size: 11px; color: var(--text-muted);">WAU (7d)</div>
+            <div id="statWau" style="font-family: var(--font-mono); font-size: 20px; font-weight: 700; color: var(--text);">-</div>
+          </div>
+          <div>
+            <div style="font-size: 11px; color: var(--text-muted);">App Sessions</div>
+            <div id="statSessions" style="font-family: var(--font-mono); font-size: 20px; font-weight: 700; color: var(--amber);">-</div>
+          </div>
+          <div>
+            <div style="font-size: 11px; color: var(--text-muted);">Funnel Conv.</div>
+            <div id="statConversion" style="font-family: var(--font-mono); font-size: 20px; font-weight: 700; color: var(--green);">-</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Conversion Funnel & Drop-off Diagnostics -->
+      <div class="card full-width">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <div class="card-label" style="margin-bottom: 0;">Conversion Funnel \xB7 User Drop-off</div>
+          <span id="funnelConvBadge" class="badge-pill badge-amber">0% Conversion</span>
+        </div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px;">
+          Step-by-step user retention from opening the app to completing a pressed field note.
+        </p>
+
+        <div id="funnelContainer" class="funnel-container">
+          <div style="font-size: 12px; color: var(--text-muted); font-style: italic;">Loading funnel metrics...</div>
+        </div>
+
+        <div id="funnelBottleneck" class="funnel-bottleneck" style="display: none;">
+          <div class="funnel-bottleneck-icon">\u26A0\uFE0F</div>
+          <div>
+            <div class="funnel-bottleneck-title">Primary Drop-off Bottleneck: <span id="bottleneckStep">-</span> (<span id="bottleneckPct">-</span>)</div>
+            <div id="bottleneckAdvice" class="funnel-bottleneck-text">-</div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Active AI Printmaker Model Control -->
@@ -13343,13 +13704,23 @@ function renderAdminDashboardHtml() {
       <div style="font-size: 12px; color: var(--text-muted); font-style: italic;">Loading destinations...</div>
     </div>
 
-    <!-- Live Activity Feed -->
+    <!-- Live Activity & Telemetry Feeds -->
     <div class="section-title">
-      <span>Live Generation Stream</span>
-      <span id="activityCount" style="font-size: 10px; color: var(--text-muted);">Latest 20</span>
+      <span>Live Activity Stream</span>
+      <div class="stream-tab-bar">
+        <button id="streamTabEvents" class="stream-tab active" onclick="switchStreamTab('events')">\u26A1 Telemetry Actions</button>
+        <button id="streamTabGens" class="stream-tab" onclick="switchStreamTab('generations')">\u{1F5A8}\uFE0F AI Generations</button>
+      </div>
     </div>
-    <div id="activityList" class="activity-list">
-      <div style="font-size: 12px; color: var(--text-muted); font-style: italic; text-align: center; padding: 20px;">Fetching latest events...</div>
+    
+    <!-- User Telemetry Feed -->
+    <div id="eventsList" class="activity-list">
+      <div style="font-size: 12px; color: var(--text-muted); font-style: italic; text-align: center; padding: 20px;">Fetching user telemetry...</div>
+    </div>
+
+    <!-- AI Generations Feed -->
+    <div id="activityList" class="activity-list" style="display: none;">
+      <div style="font-size: 12px; color: var(--text-muted); font-style: italic; text-align: center; padding: 20px;">Fetching latest generations...</div>
     </div>
   </div>
 
@@ -13501,6 +13872,181 @@ function renderAdminDashboardHtml() {
       }
     }
 
+    let currentStreamTab = 'events';
+
+    function switchStreamTab(tab) {
+      currentStreamTab = tab;
+      const tabEv = document.getElementById('streamTabEvents');
+      const tabGen = document.getElementById('streamTabGens');
+      const listEv = document.getElementById('eventsList');
+      const listGen = document.getElementById('activityList');
+
+      if (tab === 'events') {
+        if (tabEv) tabEv.className = 'stream-tab active';
+        if (tabGen) tabGen.className = 'stream-tab';
+        if (listEv) listEv.style.display = 'flex';
+        if (listGen) listGen.style.display = 'none';
+      } else {
+        if (tabEv) tabEv.className = 'stream-tab';
+        if (tabGen) tabGen.className = 'stream-tab active';
+        if (listEv) listEv.style.display = 'none';
+        if (listGen) listGen.style.display = 'flex';
+      }
+    }
+
+    function getBottleneckAdvice(stepName) {
+      if (!stepName) return 'Audience is progressing smoothly through the creation flow.';
+      if (stepName.includes('New Note')) {
+        return 'Users launch the app but do not tap "New Note". Consider adding an empty library welcome prompt or card.';
+      }
+      if (stepName.includes('Selected Photo')) {
+        return 'Users open the compose screen but do not select a photo. Verify camera and library permissions are clear and frictionless.';
+      }
+      if (stepName.includes('Clicked "Press"')) {
+        return 'Users select a photo but leave without pressing. Check if photo metadata or date confirmations are confusing.';
+      }
+      if (stepName.includes('Started Processing')) {
+        return 'Users click Press but do not reach processing. They might be declining the AI safety consent modal or bouncing on paywall.';
+      }
+      if (stepName.includes('Successfully Created')) {
+        return 'Generations are failing during AI plate carving. Check backend model timeouts and content safety flags.';
+      }
+      return 'Audience is progressing smoothly through the creation flow.';
+    }
+
+    function renderFunnel(funnel) {
+      if (!funnel) return;
+      const baseOpens = funnel.appOpens || 1;
+
+      const steps = [
+        { label: '1. App Opened', count: funnel.appOpens || 0, icon: '\u{1F4F1}' },
+        { label: '2. Compose Opened', count: funnel.composeOpened || 0, icon: '\u270D\uFE0F' },
+        { label: '3. Photo Selected', count: funnel.photoSelected || 0, icon: '\u{1F4F7}' },
+        { label: '4. Press Clicked', count: funnel.pressClicked || 0, icon: '\u{1F5A8}\uFE0F' },
+        { label: '5. Carving Started', count: funnel.pressingStarted || 0, icon: '\u2699\uFE0F' },
+        { label: '6. Stamp Created', count: funnel.generatedSuccess || 0, icon: '\u{1F3C6}' },
+      ];
+
+      const container = document.getElementById('funnelContainer');
+      if (container) {
+        container.innerHTML = steps.map((step, idx) => {
+          const pctOfTotal = baseOpens > 0 ? Math.min(100, Math.round((step.count / baseOpens) * 100)) : 0;
+          const prevCount = idx > 0 ? steps[idx - 1].count : baseOpens;
+          const stepDrop = prevCount > 0 && idx > 0 ? Math.max(0, Math.round(((prevCount - step.count) / prevCount) * 100)) : 0;
+          const dropLabel = idx > 0 && stepDrop > 0 ? \`<span style="color: var(--red); font-size: 10px; font-family: var(--font-mono); margin-left: 6px;">(-\${stepDrop}% drop)</span>\` : '';
+
+          return \`
+            <div class="funnel-step">
+              <div class="funnel-step-header">
+                <div class="funnel-step-title">
+                  <span>\${step.icon}</span>
+                  <span>\${step.label}</span>
+                </div>
+                <div class="funnel-step-meta">
+                  <span class="funnel-step-count">\${step.count}</span>
+                  <span style="color: var(--text-muted); margin-left: 3px;">(\${pctOfTotal}%)</span>
+                  \${dropLabel}
+                </div>
+              </div>
+              <div class="funnel-bar-bg">
+                <div class="funnel-bar-fill" style="width: \${pctOfTotal}%;"></div>
+              </div>
+            </div>
+          \`;
+        }).join('');
+      }
+
+      const bottleneckBox = document.getElementById('funnelBottleneck');
+      if (bottleneckBox) {
+        if (funnel.biggestDropoff && funnel.biggestDropoff !== 'None' && funnel.biggestDropoffPct > 0) {
+          bottleneckBox.style.display = 'flex';
+          const stepEl = document.getElementById('bottleneckStep');
+          const pctEl = document.getElementById('bottleneckPct');
+          const adviceEl = document.getElementById('bottleneckAdvice');
+          if (stepEl) stepEl.textContent = funnel.biggestDropoff;
+          if (pctEl) pctEl.textContent = funnel.biggestDropoffPct + '% drop-off';
+          if (adviceEl) adviceEl.textContent = getBottleneckAdvice(funnel.biggestDropoff);
+        } else {
+          bottleneckBox.style.display = 'none';
+        }
+      }
+    }
+
+    function formatEventDetails(eventName, meta) {
+      meta = meta || {};
+      switch (eventName) {
+        case 'app_open':
+          return { icon: '\u{1F4F1}', title: 'App Opened' };
+        case 'compose_opened':
+          return { icon: '\u270D\uFE0F', title: 'Opened Compose Desk' };
+        case 'photo_selected':
+          return { icon: '\u{1F4F7}', title: 'Photo Selected (' + (meta.source || 'library') + ')' };
+        case 'photo_picker_cancelled':
+          return { icon: '\u21A9\uFE0F', title: 'Photo Picker Cancelled' };
+        case 'keywords_suggest_clicked':
+          return { icon: '\u2728', title: 'Tapped Auto-Detect Keywords' };
+        case 'press_clicked':
+          return { icon: '\u{1F5A8}\uFE0F', title: 'Tapped "Press Field Note"' };
+        case 'privacy_modal_shown':
+          return { icon: '\u{1F6E1}\uFE0F', title: 'AI Transparency Modal Prompted' };
+        case 'privacy_modal_accepted':
+          return { icon: '\u{1F91D}', title: 'AI Transparency Accepted' };
+        case 'paywall_shown':
+          return { icon: '\u{1F4B3}', title: 'Paywall Prompted' };
+        case 'pressing_started':
+          return { icon: '\u2699\uFE0F', title: 'Linocut Plate Carving Started' };
+        case 'pressing_success':
+          return { icon: '\u{1F3C6}', title: 'Note Pressed & Saved' };
+        case 'pressing_failed':
+          return { icon: '\u26A0\uFE0F', title: meta.isModeration ? 'Pressing Flagged (Moderation)' : 'Pressing Failed' };
+        case 'note_opened':
+          return { icon: '\u{1F4D6}', title: 'Viewed Saved Note' };
+        case 'settings_opened':
+          return { icon: '\u2699\uFE0F', title: 'Opened Settings' };
+        case 'screen_view':
+          return { icon: '\u{1F441}\uFE0F', title: 'Viewed ' + (meta.screen || 'Screen') };
+        default:
+          return { icon: '\u26A1', title: eventName.replace(/_/g, ' ') };
+      }
+    }
+
+    function renderRecentEvents(events) {
+      const container = document.getElementById('eventsList');
+      if (!container) return;
+
+      if (!events || events.length === 0) {
+        container.innerHTML = '<div style="font-size: 12px; color: var(--text-muted); font-style: italic; text-align: center; padding: 20px;">No user telemetry events recorded yet.</div>';
+        return;
+      }
+
+      container.innerHTML = events.map(ev => {
+        const info = formatEventDetails(ev.eventName, ev.metadata);
+        const platformBadge = ev.platform === 'android' ? '\u{1F916} Android' : ev.platform === 'ios' ? '\u{1F34F} iOS' : '\u{1F310} ' + ev.platform;
+        const devSnippet = ev.deviceId ? ev.deviceId.slice(-6) : (ev.installationId ? ev.installationId.slice(0, 6) : 'anon');
+
+        let metaText = '';
+        if (ev.metadata && Object.keys(ev.metadata).length > 0) {
+          if (ev.metadata.place) metaText = ' \xB7 ' + ev.metadata.place;
+          else if (ev.metadata.screen) metaText = ' \xB7 ' + ev.metadata.screen;
+          else if (ev.metadata.source) metaText = ' \xB7 ' + ev.metadata.source;
+          else if (ev.metadata.model) metaText = ' \xB7 ' + (ev.metadata.model.includes('grok') ? 'Grok' : 'Gemini');
+        }
+
+        return \`
+          <div class="activity-item">
+            <div class="activity-left">
+              <div style="font-size: 18px; line-height: 1; flex-shrink: 0;">\${info.icon}</div>
+              <div>
+                <div class="activity-title">\${info.title}</div>
+                <div class="activity-sub">\${platformBadge} \xB7 id:\${devSnippet}\${metaText}</div>
+              </div>
+            </div>
+            <div class="activity-time">\${timeAgo(ev.createdAt)}</div>
+          </div>
+        \`;
+      }).join('');
+    }
+
     function renderStats(data) {
       cachedStats = data;
       updatePlatformCards(data);
@@ -13510,6 +14056,25 @@ function renderAdminDashboardHtml() {
       document.getElementById('statWebTotal').textContent = web.total;
       document.getElementById('statWebToday').textContent = '+' + web.last24h;
       document.getElementById('statWeb7d').textContent = '+' + web.last7d;
+
+      // Engagement & Retention Metrics
+      if (data.engagement) {
+        document.getElementById('statDau').textContent = data.engagement.dau;
+        document.getElementById('statWau').textContent = data.engagement.wau;
+        document.getElementById('statSessions').textContent = data.engagement.totalSessions;
+      }
+      if (data.funnel) {
+        document.getElementById('statConversion').textContent = (data.funnel.conversionRate || 0) + '%';
+        const badge = document.getElementById('funnelConvBadge');
+        if (badge) {
+          badge.textContent = (data.funnel.conversionRate || 0) + '% Conversion';
+          badge.className = 'badge-pill ' + (data.funnel.conversionRate >= 15 ? 'badge-green' : 'badge-amber');
+        }
+        renderFunnel(data.funnel);
+      }
+
+      // Live Telemetry Events
+      renderRecentEvents(data.recentEvents);
 
       // Generations
       document.getElementById('statGensTotal').textContent = data.generations.total;
@@ -13796,6 +14361,8 @@ function verifyAdminAuth(c) {
   }
 }
 app.get("/admin", (c) => {
+  c.header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+  c.header("Pragma", "no-cache");
   return c.html(renderAdminDashboardHtml());
 });
 app.get("/v1/admin/stats", async (c) => {
@@ -13804,6 +14371,8 @@ app.get("/v1/admin/stats", async (c) => {
   }
   try {
     const stats = await getAdminStats();
+    c.header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+    c.header("Pragma", "no-cache");
     return c.json(stats);
   } catch (err) {
     return c.json({ error: "STATS_ERROR", message: err.message }, 500);
@@ -13887,6 +14456,17 @@ app.get("/v1/me", async (c) => {
   }
   const user = await getOrCreateUser(installationId, void 0, deviceId);
   const entitlement = determineEntitlement(user);
+  if (deviceId && !isDeveloperDevice(deviceId, installationId)) {
+    const platform = deviceId.startsWith("android_") ? "android" : deviceId.startsWith("ios_") ? "ios" : "web";
+    logAppEvent({
+      installationId: user.installation_id,
+      deviceId: user.device_id,
+      eventName: "app_open",
+      platform,
+      metadata: { source: "me_sync" }
+    }).catch(() => {
+    });
+  }
   return c.json({
     installationId: user.installation_id,
     deviceId: user.device_id,
@@ -14029,6 +14609,26 @@ app.post("/v1/report", async (c) => {
   } catch (err) {
     console.error("[Content Report] Error:", err);
     return c.json({ error: "REPORT_ERROR", message: err.message || "Failed to log report." }, 500);
+  }
+});
+app.post("/v1/events", async (c) => {
+  try {
+    const body = await c.req.json();
+    if (Array.isArray(body.events)) {
+      await logBatchAppEvents(body.events);
+    } else if (body.eventName) {
+      await logAppEvent({
+        installationId: body.installationId || "anonymous",
+        deviceId: body.deviceId || null,
+        eventName: body.eventName,
+        platform: body.platform,
+        appVersion: body.appVersion,
+        metadata: body.metadata
+      });
+    }
+    return c.json({ success: true });
+  } catch (err) {
+    return c.json({ error: "EVENT_LOG_ERROR", message: err.message || "Failed to log events." }, 400);
   }
 });
 var keywordRateLimitMap = /* @__PURE__ */ new Map();
@@ -14208,12 +14808,33 @@ app.post("/v1/notes", async (c) => {
       }
     });
   } catch (err) {
-    console.error(`[Notes] Generation error: ${err.message}`);
-    await logGenerationRecord(noteId, installationId, "", "", "failed", err.message);
+    const rawErrorMessage = err.rawResponse || err.message || "";
+    const isModeration = Boolean(err.isModeration) || err.code === "CONTENT_MODERATED" || rawErrorMessage.includes("content-moderated") || rawErrorMessage.includes("content moderation") || rawErrorMessage.includes("rejected by content moderation");
+    const isTimeout = err.code === "TIMEOUT" || err.name === "AbortError" || rawErrorMessage.includes("timed out") || rawErrorMessage.includes("timeout");
+    let errorCode = "GENERATION_FAILED";
+    let errorTitle = "Pressing Interrupted";
+    let userFriendlyMessage = "An unexpected hiccup occurred while processing your print.";
+    let tip = "Try running the press again, or choose a different photograph.";
+    if (isModeration) {
+      errorCode = "CONTENT_MODERATED";
+      errorTitle = "Photo Could Not Be Pressed";
+      userFriendlyMessage = "The AI printing press flagged this image under its automated safety guidelines. This commonly occurs with close-up photos of young children or recognized cartoon & branded clothing (such as Disney).";
+      tip = "Try a wider landscape shot, an environmental scene (like exploring a trail or trees), or a photo without cartoon graphics on clothing.";
+    } else if (isTimeout) {
+      errorCode = "TIMEOUT";
+      errorTitle = "The Press Timed Out";
+      userFriendlyMessage = "Carving this linocut plate took longer than expected and the studio connection timed out.";
+      tip = "Please check your connection and tap Retry to try pressing again.";
+    }
+    console.error(`[Notes] Generation error (${errorCode}): ${err.message}`);
+    await logGenerationRecord(noteId, installationId, "", "", "failed", `${errorCode}: ${err.message}`);
     const user = await getOrCreateUser(installationId, void 0, deviceId);
     return c.json({
-      error: "GENERATION_FAILED",
-      message: err.message || "An error occurred during field note generation.",
+      error: errorCode,
+      title: errorTitle,
+      message: userFriendlyMessage,
+      tip,
+      rawError: rawErrorMessage || err.message,
       userState: {
         freeUsed: user.free_used,
         adUsed: Boolean(user.ad_used),
@@ -14221,7 +14842,7 @@ app.post("/v1/notes", async (c) => {
         isPro: Boolean(user.is_pro),
         entitlement: determineEntitlement(user)
       }
-    }, 500);
+    }, isModeration ? 422 : 500);
   }
 });
 app.post("/v1/keywords/suggest", async (c) => {

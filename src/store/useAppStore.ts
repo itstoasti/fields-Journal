@@ -5,6 +5,7 @@ import { getInstallationAndDeviceInfo, updateActiveIdentity, clearLocalIdentity 
 import { fetchUserEntitlements, linkAccountByKeyApi, deleteAccountDataApi } from '../lib/api';
 import { initializePurchases } from '../lib/purchases';
 import { rewardedAdManager } from '../lib/ads';
+import { trackEvent, AnalyticsEvents } from '../lib/analytics';
 
 import { Platform } from 'react-native';
 
@@ -92,6 +93,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const { installationId, deviceId } = await getInstallationAndDeviceInfo();
       console.log(`[Store] Initializing app for install=${installationId}, device=${deviceId}`);
+
+      // Track app open event
+      trackEvent(AnalyticsEvents.APP_OPEN, { source: 'init_app' });
       
       // Load privacy consent
       const consentStr = await getStorageItem(PRIVACY_CONSENT_KEY);

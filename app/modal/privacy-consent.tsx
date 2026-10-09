@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -10,12 +10,18 @@ import { TypewriterText, StampButton } from '../../src/components';
 import { colors, fonts, fontSizes, layout, spacing } from '../../src/theme';
 import { useAppStore } from '../../src/store/useAppStore';
 import { getApiBaseUrl } from '../../src/lib/api';
+import { trackEvent, AnalyticsEvents } from '../../src/lib/analytics';
 
 export default function PrivacyConsentModal() {
   const router = useRouter();
   const setPrivacyConsent = useAppStore((state) => state.setPrivacyConsent);
 
+  useEffect(() => {
+    trackEvent(AnalyticsEvents.PRIVACY_MODAL_SHOWN);
+  }, []);
+
   const handleContinue = async () => {
+    trackEvent(AnalyticsEvents.PRIVACY_MODAL_ACCEPTED);
     await setPrivacyConsent(true);
     router.back();
   };

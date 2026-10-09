@@ -76,6 +76,27 @@ export async function fetchUserEntitlements(
   }
 }
 
+export class ApiRequestError extends Error {
+  code: string;
+  title?: string;
+  tip?: string;
+  rawError?: string;
+  userState?: any;
+
+  constructor(
+    message: string,
+    details?: { code?: string; title?: string; tip?: string; rawError?: string; userState?: any }
+  ) {
+    super(message);
+    this.name = 'ApiRequestError';
+    this.code = details?.code || 'UNKNOWN_ERROR';
+    this.title = details?.title;
+    this.tip = details?.tip;
+    this.rawError = details?.rawError;
+    this.userState = details?.userState;
+  }
+}
+
 export async function submitGenerateNote(request: GenerateNoteRequest): Promise<GenerateNoteResponse> {
   const baseUrl = getApiBaseUrl();
   const controller = new AbortController();
@@ -104,21 +125,57 @@ export async function submitGenerateNote(request: GenerateNoteRequest): Promise<
         if (responseText.includes('FUNCTION_PAYLOAD_TOO_LARGE') || response.status === 413) {
           errorJson = {
             error: 'PAYLOAD_TOO_LARGE',
+            title: 'Photo Too Large',
             message: 'Photo payload is too large for cloud processing. Please try again.',
+            tip: 'Try cropping or choosing a slightly smaller photo.',
           };
         } else if (responseText.includes('FUNCTION_INVOCATION_TIMEOUT') || response.status === 504) {
           errorJson = {
             error: 'TIMEOUT',
+            title: 'The Press Timed Out',
             message: 'Server generation timed out. The model took too long to carve the plate. Please retry.',
+            tip: 'Check your connection and tap Retry to run the press again.',
           };
         } else {
           errorJson = {
             error: 'NETWORK_ERROR',
+            title: 'Connection Interrupted',
             message: `Server returned status ${response.status}. Please try again.`,
+            tip: 'Check your internet connection and try again.',
+            rawError: responseText,
           };
         }
       }
-      throw new Error(errorJson.message || errorJson.error || 'Field note generation failed.');
+
+      const fullErrorStr = `${errorJson.error || ''} ${errorJson.message || ''} ${errorJson.rawError || ''} ${responseText}`;
+      const isModeration =
+        errorJson.error === 'CONTENT_MODERATED' ||
+        fullErrorStr.includes('content-moderated') ||
+        fullErrorStr.includes('content moderation') ||
+        fullErrorStr.includes('rejected by content moderation');
+
+      if (isModeration) {
+        throw new ApiRequestError(
+          errorJson.message || 'The AI printing press flagged this image under its automated safety guidelines.',
+          {
+            code: 'CONTENT_MODERATED',
+            title: errorJson.title || 'Photo Could Not Be Pressed',
+            tip:
+              errorJson.tip ||
+              'Try a wider landscape shot, an environmental scene (like exploring a trail or trees), or a photo without cartoon graphics on clothing.',
+            rawError: errorJson.rawError || responseText || errorJson.message,
+            userState: errorJson.userState,
+          }
+        );
+      }
+
+      throw new ApiRequestError(errorJson.message || errorJson.error || 'Field note generation failed.', {
+        code: errorJson.error || 'GENERATION_FAILED',
+        title: errorJson.title,
+        tip: errorJson.tip,
+        rawError: errorJson.rawError || responseText,
+        userState: errorJson.userState,
+      });
     }
 
     const data: GenerateNoteResponse = await response.json();
@@ -126,7 +183,14 @@ export async function submitGenerateNote(request: GenerateNoteRequest): Promise<
   } catch (error: any) {
     clearTimeout(timeoutId);
     if (error.name === 'AbortError') {
-      throw new Error('Connection timed out. The server took too long to generate your note. Your credits were not deducted.');
+      throw new ApiRequestError(
+        'Connection timed out. The server took too long to generate your note. Your credits were not deducted.',
+        {
+          code: 'TIMEOUT',
+          title: 'The Press Timed Out',
+          tip: 'Please check your connection and tap Retry to try pressing again.',
+        }
+      );
     }
     throw error;
   }

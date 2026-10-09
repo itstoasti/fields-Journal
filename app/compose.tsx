@@ -28,6 +28,7 @@ import { extractPhotoMetadata } from '../src/lib/metadata';
 import { searchLocationSuggestions, LocationSuggestion } from '../src/lib/locationSearch';
 import { preparePhotoForVision } from '../src/lib/image';
 import { suggestKeywordsFromImage } from '../src/lib/api';
+import { trackEvent, AnalyticsEvents } from '../src/lib/analytics';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -42,6 +43,7 @@ export default function ComposeScreen() {
   useFocusEffect(
     useCallback(() => {
       syncWithBackend();
+      trackEvent(AnalyticsEvents.SCREEN_VIEW, { screen: 'compose' });
     }, [syncWithBackend])
   );
 
@@ -139,6 +141,7 @@ export default function ComposeScreen() {
 
     try {
       setIsDetectingKeywords(true);
+      trackEvent(AnalyticsEvents.KEYWORDS_SUGGEST_CLICKED, { hasPlace: Boolean(photoOverride || selectedPhotoUri) });
       const thumbnail = await preparePhotoForVision(photoToUse);
       if (!thumbnail.base64) {
         throw new Error('Could not process thumbnail for keyword detection.');
@@ -202,11 +205,18 @@ export default function ComposeScreen() {
     try {
       const result = await pickImageFromLibrary();
       if (!result.canceled && result.uri) {
+        trackEvent(AnalyticsEvents.PHOTO_SELECTED, {
+          source: 'library',
+          hasLocation: Boolean(result.location),
+          hasExif: Boolean(result.exif),
+        });
         setSelectedPhotoUri(result.uri);
         if (result.width && result.height) {
           setSelectedAspectRatio(result.width / result.height);
         }
         await applyExtractedMetadata(result);
+      } else if (result.canceled) {
+        trackEvent(AnalyticsEvents.PHOTO_PICKER_CANCELLED, { source: 'library' });
       }
     } catch (error: any) {
       FieldAlert.alert('Photo Picker', error.message || 'Could not select photo.');
@@ -217,11 +227,14 @@ export default function ComposeScreen() {
     try {
       const result = await pickImageFromCamera();
       if (!result.canceled && result.uri) {
+        trackEvent(AnalyticsEvents.PHOTO_SELECTED, { source: 'camera' });
         setSelectedPhotoUri(result.uri);
         if (result.width && result.height) {
           setSelectedAspectRatio(result.width / result.height);
         }
         await applyExtractedMetadata(result);
+      } else if (result.canceled) {
+        trackEvent(AnalyticsEvents.PHOTO_PICKER_CANCELLED, { source: 'camera' });
       }
     } catch (error: any) {
       FieldAlert.alert('Camera', error.message || 'Could not open camera.');
@@ -259,6 +272,7 @@ export default function ComposeScreen() {
   const proceedWithEntitlement = (confirmedYear: string) => {
     // Step 1: Check First-run Privacy Consent
     if (!hasConsentedPrivacy) {
+      trackEvent(AnalyticsEvents.PRIVACY_MODAL_SHOWN);
       router.push('/modal/privacy-consent');
       return;
     }
@@ -273,6 +287,7 @@ export default function ComposeScreen() {
 
     // Step 3: Handle Paywall
     if (entitlement === 'paywall') {
+      trackEvent(AnalyticsEvents.PAYWALL_SHOWN, { source: 'compose_gate' });
       router.push('/modal/paywall');
       return;
     }
@@ -305,6 +320,12 @@ export default function ComposeScreen() {
   };
 
   const handlePressAction = async () => {
+    trackEvent(AnalyticsEvents.PRESS_CLICKED, {
+      hasPhoto: Boolean(selectedPhotoUri),
+      hasPlace: Boolean(place.trim()),
+      hasYear: Boolean(year.trim()),
+      entitlement: getEntitlementType(),
+    });
     if (!selectedPhotoUri) {
       FieldAlert.alert('Photo Required', 'Please select a photo from your library or camera first.');
       return;

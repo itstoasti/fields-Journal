@@ -59,7 +59,10 @@ export interface GenerateNoteResponse {
 
 export interface ApiError {
   error: string;
+  title?: string;
   message: string;
+  tip?: string;
+  rawError?: string;
   userState?: {
     freeUsed: number;
     adUsed: boolean;

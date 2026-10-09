@@ -21,6 +21,8 @@ import {
   deleteUserAccount,
   logContentReport,
   logGenerationRecord,
+  logAppEvent,
+  logBatchAppEvents,
   getAdminStats,
   getSystemSetting,
   setSystemSetting,
@@ -156,6 +158,8 @@ function verifyAdminAuth(c: any): boolean {
 
 // Admin Telemetry Dashboard (Mobile Web)
 app.get('/admin', (c) => {
+  c.header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  c.header('Pragma', 'no-cache');
   return c.html(renderAdminDashboardHtml());
 });
 
@@ -167,6 +171,8 @@ app.get('/v1/admin/stats', async (c) => {
 
   try {
     const stats = await getAdminStats();
+    c.header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    c.header('Pragma', 'no-cache');
     return c.json(stats);
   } catch (err: any) {
     return c.json({ error: 'STATS_ERROR', message: err.message }, 500);
@@ -267,6 +273,18 @@ app.get('/v1/me', async (c) => {
 
   const user = await getOrCreateUser(installationId, undefined, deviceId);
   const entitlement = determineEntitlement(user);
+
+  // Auto-record app open event for telemetry & active user tracking
+  if (deviceId && !isDeveloperDevice(deviceId, installationId)) {
+    const platform = deviceId.startsWith('android_') ? 'android' : deviceId.startsWith('ios_') ? 'ios' : 'web';
+    logAppEvent({
+      installationId: user.installation_id,
+      deviceId: user.device_id,
+      eventName: 'app_open',
+      platform,
+      metadata: { source: 'me_sync' },
+    }).catch(() => {});
+  }
 
   return c.json({
     installationId: user.installation_id,
@@ -438,6 +456,28 @@ app.post('/v1/report', async (c) => {
   } catch (err: any) {
     console.error('[Content Report] Error:', err);
     return c.json({ error: 'REPORT_ERROR', message: err.message || 'Failed to log report.' }, 500);
+  }
+});
+
+// Telemetry & User Funnel Events Ingestion
+app.post('/v1/events', async (c) => {
+  try {
+    const body = await c.req.json();
+    if (Array.isArray(body.events)) {
+      await logBatchAppEvents(body.events);
+    } else if (body.eventName) {
+      await logAppEvent({
+        installationId: body.installationId || 'anonymous',
+        deviceId: body.deviceId || null,
+        eventName: body.eventName,
+        platform: body.platform,
+        appVersion: body.appVersion,
+        metadata: body.metadata,
+      });
+    }
+    return c.json({ success: true });
+  } catch (err: any) {
+    return c.json({ error: 'EVENT_LOG_ERROR', message: err.message || 'Failed to log events.' }, 400);
   }
 });
 
@@ -655,14 +695,50 @@ app.post('/v1/notes', async (c) => {
       },
     });
   } catch (err: any) {
-    console.error(`[Notes] Generation error: ${err.message}`);
-    await logGenerationRecord(noteId, installationId, '', '', 'failed', err.message);
+    const rawErrorMessage = err.rawResponse || err.message || '';
+    const isModeration =
+      Boolean(err.isModeration) ||
+      err.code === 'CONTENT_MODERATED' ||
+      rawErrorMessage.includes('content-moderated') ||
+      rawErrorMessage.includes('content moderation') ||
+      rawErrorMessage.includes('rejected by content moderation');
+
+    const isTimeout =
+      err.code === 'TIMEOUT' ||
+      err.name === 'AbortError' ||
+      rawErrorMessage.includes('timed out') ||
+      rawErrorMessage.includes('timeout');
+
+    let errorCode = 'GENERATION_FAILED';
+    let errorTitle = 'Pressing Interrupted';
+    let userFriendlyMessage = 'An unexpected hiccup occurred while processing your print.';
+    let tip = 'Try running the press again, or choose a different photograph.';
+
+    if (isModeration) {
+      errorCode = 'CONTENT_MODERATED';
+      errorTitle = 'Photo Could Not Be Pressed';
+      userFriendlyMessage =
+        'The AI printing press flagged this image under its automated safety guidelines. This commonly occurs with close-up photos of young children or recognized cartoon & branded clothing (such as Disney).';
+      tip = 'Try a wider landscape shot, an environmental scene (like exploring a trail or trees), or a photo without cartoon graphics on clothing.';
+    } else if (isTimeout) {
+      errorCode = 'TIMEOUT';
+      errorTitle = 'The Press Timed Out';
+      userFriendlyMessage =
+        'Carving this linocut plate took longer than expected and the studio connection timed out.';
+      tip = 'Please check your connection and tap Retry to try pressing again.';
+    }
+
+    console.error(`[Notes] Generation error (${errorCode}): ${err.message}`);
+    await logGenerationRecord(noteId, installationId, '', '', 'failed', `${errorCode}: ${err.message}`);
 
     const user = await getOrCreateUser(installationId, undefined, deviceId);
 
     return c.json({
-      error: 'GENERATION_FAILED',
-      message: err.message || 'An error occurred during field note generation.',
+      error: errorCode,
+      title: errorTitle,
+      message: userFriendlyMessage,
+      tip,
+      rawError: rawErrorMessage || err.message,
       userState: {
         freeUsed: user.free_used,
         adUsed: Boolean(user.ad_used),
@@ -670,7 +746,7 @@ app.post('/v1/notes', async (c) => {
         isPro: Boolean(user.is_pro),
         entitlement: determineEntitlement(user),
       },
-    }, 500);
+    }, isModeration ? 422 : 500);
   }
 });
 

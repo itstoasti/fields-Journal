@@ -250,6 +250,118 @@ export function renderAdminDashboardHtml(): string {
       font-size: 11px;
     }
 
+    /* Funnel Styles */
+    .funnel-container {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 10px;
+    }
+
+    .funnel-step {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .funnel-step-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+    }
+
+    .funnel-step-title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    .funnel-step-meta {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .funnel-step-count {
+      color: var(--amber);
+      font-weight: 700;
+    }
+
+    .funnel-bar-bg {
+      width: 100%;
+      height: 7px;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 6px;
+    }
+
+    .funnel-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      background: linear-gradient(90deg, #FFC480, #F59E0B);
+      transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .funnel-bottleneck {
+      background: rgba(248, 113, 113, 0.08);
+      border: 1px solid rgba(248, 113, 113, 0.25);
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-top: 14px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .funnel-bottleneck-icon {
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .funnel-bottleneck-title {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--red);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+
+    .funnel-bottleneck-text {
+      font-size: 12px;
+      color: var(--text);
+      line-height: 1.4;
+    }
+
+    /* Stream Feed Switcher */
+    .stream-tab-bar {
+      display: flex;
+      gap: 6px;
+    }
+
+    .stream-tab {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid var(--card-border);
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .stream-tab.active {
+      background: var(--amber-dim);
+      color: var(--amber);
+      border-color: rgba(255, 196, 128, 0.4);
+    }
+
     /* Activity Stream */
     .activity-list {
       display: flex;
@@ -481,6 +593,55 @@ export function renderAdminDashboardHtml(): string {
           </div>
         </div>
       </div>
+
+      <!-- User Engagement & Retention Overview -->
+      <div class="card full-width">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <div class="card-label" style="margin-bottom: 0;">Audience Engagement & Retention</div>
+          <span class="badge-pill badge-green" style="font-size: 10px;">Live Telemetry</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; margin-top: 6px;">
+          <div>
+            <div style="font-size: 11px; color: var(--text-muted);">DAU (24h)</div>
+            <div id="statDau" style="font-family: var(--font-mono); font-size: 20px; font-weight: 700; color: var(--text);">-</div>
+          </div>
+          <div>
+            <div style="font-size: 11px; color: var(--text-muted);">WAU (7d)</div>
+            <div id="statWau" style="font-family: var(--font-mono); font-size: 20px; font-weight: 700; color: var(--text);">-</div>
+          </div>
+          <div>
+            <div style="font-size: 11px; color: var(--text-muted);">App Sessions</div>
+            <div id="statSessions" style="font-family: var(--font-mono); font-size: 20px; font-weight: 700; color: var(--amber);">-</div>
+          </div>
+          <div>
+            <div style="font-size: 11px; color: var(--text-muted);">Funnel Conv.</div>
+            <div id="statConversion" style="font-family: var(--font-mono); font-size: 20px; font-weight: 700; color: var(--green);">-</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Conversion Funnel & Drop-off Diagnostics -->
+      <div class="card full-width">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <div class="card-label" style="margin-bottom: 0;">Conversion Funnel · User Drop-off</div>
+          <span id="funnelConvBadge" class="badge-pill badge-amber">0% Conversion</span>
+        </div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px;">
+          Step-by-step user retention from opening the app to completing a pressed field note.
+        </p>
+
+        <div id="funnelContainer" class="funnel-container">
+          <div style="font-size: 12px; color: var(--text-muted); font-style: italic;">Loading funnel metrics...</div>
+        </div>
+
+        <div id="funnelBottleneck" class="funnel-bottleneck" style="display: none;">
+          <div class="funnel-bottleneck-icon">⚠️</div>
+          <div>
+            <div class="funnel-bottleneck-title">Primary Drop-off Bottleneck: <span id="bottleneckStep">-</span> (<span id="bottleneckPct">-</span>)</div>
+            <div id="bottleneckAdvice" class="funnel-bottleneck-text">-</div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Active AI Printmaker Model Control -->
@@ -574,13 +735,23 @@ export function renderAdminDashboardHtml(): string {
       <div style="font-size: 12px; color: var(--text-muted); font-style: italic;">Loading destinations...</div>
     </div>
 
-    <!-- Live Activity Feed -->
+    <!-- Live Activity & Telemetry Feeds -->
     <div class="section-title">
-      <span>Live Generation Stream</span>
-      <span id="activityCount" style="font-size: 10px; color: var(--text-muted);">Latest 20</span>
+      <span>Live Activity Stream</span>
+      <div class="stream-tab-bar">
+        <button id="streamTabEvents" class="stream-tab active" onclick="switchStreamTab('events')">⚡ Telemetry Actions</button>
+        <button id="streamTabGens" class="stream-tab" onclick="switchStreamTab('generations')">🖨️ AI Generations</button>
+      </div>
     </div>
-    <div id="activityList" class="activity-list">
-      <div style="font-size: 12px; color: var(--text-muted); font-style: italic; text-align: center; padding: 20px;">Fetching latest events...</div>
+    
+    <!-- User Telemetry Feed -->
+    <div id="eventsList" class="activity-list">
+      <div style="font-size: 12px; color: var(--text-muted); font-style: italic; text-align: center; padding: 20px;">Fetching user telemetry...</div>
+    </div>
+
+    <!-- AI Generations Feed -->
+    <div id="activityList" class="activity-list" style="display: none;">
+      <div style="font-size: 12px; color: var(--text-muted); font-style: italic; text-align: center; padding: 20px;">Fetching latest generations...</div>
     </div>
   </div>
 
@@ -732,6 +903,181 @@ export function renderAdminDashboardHtml(): string {
       }
     }
 
+    let currentStreamTab = 'events';
+
+    function switchStreamTab(tab) {
+      currentStreamTab = tab;
+      const tabEv = document.getElementById('streamTabEvents');
+      const tabGen = document.getElementById('streamTabGens');
+      const listEv = document.getElementById('eventsList');
+      const listGen = document.getElementById('activityList');
+
+      if (tab === 'events') {
+        if (tabEv) tabEv.className = 'stream-tab active';
+        if (tabGen) tabGen.className = 'stream-tab';
+        if (listEv) listEv.style.display = 'flex';
+        if (listGen) listGen.style.display = 'none';
+      } else {
+        if (tabEv) tabEv.className = 'stream-tab';
+        if (tabGen) tabGen.className = 'stream-tab active';
+        if (listEv) listEv.style.display = 'none';
+        if (listGen) listGen.style.display = 'flex';
+      }
+    }
+
+    function getBottleneckAdvice(stepName) {
+      if (!stepName) return 'Audience is progressing smoothly through the creation flow.';
+      if (stepName.includes('New Note')) {
+        return 'Users launch the app but do not tap "New Note". Consider adding an empty library welcome prompt or card.';
+      }
+      if (stepName.includes('Selected Photo')) {
+        return 'Users open the compose screen but do not select a photo. Verify camera and library permissions are clear and frictionless.';
+      }
+      if (stepName.includes('Clicked "Press"')) {
+        return 'Users select a photo but leave without pressing. Check if photo metadata or date confirmations are confusing.';
+      }
+      if (stepName.includes('Started Processing')) {
+        return 'Users click Press but do not reach processing. They might be declining the AI safety consent modal or bouncing on paywall.';
+      }
+      if (stepName.includes('Successfully Created')) {
+        return 'Generations are failing during AI plate carving. Check backend model timeouts and content safety flags.';
+      }
+      return 'Audience is progressing smoothly through the creation flow.';
+    }
+
+    function renderFunnel(funnel) {
+      if (!funnel) return;
+      const baseOpens = funnel.appOpens || 1;
+
+      const steps = [
+        { label: '1. App Opened', count: funnel.appOpens || 0, icon: '📱' },
+        { label: '2. Compose Opened', count: funnel.composeOpened || 0, icon: '✍️' },
+        { label: '3. Photo Selected', count: funnel.photoSelected || 0, icon: '📷' },
+        { label: '4. Press Clicked', count: funnel.pressClicked || 0, icon: '🖨️' },
+        { label: '5. Carving Started', count: funnel.pressingStarted || 0, icon: '⚙️' },
+        { label: '6. Stamp Created', count: funnel.generatedSuccess || 0, icon: '🏆' },
+      ];
+
+      const container = document.getElementById('funnelContainer');
+      if (container) {
+        container.innerHTML = steps.map((step, idx) => {
+          const pctOfTotal = baseOpens > 0 ? Math.min(100, Math.round((step.count / baseOpens) * 100)) : 0;
+          const prevCount = idx > 0 ? steps[idx - 1].count : baseOpens;
+          const stepDrop = prevCount > 0 && idx > 0 ? Math.max(0, Math.round(((prevCount - step.count) / prevCount) * 100)) : 0;
+          const dropLabel = idx > 0 && stepDrop > 0 ? \`<span style="color: var(--red); font-size: 10px; font-family: var(--font-mono); margin-left: 6px;">(-\${stepDrop}% drop)</span>\` : '';
+
+          return \`
+            <div class="funnel-step">
+              <div class="funnel-step-header">
+                <div class="funnel-step-title">
+                  <span>\${step.icon}</span>
+                  <span>\${step.label}</span>
+                </div>
+                <div class="funnel-step-meta">
+                  <span class="funnel-step-count">\${step.count}</span>
+                  <span style="color: var(--text-muted); margin-left: 3px;">(\${pctOfTotal}%)</span>
+                  \${dropLabel}
+                </div>
+              </div>
+              <div class="funnel-bar-bg">
+                <div class="funnel-bar-fill" style="width: \${pctOfTotal}%;"></div>
+              </div>
+            </div>
+          \`;
+        }).join('');
+      }
+
+      const bottleneckBox = document.getElementById('funnelBottleneck');
+      if (bottleneckBox) {
+        if (funnel.biggestDropoff && funnel.biggestDropoff !== 'None' && funnel.biggestDropoffPct > 0) {
+          bottleneckBox.style.display = 'flex';
+          const stepEl = document.getElementById('bottleneckStep');
+          const pctEl = document.getElementById('bottleneckPct');
+          const adviceEl = document.getElementById('bottleneckAdvice');
+          if (stepEl) stepEl.textContent = funnel.biggestDropoff;
+          if (pctEl) pctEl.textContent = funnel.biggestDropoffPct + '% drop-off';
+          if (adviceEl) adviceEl.textContent = getBottleneckAdvice(funnel.biggestDropoff);
+        } else {
+          bottleneckBox.style.display = 'none';
+        }
+      }
+    }
+
+    function formatEventDetails(eventName, meta) {
+      meta = meta || {};
+      switch (eventName) {
+        case 'app_open':
+          return { icon: '📱', title: 'App Opened' };
+        case 'compose_opened':
+          return { icon: '✍️', title: 'Opened Compose Desk' };
+        case 'photo_selected':
+          return { icon: '📷', title: 'Photo Selected (' + (meta.source || 'library') + ')' };
+        case 'photo_picker_cancelled':
+          return { icon: '↩️', title: 'Photo Picker Cancelled' };
+        case 'keywords_suggest_clicked':
+          return { icon: '✨', title: 'Tapped Auto-Detect Keywords' };
+        case 'press_clicked':
+          return { icon: '🖨️', title: 'Tapped "Press Field Note"' };
+        case 'privacy_modal_shown':
+          return { icon: '🛡️', title: 'AI Transparency Modal Prompted' };
+        case 'privacy_modal_accepted':
+          return { icon: '🤝', title: 'AI Transparency Accepted' };
+        case 'paywall_shown':
+          return { icon: '💳', title: 'Paywall Prompted' };
+        case 'pressing_started':
+          return { icon: '⚙️', title: 'Linocut Plate Carving Started' };
+        case 'pressing_success':
+          return { icon: '🏆', title: 'Note Pressed & Saved' };
+        case 'pressing_failed':
+          return { icon: '⚠️', title: meta.isModeration ? 'Pressing Flagged (Moderation)' : 'Pressing Failed' };
+        case 'note_opened':
+          return { icon: '📖', title: 'Viewed Saved Note' };
+        case 'settings_opened':
+          return { icon: '⚙️', title: 'Opened Settings' };
+        case 'screen_view':
+          return { icon: '👁️', title: 'Viewed ' + (meta.screen || 'Screen') };
+        default:
+          return { icon: '⚡', title: eventName.replace(/_/g, ' ') };
+      }
+    }
+
+    function renderRecentEvents(events) {
+      const container = document.getElementById('eventsList');
+      if (!container) return;
+
+      if (!events || events.length === 0) {
+        container.innerHTML = '<div style="font-size: 12px; color: var(--text-muted); font-style: italic; text-align: center; padding: 20px;">No user telemetry events recorded yet.</div>';
+        return;
+      }
+
+      container.innerHTML = events.map(ev => {
+        const info = formatEventDetails(ev.eventName, ev.metadata);
+        const platformBadge = ev.platform === 'android' ? '🤖 Android' : ev.platform === 'ios' ? '🍏 iOS' : '🌐 ' + ev.platform;
+        const devSnippet = ev.deviceId ? ev.deviceId.slice(-6) : (ev.installationId ? ev.installationId.slice(0, 6) : 'anon');
+
+        let metaText = '';
+        if (ev.metadata && Object.keys(ev.metadata).length > 0) {
+          if (ev.metadata.place) metaText = ' · ' + ev.metadata.place;
+          else if (ev.metadata.screen) metaText = ' · ' + ev.metadata.screen;
+          else if (ev.metadata.source) metaText = ' · ' + ev.metadata.source;
+          else if (ev.metadata.model) metaText = ' · ' + (ev.metadata.model.includes('grok') ? 'Grok' : 'Gemini');
+        }
+
+        return \`
+          <div class="activity-item">
+            <div class="activity-left">
+              <div style="font-size: 18px; line-height: 1; flex-shrink: 0;">\${info.icon}</div>
+              <div>
+                <div class="activity-title">\${info.title}</div>
+                <div class="activity-sub">\${platformBadge} · id:\${devSnippet}\${metaText}</div>
+              </div>
+            </div>
+            <div class="activity-time">\${timeAgo(ev.createdAt)}</div>
+          </div>
+        \`;
+      }).join('');
+    }
+
     function renderStats(data) {
       cachedStats = data;
       updatePlatformCards(data);
@@ -741,6 +1087,25 @@ export function renderAdminDashboardHtml(): string {
       document.getElementById('statWebTotal').textContent = web.total;
       document.getElementById('statWebToday').textContent = '+' + web.last24h;
       document.getElementById('statWeb7d').textContent = '+' + web.last7d;
+
+      // Engagement & Retention Metrics
+      if (data.engagement) {
+        document.getElementById('statDau').textContent = data.engagement.dau;
+        document.getElementById('statWau').textContent = data.engagement.wau;
+        document.getElementById('statSessions').textContent = data.engagement.totalSessions;
+      }
+      if (data.funnel) {
+        document.getElementById('statConversion').textContent = (data.funnel.conversionRate || 0) + '%';
+        const badge = document.getElementById('funnelConvBadge');
+        if (badge) {
+          badge.textContent = (data.funnel.conversionRate || 0) + '% Conversion';
+          badge.className = 'badge-pill ' + (data.funnel.conversionRate >= 15 ? 'badge-green' : 'badge-amber');
+        }
+        renderFunnel(data.funnel);
+      }
+
+      // Live Telemetry Events
+      renderRecentEvents(data.recentEvents);
 
       // Generations
       document.getElementById('statGensTotal').textContent = data.generations.total;
