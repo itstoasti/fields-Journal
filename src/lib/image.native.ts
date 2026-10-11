@@ -140,6 +140,17 @@ export async function savePosterLocally(
     const sourceFile = new File(imageBase64OrUri);
     await sourceFile.copy(targetFile);
     return targetFile.uri;
+  } else if (imageBase64OrUri.startsWith('asset:') || imageBase64OrUri.startsWith('content:')) {
+    try {
+      const manip = await ImageManipulator.manipulateAsync(imageBase64OrUri, [], {
+        format: ImageManipulator.SaveFormat.JPEG,
+      });
+      const sourceFile = new File(manip.uri);
+      await sourceFile.copy(targetFile);
+      return targetFile.uri;
+    } catch {
+      return imageBase64OrUri;
+    }
   } else {
     // Clean base64 string
     const cleanBase64 = imageBase64OrUri.replace(/^data:image\/\w+;base64,/, '');

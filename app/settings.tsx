@@ -454,10 +454,29 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        {/* Expedition Guide & Tutorial */}
+        <View style={styles.card}>
+          <TypewriterText size="xs" bold color={colors.inkSecondary} letterSpacing={1.5}>
+            HELP &amp; EXPEDITION GUIDE
+          </TypewriterText>
+
+          <View style={styles.menuList}>
+            <Pressable style={styles.menuItem} onPress={() => router.push('/modal/onboarding')}>
+              <View style={styles.menuItemLeft}>
+                <Ionicons name="book-outline" size={20} color={colors.brickRed} />
+                <TypewriterText size="sm" color={colors.charcoal} style={styles.menuItemText}>
+                  Expedition Field Guide (Tutorial)
+                </TypewriterText>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.inkMuted} />
+            </Pressable>
+          </View>
+        </View>
+
         {/* Legal & About */}
         <View style={styles.card}>
           <TypewriterText size="xs" bold color={colors.inkSecondary} letterSpacing={1.5}>
-            LEGAL & PRIVACY
+            LEGAL &amp; PRIVACY
           </TypewriterText>
 
           <View style={styles.menuList}>
@@ -515,7 +534,7 @@ export default function SettingsScreen() {
             Installation ID: {installationId ? installationId.slice(0, 16) + '...' : 'Loading...'}
           </TypewriterText>
           <TypewriterText size="xs" color={colors.inkMuted} style={styles.footerText}>
-            FIELDS v1.0.0 · Travel Journal & Scrapbook
+            FIELDS v1.0.6 · Travel Journal & Scrapbook
           </TypewriterText>
         </View>
       </ScrollView>

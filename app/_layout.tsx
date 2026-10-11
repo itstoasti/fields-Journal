@@ -74,6 +74,13 @@ export default function RootLayout() {
             animation: 'fade',
           }}
         />
+        <Stack.Screen
+          name="modal/onboarding"
+          options={{
+            presentation: 'fullScreenModal',
+            animation: 'fade',
+          }}
+        />
       </Stack>
 
       {/* Global Field Notes Artisanal Alert Dialog */}

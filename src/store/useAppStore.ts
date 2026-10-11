@@ -13,6 +13,7 @@ const SAVED_NOTES_KEY = 'fn_saved_notes_json';
 const PRIVACY_CONSENT_KEY = 'fn_privacy_consented_v1';
 const SELECTED_MODEL_KEY = 'fn_selected_model_v1';
 const ENTITLEMENTS_KEY = 'fn_entitlements_v1';
+const ONBOARDING_SEEN_KEY = 'fn_has_seen_onboarding_v1';
 
 async function getStorageItem(key: string): Promise<string | null> {
   if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
@@ -57,12 +58,14 @@ export interface AppState {
   notes: Note[];
   entitlements: UserEntitlementState;
   hasConsentedPrivacy: boolean;
+  hasSeenOnboarding: boolean;
   selectedModel: string;
   
   // Actions
   initApp: () => Promise<void>;
   setSelectedModel: (model: string) => Promise<void>;
   setPrivacyConsent: (consented: boolean) => Promise<void>;
+  setHasSeenOnboarding: (seen: boolean) => Promise<void>;
   addNote: (note: Note) => Promise<void>;
   deleteNote: (id: string) => Promise<void>;
   clearAllNotes: () => Promise<void>;
@@ -87,6 +90,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     entitlement: 'free',
   },
   hasConsentedPrivacy: false,
+  hasSeenOnboarding: false,
   selectedModel: 'grok-imagine-image-2.0',
 
   initApp: async () => {
@@ -100,6 +104,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       // Load privacy consent
       const consentStr = await getStorageItem(PRIVACY_CONSENT_KEY);
       const hasConsentedPrivacy = consentStr === 'true';
+
+      // Load onboarding status
+      const onboardingStr = await getStorageItem(ONBOARDING_SEEN_KEY);
+      const hasSeenOnboarding = onboardingStr === 'true';
 
       // Load selected model preference
       const savedModel = await getStorageItem(SELECTED_MODEL_KEY);
@@ -137,6 +145,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         deviceId,
         notes: loadedNotes,
         hasConsentedPrivacy,
+        hasSeenOnboarding,
         selectedModel,
         entitlements: initialEntitlements,
       });
@@ -196,6 +205,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ hasConsentedPrivacy: consented });
   },
 
+  setHasSeenOnboarding: async (seen: boolean) => {
+    await setStorageItem(ONBOARDING_SEEN_KEY, seen ? 'true' : 'false');
+    set({ hasSeenOnboarding: seen });
+  },
+
   addNote: async (newNote: Note) => {
     const currentNotes = get().notes;
     const updated = [newNote, ...currentNotes];
@@ -229,6 +243,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // 2. Wipe all local app storage and saved notes
     await removeStorageItem(SAVED_NOTES_KEY);
     await removeStorageItem(PRIVACY_CONSENT_KEY);
+    await removeStorageItem(ONBOARDING_SEEN_KEY);
     await removeStorageItem(ENTITLEMENTS_KEY);
     await removeStorageItem(SELECTED_MODEL_KEY);
     await clearLocalIdentity();
@@ -252,6 +267,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       accountKey: '',
       entitlements: cleanEntitlements,
       hasConsentedPrivacy: false,
+      hasSeenOnboarding: false,
     });
 
     await setStorageItem(ENTITLEMENTS_KEY, JSON.stringify(cleanEntitlements));

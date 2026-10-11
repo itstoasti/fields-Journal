@@ -18,6 +18,11 @@ export const AnalyticsEvents = {
   PRESSING_FAILED: 'pressing_failed',
   NOTE_OPENED: 'note_opened',
   SETTINGS_OPENED: 'settings_opened',
+  ONBOARDING_MODAL_SHOWN: 'onboarding_modal_shown',
+  ONBOARDING_COMPLETED: 'onboarding_completed',
+  ONBOARDING_SKIPPED: 'onboarding_skipped',
+  DEMO_PHOTO_USED: 'demo_photo_used',
+  SAMPLE_NOTE_OPENED: 'sample_note_opened',
 } as const;
 
 export type AnalyticsEventName = (typeof AnalyticsEvents)[keyof typeof AnalyticsEvents] | string;

@@ -20,7 +20,7 @@ export function getApiBaseUrl(): string {
   }
 
   // 100% Cloud Serverless API on Vercel + Turso Cloud SQLite
-  return 'https://fields-journal.vercel.app';
+  return 'https://travel-scrapbook.com';
 }
 
 const getCommonHeaders = (baseUrl: string): Record<string, string> => {

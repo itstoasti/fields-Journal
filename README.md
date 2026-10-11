@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://fields-journal.vercel.app"><img src="https://img.shields.io/badge/Web-Live%20on%20Vercel-black?style=for-the-badge&logo=vercel" alt="Vercel" /></a>
+  <a href="https://travel-scrapbook.com"><img src="https://img.shields.io/badge/Web-Live%20on%20Vercel-black?style=for-the-badge&logo=vercel" alt="Vercel" /></a>
   <a href="https://turso.tech"><img src="https://img.shields.io/badge/Database-Turso%20Cloud-00FFE0?style=for-the-badge&logo=sqlite&logoColor=black" alt="Turso" /></a>
   <a href="https://expo.dev"><img src="https://img.shields.io/badge/Client-Expo%20SDK%2054-000020?style=for-the-badge&logo=expo" alt="Expo" /></a>
   <a href="https://reactnative.dev"><img src="https://img.shields.io/badge/React%20Native-0.81%20%7C%20React%2019-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React Native" /></a>
@@ -81,7 +81,7 @@ Fields implements a customer-friendly, transparent hybrid monetization model pow
                                                       ▼
                                ┌──────────────────────────────────────────────┐
                                │           VERCEL SERVERLESS API              │
-                               │           https://fields-journal.vercel.app  │
+                               │           https://travel-scrapbook.com  │
                                │                                              │
                                │  • /health             • /v1/me              │
                                │  • /v1/notes           • /v1/credits/sync    │
@@ -195,7 +195,7 @@ npm install --prefix server
 Create a `.env` file in the project root:
 ```env
 # Mobile Client (.env)
-EXPO_PUBLIC_API_URL=https://fields-journal.vercel.app
+EXPO_PUBLIC_API_URL=https://travel-scrapbook.com
 EXPO_PUBLIC_REVENUECAT_API_KEY=test_kejmcZYQWmrefaSizVLCGOzPWDB
 EXPO_PUBLIC_RC_PRODUCT_NOTES_20=notes_20
 EXPO_PUBLIC_RC_ENTITLEMENT_ID=fields_travel_journal_scrapebook_pro
@@ -214,9 +214,9 @@ eas build --platform android --profile production
 * **Keystore**: Managed remotely via EAS Credentials.
 
 ### 2. Google Play Store Compliance URLs
-* **Marketing Landing**: `https://fields-journal.vercel.app`
-* **Privacy Policy**: `https://fields-journal.vercel.app/privacy`
-* **Terms of Service**: `https://fields-journal.vercel.app/terms`
+* **Marketing Landing**: `https://travel-scrapbook.com`
+* **Privacy Policy**: `https://travel-scrapbook.com/privacy`
+* **Terms of Service**: `https://travel-scrapbook.com/terms`
 
 ---
 

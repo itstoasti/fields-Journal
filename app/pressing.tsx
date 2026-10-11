@@ -138,6 +138,7 @@ export default function PressingScreen() {
     keyword3: string;
     year: string;
     entitlement: 'free' | 'ad' | 'credit' | 'pro';
+    isDemo?: string;
   }>();
 
   const installationId = useAppStore((state) => state.installationId);
@@ -287,10 +288,12 @@ export default function PressingScreen() {
     );
     dotLoop.start();
 
-    // 5. Elapsed seconds timer
+    const isDemo = params.isDemo === 'true';
+
+    // 5. Elapsed seconds timer (accelerated for demo so user experiences all stage titles)
     const timerInterval = setInterval(() => {
-      setElapsedSec((prev) => prev + 1);
-    }, 1000);
+      setElapsedSec((prev) => prev + (isDemo ? 5 : 1));
+    }, isDemo ? 550 : 1000);
 
     // 6. Dot cycler (continuous micro-animation)
     const dotInterval = setInterval(() => {
@@ -318,6 +321,88 @@ export default function PressingScreen() {
       setPhase('working');
       setErrorDetails(null);
       setShowTechnicalDetails(false);
+
+      // Demo Sample Run: Use pre-generated Kyoto poster asset, spending 0 API credits & 0 user credits!
+      if (params.isDemo === 'true') {
+        trackEvent(AnalyticsEvents.PRESSING_STARTED, {
+          place: params.place || 'Kyoto Old District',
+          number: params.number || '01',
+          entitlement: 'free',
+          isDemo: true,
+        });
+
+        // 1. Animate progress bar across the demo run
+        Animated.timing(progressAnim, {
+          toValue: 0.92,
+          duration: 2800,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: false,
+        }).start();
+
+        // 2. Wait ~3 seconds for user to enjoy the tactile press animations
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+
+        // 3. Fast finish to 100%
+        Animated.timing(progressAnim, {
+          toValue: 1.0,
+          duration: 300,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: false,
+        }).start();
+
+        if (Platform.OS !== 'web') {
+          try {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          } catch {}
+        }
+
+        // 4. Use already pre-generated Kyoto linocut poster asset (zero Gemini API cost)
+        const demoPosterAsset = require('../assets/posters/poster_kyoto.jpg');
+        const resolvedDemoUri = Image.resolveAssetSource(demoPosterAsset).uri;
+
+        let localPosterUri = resolvedDemoUri;
+        try {
+          localPosterUri = await savePosterLocally(`demo_${Date.now()}`, resolvedDemoUri);
+        } catch {
+          localPosterUri = resolvedDemoUri;
+        }
+
+        // 5. Add note to scrapbook feed
+        const newNote: Note = {
+          id: `demo_${Date.now()}`,
+          createdAt: new Date().toISOString(),
+          place: params.place || 'Kyoto Old District',
+          number: params.number || '01',
+          keywords: [params.keyword1 || 'Cedar trees', params.keyword2 || 'Temple bell', params.keyword3 || 'Dusk mist'],
+          year: params.year || '2026',
+          sourceUri: params.photoUri,
+          posterUri: localPosterUri,
+          width: 1200,
+          height: 896,
+        };
+
+        await addNote(newNote);
+
+        // NOTE: We DO NOT call updateEntitlements()! User's 2-3 free credits are 100% preserved.
+        trackEvent(AnalyticsEvents.PRESSING_SUCCESS, {
+          noteId: newNote.id,
+          isDemo: true,
+        });
+
+        // 6. Navigate to Result screen
+        router.replace({
+          pathname: '/result',
+          params: {
+            noteId: newNote.id,
+            posterUri: localPosterUri,
+            place: newNote.place,
+            number: newNote.number,
+            year: newNote.year,
+            keywords: JSON.stringify(newNote.keywords),
+          },
+        });
+        return;
+      }
 
       trackEvent(AnalyticsEvents.PRESSING_STARTED, {
         place: params.place || '',

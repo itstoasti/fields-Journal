@@ -10,6 +10,7 @@ import {
   Dimensions,
   Keyboard,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -32,6 +33,8 @@ import { trackEvent, AnalyticsEvents } from '../src/lib/analytics';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
+const SAMPLE_TRAVEL_PHOTO = require('../assets/sample_travel_photo.jpg');
+
 export default function ComposeScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ photoUri?: string }>();
@@ -51,6 +54,7 @@ export default function ComposeScreen() {
   const [selectedPhotoUri, setSelectedPhotoUri] = useState<string | null>(
     params.photoUri || null
   );
+  const [isDemo, setIsDemo] = useState<boolean>(false);
   const [selectedAspectRatio, setSelectedAspectRatio] = useState<number>(4 / 3);
   const [place, setPlace] = useState<string>('');
   const [noteNumber, setNoteNumber] = useState<string>(getNextNoteNumber());
@@ -205,6 +209,7 @@ export default function ComposeScreen() {
     try {
       const result = await pickImageFromLibrary();
       if (!result.canceled && result.uri) {
+        setIsDemo(false);
         trackEvent(AnalyticsEvents.PHOTO_SELECTED, {
           source: 'library',
           hasLocation: Boolean(result.location),
@@ -227,6 +232,7 @@ export default function ComposeScreen() {
     try {
       const result = await pickImageFromCamera();
       if (!result.canceled && result.uri) {
+        setIsDemo(false);
         trackEvent(AnalyticsEvents.PHOTO_SELECTED, { source: 'camera' });
         setSelectedPhotoUri(result.uri);
         if (result.width && result.height) {
@@ -241,6 +247,20 @@ export default function ComposeScreen() {
     }
   };
 
+  const handleUseDemoPhoto = () => {
+    trackEvent(AnalyticsEvents.DEMO_PHOTO_USED);
+    setIsDemo(true);
+    const sampleUri = Image.resolveAssetSource(SAMPLE_TRAVEL_PHOTO).uri;
+    setSelectedPhotoUri(sampleUri);
+    setSelectedAspectRatio(560 / 827);
+    setPlace('Kyoto Old District');
+    setYear('2026');
+    setNoteNumber('01');
+    setKeywordsText('Cedar trees · Temple bell · Dusk mist');
+    setAutoDetectedNotice('Loaded Kyoto demo photo (0 credits · no API used)');
+    setTimeout(() => setAutoDetectedNotice(null), 4000);
+  };
+
   const parseKeywords = (): [string, string, string] => {
     const parts = keywordsText.split(/[·,\n|]/).map((s) => s.trim()).filter(Boolean);
     return [
@@ -250,7 +270,11 @@ export default function ComposeScreen() {
     ];
   };
 
-  const executeProceedToPressing = (entitlementType: 'free' | 'ad' | 'credit' | 'pro', yearOverride?: string) => {
+  const executeProceedToPressing = (
+    entitlementType: 'free' | 'ad' | 'credit' | 'pro',
+    yearOverride?: string,
+    demoOverride?: boolean
+  ) => {
     if (!selectedPhotoUri) return;
     const [k1, k2, k3] = parseKeywords();
 
@@ -265,11 +289,18 @@ export default function ComposeScreen() {
         keyword3: k3,
         year: (yearOverride || year).trim() || new Date().getFullYear().toString(),
         entitlement: entitlementType,
+        isDemo: (demoOverride ?? isDemo) ? 'true' : 'false',
       },
     });
   };
 
   const proceedWithEntitlement = (confirmedYear: string) => {
+    // Demo Sample Photo: Bypasses paywalls, ads, and API usage! Uses pre-generated poster with 0 credits deducted.
+    if (isDemo) {
+      executeProceedToPressing('free', confirmedYear, true);
+      return;
+    }
+
     // Step 1: Check First-run Privacy Consent
     if (!hasConsentedPrivacy) {
       trackEvent(AnalyticsEvents.PRIVACY_MODAL_SHOWN);
@@ -367,6 +398,7 @@ export default function ComposeScreen() {
   };
 
   const getButtonTitle = () => {
+    if (isDemo) return 'TEST PRESS (FREE DEMO · 0 CREDITS)';
     const ent = getEntitlementType();
     if (ent === 'pro') return 'MAKE NOTE (PRO)';
     if (ent === 'free') return 'MAKE NOTE (FREE)';
@@ -465,6 +497,38 @@ export default function ComposeScreen() {
                   icon={<Ionicons name="camera-outline" size={16} color={colors.charcoal} />}
                 />
               </View>
+
+              {/* Instant Playground: Test with Kyoto Demo Photo */}
+              <View style={styles.demoDividerRow}>
+                <View style={styles.demoDividerLine} />
+                <TypewriterText size="xs" color={colors.inkMuted} style={styles.demoDividerText}>
+                  OR TEST THE PRESS
+                </TypewriterText>
+                <View style={styles.demoDividerLine} />
+              </View>
+
+              <Pressable
+                onPress={handleUseDemoPhoto}
+                style={({ pressed }) => [
+                  styles.demoPhotoButton,
+                  pressed && { backgroundColor: '#ECE5D8' },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Try with sample Kyoto photo"
+              >
+                <View style={styles.demoPhotoIconWrap}>
+                  <Ionicons name="sparkles" size={13} color={colors.brickRed} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <TypewriterText size="xs" bold color={colors.charcoal} letterSpacing={1}>
+                    TRY KYOTO SAMPLE PHOTO
+                  </TypewriterText>
+                  <TypewriterText size="xs" color={colors.inkSecondary}>
+                    Instant test run (0 credits · pre-generated)
+                  </TypewriterText>
+                </View>
+                <Ionicons name="arrow-forward" size={15} color={colors.inkSecondary} />
+              </Pressable>
             </View>
           )}
 
@@ -692,6 +756,44 @@ const styles = StyleSheet.create({
   },
   pickerButton: {
     flex: 1,
+  },
+  demoDividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    marginVertical: spacing.md,
+    gap: spacing.sm,
+  },
+  demoDividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.paperBorder,
+  },
+  demoDividerText: {
+    fontSize: 10,
+    letterSpacing: 1.5,
+  },
+  demoPhotoButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    backgroundColor: colors.paper,
+    borderWidth: 1.5,
+    borderColor: colors.charcoal,
+    borderRadius: 6,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.md,
+    gap: spacing.sm,
+  },
+  demoPhotoIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F5EBE6',
+    borderWidth: 1,
+    borderColor: colors.brickRed,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   // Boxed Table Grid Form
   tableBox: {
