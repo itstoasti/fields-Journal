@@ -185,7 +185,7 @@ export default function HomeScreen() {
                 Start your travel scrapbook
               </TypewriterText>
               <TypewriterText size="xs" color={colors.inkSecondary} style={styles.emptyPromptSub}>
-                Upload any vacation photo. Fields carves it into an authentic linocut relief print with dates, GPS coordinates, and poetic keywords.
+                Upload any vacation photo. Fields turns it into a vintage travel stamp with dates, places, and memories.
               </TypewriterText>
             </View>
           </View>
@@ -207,7 +207,7 @@ export default function HomeScreen() {
       {/* Bottom Action Bar */}
       <View style={styles.bottomBar}>
         <StampButton
-          title={notes.length === 0 ? 'Carve your first note' : 'New field note'}
+          title={notes.length === 0 ? 'Create your first stamp' : 'New travel stamp'}
           onPress={handleNewNote}
           variant="primary"
           style={styles.primaryButton}

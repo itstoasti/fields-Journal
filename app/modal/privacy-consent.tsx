@@ -65,7 +65,7 @@ export default function PrivacyConsentModal() {
             Generative AI &amp; Photo Processing:
           </TypewriterText>
           <TypewriterText size="xs" color={colors.charcoal} style={styles.messageText}>
-            Fields uses generative AI (powered by Google Gemini) to transform your photo into an artistic linocut stamp and craft your field note entry.
+            Fields uses AI (powered by Google Gemini) to turn your photo into a vintage travel stamp and craft your scrapbook card.
           </TypewriterText>
 
           <View style={styles.bulletItem}>
@@ -73,7 +73,7 @@ export default function PrivacyConsentModal() {
               • Privacy First:
             </TypewriterText>
             <TypewriterText size="xs" color={colors.inkSecondary} style={styles.bulletText}>
-              Your photo is processed transiently in memory to generate your note. It is never stored on our servers and is never used to train AI models.
+              Your photo is used only to create your stamp. It is never stored on our servers and is never used to train AI models.
             </TypewriterText>
           </View>
 

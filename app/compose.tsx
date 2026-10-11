@@ -398,13 +398,13 @@ export default function ComposeScreen() {
   };
 
   const getButtonTitle = () => {
-    if (isDemo) return 'TEST PRESS (FREE DEMO · 0 CREDITS)';
+    if (isDemo) return 'TEST RUN (FREE SAMPLE · 0 CREDITS)';
     const ent = getEntitlementType();
-    if (ent === 'pro') return 'MAKE NOTE (PRO)';
-    if (ent === 'free') return 'MAKE NOTE (FREE)';
-    if (ent === 'ad') return 'WATCH AD TO MAKE NOTE';
-    if (ent === 'credit') return 'MAKE NOTE (1 CREDIT)';
-    return 'PURCHASE NOTES';
+    if (ent === 'pro') return 'CREATE STAMP (PRO)';
+    if (ent === 'free') return 'CREATE STAMP (FREE)';
+    if (ent === 'ad') return 'WATCH AD TO CREATE STAMP';
+    if (ent === 'credit') return 'CREATE STAMP (1 CREDIT)';
+    return 'GET STAMP CREDITS';
   };
 
   return (
@@ -502,7 +502,7 @@ export default function ComposeScreen() {
               <View style={styles.demoDividerRow}>
                 <View style={styles.demoDividerLine} />
                 <TypewriterText size="xs" color={colors.inkMuted} style={styles.demoDividerText}>
-                  OR TEST THE PRESS
+                  OR TRY A SAMPLE PHOTO
                 </TypewriterText>
                 <View style={styles.demoDividerLine} />
               </View>

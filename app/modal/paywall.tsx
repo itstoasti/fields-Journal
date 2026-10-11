@@ -233,7 +233,7 @@ export default function PaywallModal() {
           <View style={styles.subBadgeRow}>
             <View style={styles.subBadgePill}>
               <TypewriterText size="xs" bold color={colors.charcoal} letterSpacing={1}>
-                ✦ 4:3 FINE ART DUAL-PLATES · HAND-PRESSED ✦
+                ✦ VINTAGE TRAVEL STAMPS · SAVED TO YOUR PHONE ✦
               </TypewriterText>
             </View>
           </View>
@@ -241,10 +241,10 @@ export default function PaywallModal() {
           {/* Headline & Editorial Hook */}
           <View style={styles.headlineBox}>
             <TypewriterText size="xl" bold color={colors.charcoal} style={styles.headline}>
-              Every Journey Deserves a Timeless Print
+              Every Journey Deserves a Stamp
             </TypewriterText>
             <TypewriterText size="xs" color={colors.inkSecondary} style={styles.subtitle}>
-              Transform your travel photos into bespoke hand-pressed linocut field notes.
+              Turn your favorite vacation photos into vintage travel stamps you'll love looking back on.
             </TypewriterText>
           </View>
 
@@ -259,38 +259,38 @@ export default function PaywallModal() {
                 </TypewriterText>
               </View>
               <TypewriterText size="xs" color={colors.inkSecondary} style={styles.benefitsGuarantee}>
-                Full Studio Edition
+                Full Pro Edition
               </TypewriterText>
             </View>
 
-            {/* Benefit 1: Bespoke Linocut */}
+            {/* Benefit 1: Stamp Art */}
             <View style={styles.benefitRow}>
               <View style={styles.iconBadge}>
                 <Ionicons name="color-palette" size={17} color={colors.oxblood} />
               </View>
               <View style={styles.benefitTextCol}>
                 <TypewriterText size="xs" bold color={colors.charcoal}>
-                  Bespoke Hand-Carved Stamp Art
+                  Custom Vintage Stamp Art
                 </TypewriterText>
                 <TypewriterText size="xs" color={colors.inkSecondary} style={styles.benefitCopy}>
-                  Not a generic filter. Every photo is individually analyzed to carve a multi-color rubber stamp unique to your scene.
+                  Not a cheap filter. Each photo turns into a vintage rubber stamp custom-made for your travel scene.
                 </TypewriterText>
               </View>
             </View>
 
             <View style={styles.benefitDivider} />
 
-            {/* Benefit 2: Archival Prints */}
+            {/* Benefit 2: High-Res Downloads */}
             <View style={styles.benefitRow}>
               <View style={styles.iconBadge}>
                 <Ionicons name="image" size={17} color={colors.oxblood} />
               </View>
               <View style={styles.benefitTextCol}>
                 <TypewriterText size="xs" bold color={colors.charcoal}>
-                  Museum-Grade 4K Dual-Plates
+                  Super Sharp High-Res Downloads
                 </TypewriterText>
                 <TypewriterText size="xs" color={colors.inkSecondary} style={styles.benefitCopy}>
-                  Archival 4:3 prints complete with location & typewriter notes. Calibrated for fine-art framing or camera roll export.
+                  Crisp 4:3 cards with your travel destination, date, and memories. Perfect for framing or sharing.
                 </TypewriterText>
               </View>
             </View>

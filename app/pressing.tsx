@@ -63,26 +63,26 @@ function parsePressingError(err: any): FormattedError {
 
   if (isTimeout) {
     return {
-      badge: '⏱ PRESS TIMEOUT',
+      badge: '⏱ TIME OUT',
       badgeVariant: 'timeout',
-      title: err?.title || 'The Press Timed Out',
+      title: err?.title || 'Taking Longer Than Expected',
       message:
-        'Carving this intricate linocut plate took longer than expected and the studio connection timed out.',
-      tip: err?.tip || 'Check your internet connection and tap Retry to run the press again.',
+        'Creating this detailed travel stamp took longer than usual and timed out.',
+      tip: err?.tip || 'Check your connection and tap Retry to try again.',
       isModeration: false,
       rawDetails: rawMsg,
     };
   }
 
   return {
-    badge: '⚠ STUDIO BULLETIN',
+    badge: '⚠ NOTICE',
     badgeVariant: 'warning',
-    title: err?.title || 'Pressing Interrupted',
+    title: err?.title || 'Stamp Creation Interrupted',
     message:
       err?.message && !err.message.includes('API returned') && !err.message.includes('{')
         ? err.message
-        : 'Our printing press ran into an unexpected hiccup while processing this image.',
-    tip: err?.tip || 'Tap Retry to run the press again, or choose a different photograph.',
+        : 'Something went wrong while processing your travel photo.',
+    tip: err?.tip || 'Tap Retry to try again, or choose a different photo.',
     isModeration: false,
     rawDetails: rawMsg,
   };
@@ -96,33 +96,33 @@ interface PressStage {
 
 const STAGES: PressStage[] = [
   {
-    label: 'analyzing composition',
-    subtext: 'evaluating focal lines, contrast & lighting',
+    label: 'analyzing photo',
+    subtext: 'finding the best lighting, subject & details',
     thresholdSec: 0,
   },
   {
-    label: 'carving linocut relief',
-    subtext: 'chiseling plate contours & natural terrain',
+    label: 'creating stamp artwork',
+    subtext: 'turning your travel photo into vintage stamp art',
     thresholdSec: 4,
   },
   {
-    label: 'mixing archival pigments',
-    subtext: 'formulating mineral spot inks & vintage sepia',
+    label: 'mixing stamp colors',
+    subtext: 'blending classic ink tones and travel dyes',
     thresholdSec: 9,
   },
   {
-    label: 'inking relief block',
-    subtext: 'rolling pigment across the raised linocut plate',
+    label: 'inking the stamp',
+    subtext: 'applying ink to the stamp surface',
     thresholdSec: 14,
   },
   {
-    label: 'hand-pressing platen',
-    subtext: 'applying mechanical pressure to parchment',
+    label: 'pressing your stamp',
+    subtext: 'stamping onto your digital travel card',
     thresholdSec: 19,
   },
   {
-    label: 'lifting & setting print',
-    subtext: 'inspecting deckled edges & archival drying',
+    label: 'finishing your field note',
+    subtext: 'adding your location, date & memories',
     thresholdSec: 25,
   },
 ];
