@@ -278,7 +278,7 @@ export default function OnboardingScreen() {
 
         {/* Action Button */}
         <StampButton
-          title={isLastSlide ? 'CARVE YOUR FIRST STAMP (FREE)' : 'NEXT STEP'}
+          title={isLastSlide ? 'CREATE YOUR FIRST STAMP (FREE)' : 'NEXT STEP'}
           onPress={handleNext}
           variant="primary"
           style={styles.primaryBtn}
