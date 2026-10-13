@@ -1,0 +1,20 @@
+# Fields (travel-scrapbook.com)
+> The digital travel scrapbook app that turns iPhone photos into collectible vintage passport stamps and journal cards.
+
+## About the Application
+Fields is a web application and mobile travel journal available at https://travel-scrapbook.com.
+It solves the problem of travel memories getting lost in unorganized camera rolls by transforming trips into tactile, printable digital scrapbooks.
+
+### Core Features
+- **Instant Travel Stamp Art**: Automatically turns travel pictures into woodblock / vintage rubber stamp art printed side-by-side with your photo.
+- **Automatic Metadata**: Extracts location and date metadata from camera roll photos with zero typing required.
+- **3 Memory Words**: AI suggests 3 evocative sensory keywords (e.g. "Cedar trees · Temple bell · Dusk mist") that can be customized by the traveler.
+- **3:2 Landscape Ratio**: High-resolution print-ready collectible format matching classic 35mm photography.
+- **Private & Local**: Photos are processed in memory and never stored or used to train models.
+
+## Key Links
+- Main Website: https://travel-scrapbook.com/
+- Web App / Stamp Generator: https://travel-scrapbook.com/app
+- Travel Scrapbook Journal: https://travel-scrapbook.com/blog
+- Pricing & Lifetime Access: https://travel-scrapbook.com/#pricing
+- Privacy Policy: https://travel-scrapbook.com/privacy

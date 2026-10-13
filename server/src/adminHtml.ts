@@ -886,6 +886,55 @@ export function renderAdminDashboardHtml(): string {
       </div>
       <div id="grantResultNotice" style="font-size: 10px; font-family: var(--font-mono); display: none;"></div>
     </div>
+
+    <!-- Autonomous SEO & Blog Management Panel -->
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">Autonomous SEO &amp; Blog</div>
+        <span id="statBlogBadge" class="kpi-badge badge-green">Live Engine</span>
+      </div>
+      <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px;">
+        Headless publishing endpoint for AI agents (Muse, Grokbot, OpenClaw, Hermes) with RankMath/Yoast scoring and instant IndexNow search indexing.
+      </p>
+
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 12px;">
+        <div style="background: var(--card-inner); border: 1px solid var(--card-border); padding: 8px; border-radius: 6px; text-align: center;">
+          <div style="font-size: 9px; color: var(--text-muted); font-family: var(--font-mono); text-transform: uppercase;">Published</div>
+          <div id="statBlogPublished" style="font-size: 16px; font-weight: 700; color: var(--cyan);">-</div>
+        </div>
+        <div style="background: var(--card-inner); border: 1px solid var(--card-border); padding: 8px; border-radius: 6px; text-align: center;">
+          <div style="font-size: 9px; color: var(--text-muted); font-family: var(--font-mono); text-transform: uppercase;">Blog Views</div>
+          <div id="statBlogViews" style="font-size: 16px; font-weight: 700; color: var(--green);">-</div>
+        </div>
+        <div style="background: var(--card-inner); border: 1px solid var(--card-border); padding: 8px; border-radius: 6px; text-align: center;">
+          <div style="font-size: 9px; color: var(--text-muted); font-family: var(--font-mono); text-transform: uppercase;">Avg SEO</div>
+          <div id="statBlogSeoScore" style="font-size: 16px; font-weight: 700; color: var(--amber);">-</div>
+        </div>
+      </div>
+
+      <!-- Quick Navigation -->
+      <div style="display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap;">
+        <a href="/blog" target="_blank" style="flex: 1; min-width: 100px; text-align: center; background: var(--card-inner); border: 1px solid var(--card-border); color: var(--text); padding: 7px 10px; border-radius: 6px; font-size: 11px; font-family: var(--font-mono); text-decoration: none;">
+          📖 View Blog
+        </a>
+        <a href="/sitemap.xml" target="_blank" style="flex: 1; min-width: 100px; text-align: center; background: var(--card-inner); border: 1px solid var(--card-border); color: var(--text); padding: 7px 10px; border-radius: 6px; font-size: 11px; font-family: var(--font-mono); text-decoration: none;">
+          🗺️ sitemap.xml
+        </a>
+        <a href="/llms.txt" target="_blank" style="flex: 1; min-width: 100px; text-align: center; background: var(--card-inner); border: 1px solid var(--card-border); color: var(--text); padding: 7px 10px; border-radius: 6px; font-size: 11px; font-family: var(--font-mono); text-decoration: none;">
+          🤖 llms.txt
+        </a>
+      </div>
+
+      <!-- Agent Setup Box -->
+      <div style="background: var(--card-inner); border: 1px solid var(--card-border); border-radius: 6px; padding: 10px; font-size: 11px;">
+        <div style="font-weight: 600; color: var(--cyan); margin-bottom: 4px; font-family: var(--font-mono);">🤖 Autonomous Agent Publish Endpoint</div>
+        <div style="color: var(--text-muted); font-size: 10px; margin-bottom: 6px;">Give this endpoint to Muse / OpenClaw / Hermes:</div>
+        <code style="display: block; background: #09090B; padding: 7px; border-radius: 4px; color: #10B981; font-family: var(--font-mono); font-size: 10px; word-break: break-all; margin-bottom: 6px;">
+          https://travel-scrapbook.com/v1/blog/publish
+        </code>
+        <div style="color: var(--text-muted); font-size: 10px;">Header: <code style="color: var(--text);">Authorization: Bearer &lt;AGENT_API_KEY&gt;</code></div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -1402,6 +1451,16 @@ export function renderAdminDashboardHtml(): string {
         \`).join('');
       } else {
         destContainer.innerHTML = '<div style="font-size: 11px; color: var(--text-muted); font-style: italic;">No destinations stamped yet.</div>';
+      }
+
+      // Autonomous Blog & SEO Stats
+      if (data.blogStats) {
+        const blogPub = document.getElementById('statBlogPublished');
+        const blogViews = document.getElementById('statBlogViews');
+        const blogSeo = document.getElementById('statBlogSeoScore');
+        if (blogPub) blogPub.textContent = data.blogStats.publishedPosts || 0;
+        if (blogViews) blogViews.textContent = data.blogStats.totalViews || 0;
+        if (blogSeo) blogSeo.textContent = (data.blogStats.avgSeoScore || 0) + '/100';
       }
 
       // Render Streams

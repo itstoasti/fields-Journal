@@ -62,6 +62,38 @@
       "destination": "/terms.html"
     },
     {
+      "source": "/blog",
+      "destination": "/api"
+    },
+    {
+      "source": "/blog/(.*)",
+      "destination": "/api"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "/api"
+    },
+    {
+      "source": "/robots.txt",
+      "destination": "/api"
+    },
+    {
+      "source": "/llms.txt",
+      "destination": "/api"
+    },
+    {
+      "source": "/rss.xml",
+      "destination": "/api"
+    },
+    {
+      "source": "/feed.xml",
+      "destination": "/api"
+    },
+    {
+      "source": "/fields_indexnow_2026.txt",
+      "destination": "/api"
+    },
+    {
       "source": "/admin",
       "destination": "/api"
     },

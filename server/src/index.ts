@@ -26,12 +26,31 @@ import {
   getAdminStats,
   getSystemSetting,
   setSystemSetting,
+  createOrUpdateBlogPost,
+  getBlogPostBySlug,
+  listBlogPosts,
+  deleteBlogPost,
+  incrementBlogPostViews,
+  getInternalLinkTargets,
+  getBlogStats,
+  BlogPost,
 } from './db.js';
 import { buildGrokPrompt } from './prompt.js';
 import { generateFieldNoteImage } from './grok.js';
 import { generateGeminiImage } from './gemini.js';
 import { suggestMemoryKeywords } from './keywords.js';
 import { renderAdminDashboardHtml } from './adminHtml.js';
+import { auditBlogPostSeo } from './seoValidator.js';
+import {
+  markdownToHtml,
+  renderBlogIndexHtml,
+  renderBlogPostHtml,
+  generateSitemapXml,
+  generateRssFeedXml,
+  generateLlmsTxt,
+  slugify,
+} from './blogRenderer.js';
+import { pingIndexNow, INDEXNOW_KEY } from './indexnow.js';
 
 dotenv.config();
 
@@ -155,6 +174,382 @@ function verifyAdminAuth(c: any): boolean {
     return provided === configuredAdminPin;
   }
 }
+
+// Agent & SEO Auth Verification
+function verifyAgentAuth(c: any): boolean {
+  const configuredKey = process.env.AGENT_API_KEY || process.env.ADMIN_PIN || process.env.ADMIN_KEY || 'fields_agent_sec_2026_x89a1c';
+  const authHeader = c.req.header('Authorization');
+  const token = authHeader?.replace(/^Bearer\s+/i, '').trim();
+  const queryKey = c.req.query('key') || c.req.query('api_key');
+  const provided = token || queryKey;
+  if (!provided) return false;
+  try {
+    const bufA = Buffer.from(provided);
+    const bufB = Buffer.from(configuredKey);
+    return bufA.length === bufB.length && crypto.timingSafeEqual(bufA, bufB);
+  } catch {
+    return provided === configuredKey;
+  }
+}
+
+// ==========================================
+// TECHNICAL SEO & GENERATIVE ENGINE (GEO) ROUTES
+// ==========================================
+
+// 1. Dynamic robots.txt
+app.get('/robots.txt', (c) => {
+  const robotsTxt = `# robots.txt for travel-scrapbook.com
+User-agent: *
+Allow: /
+Allow: /blog
+Allow: /blog/*
+Disallow: /admin
+Disallow: /admin/*
+Disallow: /v1/
+
+# Search Engines
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+# AI Crawlers & LLM Retrieval Engines
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+User-agent: Twitterbot
+Allow: /
+
+User-agent: facebookexternalhit
+Allow: /
+
+Sitemap: https://travel-scrapbook.com/sitemap.xml
+`;
+  c.header('Content-Type', 'text/plain; charset=utf-8');
+  c.header('Cache-Control', 'public, max-age=86400, stale-while-revalidate=86400');
+  return c.text(robotsTxt);
+});
+
+// 2. Dynamic sitemap.xml
+app.get('/sitemap.xml', async (c) => {
+  try {
+    const posts = await listBlogPosts({ status: 'published', limit: 500 });
+    const sitemapXml = generateSitemapXml(posts);
+    c.header('Content-Type', 'application/xml; charset=utf-8');
+    c.header('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
+    return c.body(sitemapXml);
+  } catch (err) {
+    console.error('[SEO] Sitemap generation error:', err);
+    return c.text('Error generating sitemap', 500);
+  }
+});
+
+// 3. LLMs Knowledge Standard (/llms.txt)
+app.get('/llms.txt', async (c) => {
+  try {
+    const posts = await listBlogPosts({ status: 'published', limit: 100 });
+    const llmsTxt = generateLlmsTxt(posts);
+    c.header('Content-Type', 'text/markdown; charset=utf-8');
+    c.header('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
+    return c.text(llmsTxt);
+  } catch (err) {
+    return c.text('# Fields (travel-scrapbook.com)\nTravel scrapbook app.', 200);
+  }
+});
+
+// 4. RSS 2.0 Feeds
+app.get('/rss.xml', async (c) => {
+  const posts = await listBlogPosts({ status: 'published', limit: 50 });
+  c.header('Content-Type', 'application/rss+xml; charset=utf-8');
+  c.header('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
+  return c.body(generateRssFeedXml(posts));
+});
+
+app.get('/feed.xml', async (c) => {
+  const posts = await listBlogPosts({ status: 'published', limit: 50 });
+  c.header('Content-Type', 'application/rss+xml; charset=utf-8');
+  c.header('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
+  return c.body(generateRssFeedXml(posts));
+});
+
+// 5. IndexNow Ownership Verification File
+app.get(`/${INDEXNOW_KEY}.txt`, (c) => {
+  c.header('Content-Type', 'text/plain; charset=utf-8');
+  return c.text(INDEXNOW_KEY);
+});
+
+// ==========================================
+// PUBLIC BLOG PAGES (/blog and /blog/:slug)
+// ==========================================
+
+// Public Blog Index
+app.get('/blog', async (c) => {
+  try {
+    const posts = await listBlogPosts({ status: 'published', limit: 60 });
+    c.header('Cache-Control', 'public, s-maxage=1800, stale-while-revalidate=86400');
+    return c.html(renderBlogIndexHtml(posts));
+  } catch (err) {
+    console.error('[Blog] Index error:', err);
+    return c.html('<h1>Unable to load blog</h1>', 500);
+  }
+});
+
+// Public Blog Article Reader
+app.get('/blog/:slug', async (c) => {
+  const slug = c.req.param('slug');
+  try {
+    const post = await getBlogPostBySlug(slug);
+    if (!post) {
+      return c.html(`
+        <!DOCTYPE html><html><head><title>Story Not Found | Fields</title><style>body{font-family:serif;background:#F4EFE6;color:#1C1917;text-align:center;padding:80px 20px;}</style></head>
+        <body><h1>Article Not Found</h1><p>The travel note you requested does not exist or has been moved.</p><p><a href="/blog" style="color:#B9381E;">&larr; Back to Journal</a></p></body></html>
+      `, 404);
+    }
+
+    // If draft, require agent or admin authentication to preview
+    if (post.status === 'draft' && !verifyAgentAuth(c) && !verifyAdminAuth(c)) {
+      return c.html(`
+        <!DOCTYPE html><html><head><title>Draft Preview | Fields</title><style>body{font-family:serif;background:#F4EFE6;color:#1C1917;text-align:center;padding:80px 20px;}</style></head>
+        <body><h1>Draft Article</h1><p>This article is currently in draft mode. Provide your agent API key in the URL parameter (?key=...) to preview.</p><p><a href="/blog" style="color:#B9381E;">&larr; Back to Journal</a></p></body></html>
+      `, 403);
+    }
+
+    // Increment view counter asynchronously
+    incrementBlogPostViews(slug).catch(() => {});
+
+    // Fetch up to 3 related posts
+    const allPosts = await listBlogPosts({ status: 'published', limit: 4 });
+    const related = allPosts.filter(p => p.slug !== slug);
+
+    c.header('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
+    return c.html(renderBlogPostHtml(post, related));
+  } catch (err) {
+    console.error('[Blog] Post render error:', err);
+    return c.html('<h1>Error reading article</h1>', 500);
+  }
+});
+
+// ==========================================
+// AGENT BLOG & SEO APIS
+// ==========================================
+
+// Internal Link Building Targets API for Muse / OpenClaw / Hermes
+app.get('/v1/blog/seo/link-targets', async (c) => {
+  try {
+    const linkTargets = await getInternalLinkTargets();
+    return c.json({
+      success: true,
+      site_domain: 'https://travel-scrapbook.com',
+      data: linkTargets,
+      instructions: 'Use these internal URLs and anchor text variations when writing articles to build strong topic clusters and drive user conversions.',
+    });
+  } catch (err: any) {
+    return c.json({ error: err?.message || 'Failed to fetch link targets' }, 500);
+  }
+});
+
+// Agent Article Publishing & RankMath SEO Auditor API
+app.post('/v1/blog/publish', async (c) => {
+  if (!verifyAgentAuth(c) && !verifyAdminAuth(c)) {
+    return c.json({
+      error: 'UNAUTHORIZED',
+      message: 'Invalid or missing agent API key. Send via Authorization: Bearer <KEY> or ?key=<KEY>',
+    }, 401);
+  }
+
+  try {
+    const body = await c.req.json();
+    if (!body.title || typeof body.title !== 'string') {
+      return c.json({ error: 'Missing required field: title' }, 400);
+    }
+    if (!body.content_markdown || typeof body.content_markdown !== 'string') {
+      return c.json({ error: 'Missing required field: content_markdown' }, 400);
+    }
+
+    const slug = slugify(body.slug || body.title);
+    const contentHtml = markdownToHtml(body.content_markdown);
+
+    // Run automated RankMath / Yoast SEO Audit
+    const seoAudit = auditBlogPostSeo({
+      title: body.title,
+      seo_title: body.seo_title,
+      slug,
+      meta_description: body.meta_description,
+      focus_keywords: body.focus_keywords,
+      content_markdown: body.content_markdown,
+      featured_image_url: body.featured_image_url,
+      featured_image_alt: body.featured_image_alt,
+      canonical_url: body.canonical_url,
+      faq_items: body.faq_items,
+    });
+
+    const status = (body.status === 'draft' ? 'draft' : 'published') as 'draft' | 'published';
+
+    const savedPost = await createOrUpdateBlogPost({
+      id: body.id,
+      slug,
+      title: body.title.trim(),
+      seo_title: (body.seo_title || body.title).trim(),
+      meta_description: (body.meta_description || '').trim(),
+      content_markdown: body.content_markdown,
+      content_html: contentHtml,
+      focus_keywords: Array.isArray(body.focus_keywords) ? body.focus_keywords : [],
+      featured_image_url: body.featured_image_url || null,
+      featured_image_alt: body.featured_image_alt || null,
+      featured_image_caption: body.featured_image_caption || null,
+      canonical_url: body.canonical_url || `https://travel-scrapbook.com/blog/${slug}`,
+      robots: body.robots || 'index, follow',
+      schema_type: body.schema_type || 'Article',
+      faq_items: Array.isArray(body.faq_items) ? body.faq_items : [],
+      author: body.author || 'Fields Editorial',
+      seo_score: seoAudit.score,
+      seo_feedback: seoAudit.summary,
+      status,
+    });
+
+    // Auto-ping IndexNow if post is published
+    if (status === 'published' && body.ping_indexnow !== false) {
+      pingIndexNow([`https://travel-scrapbook.com/blog/${slug}`, 'https://travel-scrapbook.com/sitemap.xml']).catch((err) => {
+        console.warn('[IndexNow] Background ping warning:', err);
+      });
+    }
+
+    return c.json({
+      success: true,
+      message: status === 'published' ? 'Article published and indexed successfully' : 'Article draft saved',
+      post: {
+        id: savedPost.id,
+        slug: savedPost.slug,
+        url: `https://travel-scrapbook.com/blog/${savedPost.slug}`,
+        title: savedPost.title,
+        status: savedPost.status,
+        seo_score: savedPost.seo_score,
+        reading_time_minutes: savedPost.reading_time_minutes,
+        created_at: savedPost.created_at,
+      },
+      seo_audit: {
+        score: seoAudit.score,
+        is_passing: seoAudit.isPassing,
+        passed_checks: seoAudit.passedChecks,
+        total_checks: seoAudit.totalChecks,
+        feedback: seoAudit.feedback,
+        recommendations: seoAudit.summary,
+      },
+    });
+  } catch (err: any) {
+    console.error('[Blog] Publish error:', err);
+    return c.json({ error: err?.message || 'Failed to publish article' }, 500);
+  }
+});
+
+// Agent Media Upload API (Base64)
+app.post('/v1/blog/media/upload', async (c) => {
+  if (!verifyAgentAuth(c) && !verifyAdminAuth(c)) {
+    return c.json({ error: 'UNAUTHORIZED' }, 401);
+  }
+
+  try {
+    const body = await c.req.json();
+    if (!body.imageBase64) {
+      return c.json({ error: 'Missing imageBase64 in payload' }, 400);
+    }
+
+    const cleanBase64 = body.imageBase64.replace(/^data:image\/[a-z]+;base64,/, '');
+    const buffer = Buffer.from(cleanBase64, 'base64');
+    const ext = (body.mimeType || 'image/jpeg').includes('png') ? 'png' : (body.mimeType || '').includes('webp') ? 'webp' : 'jpg';
+    const filename = body.filename ? slugify(path.basename(body.filename, path.extname(body.filename))) + `.${ext}` : `media_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.${ext}`;
+
+    const uploadDirs = [
+      path.resolve(process.cwd(), 'public', 'assets', 'uploads'),
+      path.resolve(process.cwd(), 'server', 'public', 'assets', 'uploads'),
+      path.resolve(process.cwd(), 'dist', 'assets', 'uploads'),
+    ];
+
+    for (const dir of uploadDirs) {
+      try {
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(path.join(dir, filename), buffer);
+      } catch {
+        // Non-fatal if folder doesn't exist in serverless environment
+      }
+    }
+
+    const mediaUrl = `/assets/uploads/${filename}`;
+    return c.json({
+      success: true,
+      url: mediaUrl,
+      full_url: `https://travel-scrapbook.com${mediaUrl}`,
+      filename,
+      size_bytes: buffer.length,
+      alt_text: body.altText || filename,
+    });
+  } catch (err: any) {
+    return c.json({ error: err?.message || 'Failed to process media upload' }, 500);
+  }
+});
+
+// List Blog Posts (API)
+app.get('/v1/blog/posts', async (c) => {
+  const statusParam = (c.req.query('status') || 'all') as 'all' | 'published' | 'draft';
+  const limitParam = Math.min(100, Math.max(1, Number(c.req.query('limit') || 50)));
+  const offsetParam = Math.max(0, Number(c.req.query('offset') || 0));
+
+  try {
+    const posts = await listBlogPosts({ status: statusParam, limit: limitParam, offset: offsetParam });
+    return c.json({
+      success: true,
+      count: posts.length,
+      posts: posts.map(p => ({
+        id: p.id,
+        slug: p.slug,
+        url: `https://travel-scrapbook.com/blog/${p.slug}`,
+        title: p.title,
+        seo_title: p.seo_title,
+        meta_description: p.meta_description,
+        focus_keywords: p.focus_keywords,
+        featured_image_url: p.featured_image_url,
+        status: p.status,
+        seo_score: p.seo_score,
+        view_count: p.view_count,
+        reading_time_minutes: p.reading_time_minutes,
+        created_at: p.created_at,
+        updated_at: p.updated_at,
+      })),
+    });
+  } catch (err: any) {
+    return c.json({ error: err?.message || 'Failed to list blog posts' }, 500);
+  }
+});
+
+// Delete Blog Post (API)
+app.delete('/v1/blog/posts/:slugOrId', async (c) => {
+  if (!verifyAgentAuth(c) && !verifyAdminAuth(c)) {
+    return c.json({ error: 'UNAUTHORIZED' }, 401);
+  }
+
+  const slugOrId = c.req.param('slugOrId');
+  const deleted = await deleteBlogPost(slugOrId);
+  return c.json({ success: deleted, message: deleted ? 'Post deleted' : 'Post not found' });
+});
 
 // Admin Telemetry Dashboard (Mobile Web)
 app.get('/admin', (c) => {

@@ -161,6 +161,37 @@ export async function initDb(): Promise<void> {
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_events_name ON app_events (event_name);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_events_created ON app_events (created_at);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_events_device ON app_events (device_id);`);
+
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS blog_posts (
+        id TEXT PRIMARY KEY,
+        slug TEXT UNIQUE NOT NULL,
+        title TEXT NOT NULL,
+        seo_title TEXT,
+        meta_description TEXT,
+        content_markdown TEXT NOT NULL,
+        content_html TEXT NOT NULL,
+        focus_keywords TEXT,
+        featured_image_url TEXT,
+        featured_image_alt TEXT,
+        featured_image_caption TEXT,
+        canonical_url TEXT,
+        robots TEXT DEFAULT 'index, follow',
+        schema_type TEXT DEFAULT 'Article',
+        faq_items TEXT,
+        author TEXT DEFAULT 'Fields Editorial',
+        seo_score INTEGER DEFAULT 0,
+        seo_feedback TEXT,
+        status TEXT NOT NULL DEFAULT 'published',
+        view_count INTEGER NOT NULL DEFAULT 0,
+        reading_time_minutes INTEGER NOT NULL DEFAULT 3,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    await client.execute(`CREATE UNIQUE INDEX IF NOT EXISTS idx_blog_posts_slug ON blog_posts (slug);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_blog_posts_status ON blog_posts (status);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_blog_posts_created ON blog_posts (created_at);`);
     console.log(`[Database] Initialized successfully (${isTurso ? 'Turso Cloud' : 'Local SQLite'})`);
   } catch (err) {
     console.error('[Database] Schema initialization warning:', err);
@@ -1570,5 +1601,297 @@ export async function getAdminStats(): Promise<AdminStats> {
         createdAt: String(r.created_at),
       };
     }),
+    blogStats: await getBlogStats().catch(() => ({
+      totalPosts: 0,
+      publishedPosts: 0,
+      draftPosts: 0,
+      totalViews: 0,
+      avgSeoScore: 0,
+    })),
   };
 }
+
+export interface BlogPost {
+  id: string;
+  slug: string;
+  title: string;
+  seo_title: string;
+  meta_description: string;
+  content_markdown: string;
+  content_html: string;
+  focus_keywords: string[];
+  featured_image_url: string | null;
+  featured_image_alt: string | null;
+  featured_image_caption: string | null;
+  canonical_url: string | null;
+  robots: string;
+  schema_type: string;
+  faq_items: Array<{ question: string; answer: string }>;
+  author: string;
+  seo_score: number;
+  seo_feedback: string[];
+  status: 'draft' | 'published';
+  view_count: number;
+  reading_time_minutes: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export function mapRowToBlogPost(row: any): BlogPost {
+  let focusKeywords: string[] = [];
+  try {
+    focusKeywords = JSON.parse(row.focus_keywords || '[]');
+  } catch {
+    focusKeywords = row.focus_keywords ? [String(row.focus_keywords)] : [];
+  }
+
+  let faqItems: Array<{ question: string; answer: string }> = [];
+  try {
+    faqItems = JSON.parse(row.faq_items || '[]');
+  } catch {
+    faqItems = [];
+  }
+
+  let seoFeedback: string[] = [];
+  try {
+    seoFeedback = JSON.parse(row.seo_feedback || '[]');
+  } catch {
+    seoFeedback = [];
+  }
+
+  return {
+    id: String(row.id),
+    slug: String(row.slug),
+    title: String(row.title),
+    seo_title: String(row.seo_title || row.title),
+    meta_description: String(row.meta_description || ''),
+    content_markdown: String(row.content_markdown || ''),
+    content_html: String(row.content_html || ''),
+    focus_keywords: focusKeywords,
+    featured_image_url: row.featured_image_url ? String(row.featured_image_url) : null,
+    featured_image_alt: row.featured_image_alt ? String(row.featured_image_alt) : null,
+    featured_image_caption: row.featured_image_caption ? String(row.featured_image_caption) : null,
+    canonical_url: row.canonical_url ? String(row.canonical_url) : null,
+    robots: String(row.robots || 'index, follow'),
+    schema_type: String(row.schema_type || 'Article'),
+    faq_items: faqItems,
+    author: String(row.author || 'Fields Editorial'),
+    seo_score: Number(row.seo_score || 0),
+    seo_feedback: seoFeedback,
+    status: (row.status === 'draft' ? 'draft' : 'published') as 'draft' | 'published',
+    view_count: Number(row.view_count || 0),
+    reading_time_minutes: Number(row.reading_time_minutes || 3),
+    created_at: String(row.created_at || ''),
+    updated_at: String(row.updated_at || ''),
+  };
+}
+
+export async function createOrUpdateBlogPost(post: Partial<BlogPost> & { title: string; content_markdown: string }): Promise<BlogPost> {
+  const now = new Date().toISOString();
+  const slug = post.slug || post.title.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^\w\-]+/g, '');
+  const id = post.id || `post_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  
+  const wordCount = post.content_markdown.trim().split(/\s+/).filter(Boolean).length;
+  const readingTime = Math.max(1, Math.ceil(wordCount / 200));
+
+  const existingRes = await client.execute({
+    sql: 'SELECT id, created_at, view_count FROM blog_posts WHERE slug = ? LIMIT 1',
+    args: [slug],
+  });
+
+  const existing = existingRes.rows[0];
+  const finalId = existing ? String(existing.id) : id;
+  const createdAt = existing ? String(existing.created_at) : now;
+  const viewCount = existing ? Number(existing.view_count || 0) : 0;
+
+  const focusKeywordsJson = JSON.stringify(post.focus_keywords || []);
+  const faqItemsJson = JSON.stringify(post.faq_items || []);
+  const seoFeedbackJson = JSON.stringify(post.seo_feedback || []);
+
+  await client.execute({
+    sql: `
+      INSERT INTO blog_posts (
+        id, slug, title, seo_title, meta_description,
+        content_markdown, content_html, focus_keywords,
+        featured_image_url, featured_image_alt, featured_image_caption,
+        canonical_url, robots, schema_type, faq_items,
+        author, seo_score, seo_feedback, status, view_count,
+        reading_time_minutes, created_at, updated_at
+      ) VALUES (
+        ?, ?, ?, ?, ?,
+        ?, ?, ?,
+        ?, ?, ?,
+        ?, ?, ?, ?,
+        ?, ?, ?, ?, ?,
+        ?, ?, ?
+      )
+      ON CONFLICT(slug) DO UPDATE SET
+        title = excluded.title,
+        seo_title = excluded.seo_title,
+        meta_description = excluded.meta_description,
+        content_markdown = excluded.content_markdown,
+        content_html = excluded.content_html,
+        focus_keywords = excluded.focus_keywords,
+        featured_image_url = excluded.featured_image_url,
+        featured_image_alt = excluded.featured_image_alt,
+        featured_image_caption = excluded.featured_image_caption,
+        canonical_url = excluded.canonical_url,
+        robots = excluded.robots,
+        schema_type = excluded.schema_type,
+        faq_items = excluded.faq_items,
+        author = excluded.author,
+        seo_score = excluded.seo_score,
+        seo_feedback = excluded.seo_feedback,
+        status = excluded.status,
+        reading_time_minutes = excluded.reading_time_minutes,
+        updated_at = excluded.updated_at;
+    `,
+    args: [
+      finalId,
+      slug,
+      post.title,
+      post.seo_title || post.title,
+      post.meta_description || '',
+      post.content_markdown,
+      post.content_html || '',
+      focusKeywordsJson,
+      post.featured_image_url || null,
+      post.featured_image_alt || null,
+      post.featured_image_caption || null,
+      post.canonical_url || `https://travel-scrapbook.com/blog/${slug}`,
+      post.robots || 'index, follow',
+      post.schema_type || 'Article',
+      faqItemsJson,
+      post.author || 'Fields Editorial',
+      post.seo_score || 0,
+      seoFeedbackJson,
+      post.status || 'published',
+      viewCount,
+      readingTime,
+      createdAt,
+      now,
+    ],
+  });
+
+  const saved = await getBlogPostBySlug(slug);
+  if (!saved) throw new Error('Failed to retrieve saved blog post');
+  return saved;
+}
+
+export async function getBlogPostBySlug(slug: string): Promise<BlogPost | null> {
+  const res = await client.execute({
+    sql: 'SELECT * FROM blog_posts WHERE slug = ? LIMIT 1',
+    args: [slug],
+  });
+  if (res.rows.length === 0) return null;
+  return mapRowToBlogPost(res.rows[0]);
+}
+
+export async function listBlogPosts(options: { status?: 'all' | 'published' | 'draft'; limit?: number; offset?: number } = {}): Promise<BlogPost[]> {
+  const { status = 'all', limit = 50, offset = 0 } = options;
+  let sql = 'SELECT * FROM blog_posts';
+  const args: any[] = [];
+
+  if (status !== 'all') {
+    sql += ' WHERE status = ?';
+    args.push(status);
+  }
+
+  sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+  args.push(limit, offset);
+
+  const res = await client.execute({ sql, args });
+  return res.rows.map(mapRowToBlogPost);
+}
+
+export async function deleteBlogPost(slugOrId: string): Promise<boolean> {
+  const res = await client.execute({
+    sql: 'DELETE FROM blog_posts WHERE slug = ? OR id = ?',
+    args: [slugOrId, slugOrId],
+  });
+  return (res.rowsAffected || 0) > 0;
+}
+
+export async function incrementBlogPostViews(slug: string): Promise<void> {
+  try {
+    await client.execute({
+      sql: 'UPDATE blog_posts SET view_count = view_count + 1 WHERE slug = ?',
+      args: [slug],
+    });
+  } catch {
+    // Non-fatal
+  }
+}
+
+export async function getInternalLinkTargets(): Promise<{
+  conversionAnchors: Array<{ label: string; url: string; recommendedAnchors: string[] }>;
+  existingArticles: Array<{ title: string; slug: string; url: string; keywords: string[] }>;
+}> {
+  const posts = await listBlogPosts({ status: 'published', limit: 25 });
+  return {
+    conversionAnchors: [
+      {
+        label: 'Travel Scrapbook Web App',
+        url: 'https://travel-scrapbook.com/app',
+        recommendedAnchors: [
+          'create a digital travel scrapbook',
+          'turn photos into vintage stamps',
+          'try the travel scrapbook app',
+          'make a custom travel stamp'
+        ],
+      },
+      {
+        label: 'Fields Homepage',
+        url: 'https://travel-scrapbook.com/',
+        recommendedAnchors: [
+          'Fields travel journal',
+          'digital travel scrapbook',
+          'vintage travel scrapbook app'
+        ],
+      },
+      {
+        label: 'Pro Pricing & Lifetime Edition',
+        url: 'https://travel-scrapbook.com/#pricing',
+        recommendedAnchors: [
+          'Fields Pro lifetime access',
+          'unlimited travel scrapbooks',
+          'high-resolution print export'
+        ],
+      },
+    ],
+    existingArticles: posts.map(p => ({
+      title: p.title,
+      slug: p.slug,
+      url: `https://travel-scrapbook.com/blog/${p.slug}`,
+      keywords: p.focus_keywords || [],
+    })),
+  };
+}
+
+export async function getBlogStats(): Promise<{
+  totalPosts: number;
+  publishedPosts: number;
+  draftPosts: number;
+  totalViews: number;
+  avgSeoScore: number;
+}> {
+  const res = await client.execute(`
+    SELECT 
+      COUNT(*) as total_posts,
+      SUM(CASE WHEN status = 'published' THEN 1 ELSE 0 END) as published_posts,
+      SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END) as draft_posts,
+      COALESCE(SUM(view_count), 0) as total_views,
+      COALESCE(AVG(seo_score), 0) as avg_seo_score
+    FROM blog_posts;
+  `);
+
+  const row = res.rows[0];
+  return {
+    totalPosts: Number(row?.total_posts || 0),
+    publishedPosts: Number(row?.published_posts || 0),
+    draftPosts: Number(row?.draft_posts || 0),
+    totalViews: Number(row?.total_views || 0),
+    avgSeoScore: Math.round(Number(row?.avg_seo_score || 0)),
+  };
+}
+
