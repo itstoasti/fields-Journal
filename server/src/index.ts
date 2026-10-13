@@ -984,48 +984,13 @@ app.post('/v1/webhooks/revenuecat', async (c) => {
 // STRIPE WEB CHECKOUT & WEBHOOK APIS
 // ==========================================
 
-// Public Checkout Links configuration (for website and web app)
-app.get('/v1/checkout/links', async (c) => {
-  try {
-    const lifetimeUrl = await getSystemSetting('stripe_lifetime_url', process.env.STRIPE_LIFETIME_URL || '');
-    const pack20Url = await getSystemSetting('stripe_pack20_url', process.env.STRIPE_PACK20_URL || '');
-    return c.json({
-      success: true,
-      lifetime_url: lifetimeUrl,
-      pack20_url: pack20Url,
-    });
-  } catch (err: any) {
-    return c.json({ error: err?.message || 'Failed to load checkout links' }, 500);
-  }
-});
-
-// Admin endpoint to configure Stripe Payment Links
-app.post('/v1/admin/checkout-links', async (c) => {
-  if (!verifyAdminAuth(c) && !verifyAgentAuth(c)) {
-    return c.json({ error: 'UNAUTHORIZED' }, 401);
-  }
-
-  try {
-    const body = await c.req.json();
-    if (body.lifetime_url !== undefined) {
-      await setSystemSetting('stripe_lifetime_url', String(body.lifetime_url).trim());
-    }
-    if (body.pack20_url !== undefined) {
-      await setSystemSetting('stripe_pack20_url', String(body.pack20_url).trim());
-    }
-
-    const lifetimeUrl = await getSystemSetting('stripe_lifetime_url', process.env.STRIPE_LIFETIME_URL || '');
-    const pack20Url = await getSystemSetting('stripe_pack20_url', process.env.STRIPE_PACK20_URL || '');
-
-    return c.json({
-      success: true,
-      message: 'Checkout links updated successfully',
-      lifetime_url: lifetimeUrl,
-      pack20_url: pack20Url,
-    });
-  } catch (err: any) {
-    return c.json({ error: err?.message || 'Failed to update checkout links' }, 500);
-  }
+// Public Checkout Links (reads strictly from server environment variables)
+app.get('/v1/checkout/links', (c) => {
+  return c.json({
+    success: true,
+    lifetime_url: process.env.STRIPE_LIFETIME_URL || '',
+    pack20_url: process.env.STRIPE_PACK20_URL || '',
+  });
 });
 
 // Stripe Webhook for Web Purchases (checkout.session.completed)

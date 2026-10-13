@@ -14559,35 +14559,6 @@ function renderAdminDashboardHtml() {
           Returns: {"url": "https://travel-scrapbook.com/v1/blog/media/img.jpg"}
         </div>
       </div>
-
-      <!-- Stripe Web Checkout Settings Card -->
-      <div style="background: var(--card-inner); border: 1px solid var(--card-border); border-radius: 6px; padding: 12px; font-size: 11px; margin-top: 12px;">
-        <div style="font-weight: 700; color: #FFC480; margin-bottom: 6px; font-family: var(--font-mono);">\u{1F4B3} Stripe Web Checkout Settings</div>
-        <div style="color: var(--text-muted); font-size: 10px; margin-bottom: 10px;">
-          Paste your Stripe Payment Links below so visitors can purchase Lifetime Access ($29.99) and 20 Note Packs ($2.99) on the website.
-        </div>
-
-        <div style="margin-bottom: 8px;">
-          <label style="display: block; font-size: 9px; font-family: var(--font-mono); color: var(--text-muted); margin-bottom: 3px;">
-            LIFETIME ACCESS STRIPE LINK ($29.99):
-          </label>
-          <input id="inputStripeLifetime" type="text" placeholder="https://buy.stripe.com/..." style="width: 100%; background: #09090B; border: 1px solid var(--card-border); color: var(--text); padding: 6px 8px; border-radius: 4px; font-size: 10px; font-family: var(--font-mono); outline: none;" />
-        </div>
-
-        <div style="margin-bottom: 10px;">
-          <label style="display: block; font-size: 9px; font-family: var(--font-mono); color: var(--text-muted); margin-bottom: 3px;">
-            20 NOTES PACK STRIPE LINK ($2.99):
-          </label>
-          <input id="inputStripePack20" type="text" placeholder="https://buy.stripe.com/..." style="width: 100%; background: #09090B; border: 1px solid var(--card-border); color: var(--text); padding: 6px 8px; border-radius: 4px; font-size: 10px; font-family: var(--font-mono); outline: none;" />
-        </div>
-
-        <div style="display: flex; gap: 8px; align-items: center;">
-          <button id="btnSaveStripeLinks" onclick="handleSaveStripeLinks()" style="background: #FFC480; color: #1C1917; border: none; font-weight: 700; font-size: 10px; padding: 6px 12px; border-radius: 4px; cursor: pointer;">
-            SAVE STRIPE LINKS
-          </button>
-          <span id="stripeSaveStatus" style="font-size: 10px; color: var(--green); display: none;">Saved successfully!</span>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -15248,49 +15219,6 @@ function renderAdminDashboardHtml() {
       }
     }
 
-    async function fetchCheckoutLinks() {
-      try {
-        const res = await fetch('/v1/checkout/links');
-        if (res.ok) {
-          const data = await res.json();
-          const inLifetime = document.getElementById('inputStripeLifetime');
-          const inPack20 = document.getElementById('inputStripePack20');
-          if (inLifetime && !inLifetime.value) inLifetime.value = data.lifetime_url || '';
-          if (inPack20 && !inPack20.value) inPack20.value = data.pack20_url || '';
-        }
-      } catch (err) {}
-    }
-
-    async function handleSaveStripeLinks() {
-      const pin = getStoredPin();
-      const lifetime = document.getElementById('inputStripeLifetime')?.value || '';
-      const pack20 = document.getElementById('inputStripePack20')?.value || '';
-      const btn = document.getElementById('btnSaveStripeLinks');
-      const status = document.getElementById('stripeSaveStatus');
-
-      if (btn) btn.textContent = 'SAVING...';
-      try {
-        const res = await fetch('/v1/admin/checkout-links', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + pin,
-          },
-          body: JSON.stringify({ lifetime_url: lifetime, pack20_url: pack20 })
-        });
-        if (res.ok) {
-          if (status) {
-            status.style.display = 'inline';
-            setTimeout(() => { status.style.display = 'none'; }, 3000);
-          }
-        }
-      } catch (e) {
-        console.error('Failed to save stripe links:', e);
-      } finally {
-        if (btn) btn.textContent = 'SAVE STRIPE LINKS';
-      }
-    }
-
     function handlePinSubmit() {
       const pin = document.getElementById('pinField').value.trim();
       if (!pin) return;
@@ -15306,7 +15234,6 @@ function renderAdminDashboardHtml() {
 
     window.addEventListener('DOMContentLoaded', () => {
       fetchStats();
-      fetchCheckoutLinks();
       setInterval(fetchStats, 30000);
     });
   </script>
@@ -17505,42 +17432,12 @@ app.post("/v1/webhooks/revenuecat", async (c) => {
     return c.json({ error: "WEBHOOK_ERROR", message: err.message }, 500);
   }
 });
-app.get("/v1/checkout/links", async (c) => {
-  try {
-    const lifetimeUrl = await getSystemSetting("stripe_lifetime_url", process.env.STRIPE_LIFETIME_URL || "");
-    const pack20Url = await getSystemSetting("stripe_pack20_url", process.env.STRIPE_PACK20_URL || "");
-    return c.json({
-      success: true,
-      lifetime_url: lifetimeUrl,
-      pack20_url: pack20Url
-    });
-  } catch (err) {
-    return c.json({ error: err?.message || "Failed to load checkout links" }, 500);
-  }
-});
-app.post("/v1/admin/checkout-links", async (c) => {
-  if (!verifyAdminAuth(c) && !verifyAgentAuth(c)) {
-    return c.json({ error: "UNAUTHORIZED" }, 401);
-  }
-  try {
-    const body = await c.req.json();
-    if (body.lifetime_url !== void 0) {
-      await setSystemSetting("stripe_lifetime_url", String(body.lifetime_url).trim());
-    }
-    if (body.pack20_url !== void 0) {
-      await setSystemSetting("stripe_pack20_url", String(body.pack20_url).trim());
-    }
-    const lifetimeUrl = await getSystemSetting("stripe_lifetime_url", process.env.STRIPE_LIFETIME_URL || "");
-    const pack20Url = await getSystemSetting("stripe_pack20_url", process.env.STRIPE_PACK20_URL || "");
-    return c.json({
-      success: true,
-      message: "Checkout links updated successfully",
-      lifetime_url: lifetimeUrl,
-      pack20_url: pack20Url
-    });
-  } catch (err) {
-    return c.json({ error: err?.message || "Failed to update checkout links" }, 500);
-  }
+app.get("/v1/checkout/links", (c) => {
+  return c.json({
+    success: true,
+    lifetime_url: process.env.STRIPE_LIFETIME_URL || "",
+    pack20_url: process.env.STRIPE_PACK20_URL || ""
+  });
 });
 app.post("/v1/webhooks/stripe", async (c) => {
   try {
