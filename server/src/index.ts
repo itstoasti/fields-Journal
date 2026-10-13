@@ -36,6 +36,10 @@ import {
   getInternalLinkTargets,
   getBlogStats,
   BlogPost,
+  saveBlogMedia,
+  getBlogMedia,
+  listBlogMedia,
+  deleteBlogMedia,
 } from './db.js';
 import { buildGrokPrompt } from './prompt.js';
 import { generateFieldNoteImage } from './grok.js';
@@ -609,62 +613,174 @@ app.post('/v1/blog/publish', async (c) => {
   }
 });
 
-// Agent Media Upload API (Base64 or Image URL download)
+// Agent Media Upload API (Supports Multipart Form Data, Raw Binary, Base64 JSON, or Image URL)
 app.post('/v1/blog/media/upload', async (c) => {
   if (!verifyAgentAuth(c) && !verifyAdminAuth(c)) {
-    return c.json({ error: 'UNAUTHORIZED' }, 401);
+    return c.json({
+      error: 'UNAUTHORIZED',
+      message: 'Invalid or missing agent API key. Send via Authorization: Bearer <KEY> or ?key=<KEY>',
+    }, 401);
   }
 
   try {
-    const body = await c.req.json();
-    let buffer: Buffer;
+    const contentType = (c.req.header('content-type') || '').toLowerCase();
+    let buffer: Buffer | undefined;
+    let mimeType = 'image/jpeg';
     let ext = 'jpg';
+    let preferredFilename: string | undefined = c.req.query('filename');
+    let altText: string | undefined = c.req.query('alt');
 
-    if (body.imageUrl && typeof body.imageUrl === 'string') {
-      const resp = await fetch(body.imageUrl);
-      if (!resp.ok) {
-        return c.json({ error: `Failed to download image from imageUrl: HTTP ${resp.status}` }, 400);
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await c.req.formData();
+      const fileEntry = formData.get('file') || formData.get('image') || formData.get('media');
+      if (!fileEntry || typeof fileEntry === 'string') {
+        return c.json({ error: 'BAD_REQUEST', message: 'No file or image provided in form data' }, 400);
       }
-      const arrayBuffer = await resp.arrayBuffer();
+      const fileObj = fileEntry as File;
+      const arrayBuffer = await fileObj.arrayBuffer();
       buffer = Buffer.from(arrayBuffer);
-      const contentType = resp.headers.get('content-type') || '';
-      ext = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : 'jpg';
-    } else if (body.imageBase64 && typeof body.imageBase64 === 'string') {
-      const cleanBase64 = body.imageBase64.replace(/^data:image\/[a-z]+;base64,/, '');
-      buffer = Buffer.from(cleanBase64, 'base64');
-      ext = (body.mimeType || 'image/jpeg').includes('png') ? 'png' : (body.mimeType || '').includes('webp') ? 'webp' : 'jpg';
+      if (fileObj.type) mimeType = fileObj.type;
+      if (fileObj.name) preferredFilename = preferredFilename || fileObj.name;
+      const formAlt = formData.get('alt') || formData.get('altText');
+      if (typeof formAlt === 'string') altText = formAlt;
+    } else if (contentType.startsWith('image/') || contentType === 'application/octet-stream') {
+      const arrayBuffer = await c.req.arrayBuffer();
+      buffer = Buffer.from(arrayBuffer);
+      if (contentType.startsWith('image/')) mimeType = contentType.split(';')[0].trim();
     } else {
-      return c.json({ error: 'Missing imageBase64 or imageUrl in payload' }, 400);
+      // JSON payload
+      const body = await c.req.json().catch(() => ({}));
+      if (body.filename) preferredFilename = preferredFilename || body.filename;
+      if (body.altText || body.alt) altText = altText || body.altText || body.alt;
+
+      if (body.imageUrl && typeof body.imageUrl === 'string') {
+        const resp = await fetch(body.imageUrl);
+        if (!resp.ok) {
+          return c.json({ error: `Failed to download image from imageUrl: HTTP ${resp.status}` }, 400);
+        }
+        const arrayBuffer = await resp.arrayBuffer();
+        buffer = Buffer.from(arrayBuffer);
+        const fetchedContentType = resp.headers.get('content-type') || '';
+        if (fetchedContentType.startsWith('image/')) {
+          mimeType = fetchedContentType.split(';')[0].trim();
+        }
+      } else {
+        const base64Str = body.imageBase64 || body.image || body.data;
+        if (base64Str && typeof base64Str === 'string') {
+          const cleanBase64 = base64Str.replace(/^data:image\/[a-z]+;base64,/, '');
+          buffer = Buffer.from(cleanBase64, 'base64');
+          if (body.mimeType) mimeType = body.mimeType;
+        }
+      }
     }
 
-    const filename = body.filename ? slugify(path.basename(body.filename, path.extname(body.filename))) + `.${ext}` : `media_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.${ext}`;
+    if (!buffer || buffer.length === 0) {
+      return c.json({
+        error: 'BAD_REQUEST',
+        message: 'No image data detected. Provide a file via multipart/form-data (-F "file=@..."), raw binary with Content-Type: image/*, or JSON with imageBase64 / imageUrl.',
+      }, 400);
+    }
 
+    // Determine extension from mimeType or filename
+    if (mimeType.includes('png')) ext = 'png';
+    else if (mimeType.includes('webp')) ext = 'webp';
+    else if (mimeType.includes('gif')) ext = 'gif';
+    else if (mimeType.includes('svg')) ext = 'svg';
+    else ext = 'jpg';
+
+    let cleanName = preferredFilename
+      ? slugify(path.basename(preferredFilename, path.extname(preferredFilename)))
+      : `img_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    if (!cleanName || cleanName === 'file' || cleanName === 'image') {
+      cleanName = `img_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    }
+    const filename = `${cleanName}.${ext}`;
+
+    // 1. Save permanently to Turso Cloud database
+    await saveBlogMedia({
+      filename,
+      mime_type: mimeType,
+      data_base64: buffer.toString('base64'),
+      byte_size: buffer.length,
+    });
+
+    // 2. Also write to local filesystem if writable (dev / local fast cache)
     const uploadDirs = [
       path.resolve(process.cwd(), 'public', 'assets', 'uploads'),
-      path.resolve(process.cwd(), 'server', 'public', 'assets', 'uploads'),
       path.resolve(process.cwd(), 'dist', 'assets', 'uploads'),
     ];
-
     for (const dir of uploadDirs) {
       try {
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         fs.writeFileSync(path.join(dir, filename), buffer);
       } catch {
-        // Non-fatal if folder doesn't exist in serverless environment
+        // Non-fatal in read-only / serverless environment
       }
     }
 
-    const mediaUrl = `/assets/uploads/${filename}`;
+    const publicUrl = `https://travel-scrapbook.com/v1/blog/media/${filename}`;
+    const directUrl = `https://travel-scrapbook.com/assets/uploads/${filename}`;
+
     return c.json({
       success: true,
-      url: mediaUrl,
-      full_url: `https://travel-scrapbook.com${mediaUrl}`,
+      url: publicUrl,
+      direct_url: directUrl,
       filename,
       size_bytes: buffer.length,
-      alt_text: body.altText || filename,
+      mime_type: mimeType,
+      alt_text: altText || cleanName.replace(/[-_]+/g, ' '),
+      instructions: 'You can now set this url directly as featured_image_url in PATCH /v1/blog/posts/:slug or POST /v1/blog/publish.',
     });
   } catch (err: any) {
+    console.error('[Media Upload Error]:', err);
     return c.json({ error: err?.message || 'Failed to process media upload' }, 500);
+  }
+});
+
+// Public Media Serving Handler (backed by Turso Cloud Database)
+async function handleServeMedia(c: any) {
+  const filenameOrId = c.req.param('filenameOrId');
+  try {
+    const media = await getBlogMedia(filenameOrId);
+    if (!media) {
+      return c.text('Image not found', 404);
+    }
+    const buffer = Buffer.from(media.data_base64, 'base64');
+    c.header('Content-Type', media.mime_type || 'image/jpeg');
+    c.header('Cache-Control', 'public, max-age=31536000, immutable');
+    c.header('Content-Disposition', `inline; filename="${media.filename}"`);
+    return c.body(buffer);
+  } catch (err: any) {
+    console.error('[Media Serve Error]:', err);
+    return c.text('Failed to load media', 500);
+  }
+}
+
+app.get('/v1/blog/media/:filenameOrId', handleServeMedia);
+app.get('/assets/uploads/:filenameOrId', handleServeMedia);
+
+// List Uploaded Media (API)
+app.get('/v1/blog/media', async (c) => {
+  try {
+    const limit = Math.min(100, Math.max(1, Number(c.req.query('limit') || 50)));
+    const mediaList = await listBlogMedia(limit);
+    return c.json({ success: true, count: mediaList.length, media: mediaList });
+  } catch (err: any) {
+    return c.json({ error: err?.message || 'Failed to list media' }, 500);
+  }
+});
+
+// Delete Uploaded Media (API)
+app.delete('/v1/blog/media/:filenameOrId', async (c) => {
+  if (!verifyAgentAuth(c) && !verifyAdminAuth(c)) {
+    return c.json({ error: 'UNAUTHORIZED' }, 401);
+  }
+  const filenameOrId = c.req.param('filenameOrId');
+  try {
+    const deleted = await deleteBlogMedia(filenameOrId);
+    return c.json({ success: deleted, message: deleted ? 'Media deleted' : 'Media not found' });
+  } catch (err: any) {
+    return c.json({ error: err?.message || 'Failed to delete media' }, 500);
   }
 });
 

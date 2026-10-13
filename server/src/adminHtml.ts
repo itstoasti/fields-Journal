@@ -951,10 +951,13 @@ export function renderAdminDashboardHtml(): string {
           GET /v1/blog/posts/:slugOrId
         </code>
 
-        <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 3px;">4. Upload / Download Image Asset:</div>
-        <code style="display: block; background: #09090B; padding: 5px 8px; border-radius: 4px; color: #A78BFA; font-family: var(--font-mono); font-size: 10px; word-break: break-all;">
-          POST /v1/blog/media/upload {"imageUrl": "https://..."} or {"imageBase64": "..."}
+        <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 3px;">4. Upload Generated Image Asset (Multipart, Raw Binary, or JSON):</div>
+        <code style="display: block; background: #09090B; padding: 5px 8px; border-radius: 4px; color: #A78BFA; font-family: var(--font-mono); font-size: 10px; word-break: break-all; margin-bottom: 4px;">
+          POST /v1/blog/media/upload (-F "file=@img.jpg" OR {"imageBase64": "..."})
         </code>
+        <div style="font-size: 9px; color: var(--text-muted); margin-bottom: 8px; font-family: var(--font-mono);">
+          Returns: {"url": "https://travel-scrapbook.com/v1/blog/media/img.jpg"}
+        </div>
       </div>
     </div>
   </div>

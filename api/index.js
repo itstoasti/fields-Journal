@@ -11827,6 +11827,17 @@ async function initDb() {
     await client.execute(`CREATE UNIQUE INDEX IF NOT EXISTS idx_blog_posts_slug ON blog_posts (slug);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_blog_posts_status ON blog_posts (status);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_blog_posts_created ON blog_posts (created_at);`);
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS blog_media (
+        id TEXT PRIMARY KEY,
+        filename TEXT UNIQUE NOT NULL,
+        mime_type TEXT NOT NULL,
+        data_base64 TEXT NOT NULL,
+        byte_size INTEGER NOT NULL,
+        created_at TEXT NOT NULL
+      );
+    `);
+    await client.execute(`CREATE UNIQUE INDEX IF NOT EXISTS idx_blog_media_filename ON blog_media (filename);`);
     console.log(`[Database] Initialized successfully (${isTurso ? "Turso Cloud" : "Local SQLite"})`);
   } catch (err) {
     console.error("[Database] Schema initialization warning:", err);
@@ -13189,6 +13200,62 @@ async function getBlogStats() {
     avgSeoScore: Math.round(Number(row?.avg_seo_score || 0))
   };
 }
+async function saveBlogMedia(media) {
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const id = media.id || `media_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  await client.execute({
+    sql: `
+      INSERT OR REPLACE INTO blog_media (id, filename, mime_type, data_base64, byte_size, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `,
+    args: [id, media.filename, media.mime_type, media.data_base64, media.byte_size, now]
+  });
+  return {
+    id,
+    filename: media.filename,
+    mime_type: media.mime_type,
+    data_base64: media.data_base64,
+    byte_size: media.byte_size,
+    created_at: now
+  };
+}
+async function getBlogMedia(filenameOrId) {
+  const res = await client.execute({
+    sql: "SELECT * FROM blog_media WHERE filename = ? OR id = ? LIMIT 1",
+    args: [filenameOrId, filenameOrId]
+  });
+  if (res.rows.length === 0) return null;
+  const row = res.rows[0];
+  return {
+    id: String(row.id),
+    filename: String(row.filename),
+    mime_type: String(row.mime_type),
+    data_base64: String(row.data_base64),
+    byte_size: Number(row.byte_size || 0),
+    created_at: String(row.created_at)
+  };
+}
+async function listBlogMedia(limit = 50) {
+  const res = await client.execute({
+    sql: "SELECT id, filename, mime_type, byte_size, created_at FROM blog_media ORDER BY created_at DESC LIMIT ?",
+    args: [limit]
+  });
+  return res.rows.map((row) => ({
+    id: String(row.id),
+    filename: String(row.filename),
+    mime_type: String(row.mime_type),
+    byte_size: Number(row.byte_size || 0),
+    created_at: String(row.created_at),
+    url: `https://travel-scrapbook.com/v1/blog/media/${row.filename}`
+  }));
+}
+async function deleteBlogMedia(filenameOrId) {
+  const res = await client.execute({
+    sql: "DELETE FROM blog_media WHERE filename = ? OR id = ?",
+    args: [filenameOrId, filenameOrId]
+  });
+  return (res.rowsAffected || 0) > 0;
+}
 
 // server/src/prompt.ts
 var LOCKED_GROK_PROMPT_TEMPLATE = `Please create a separate "Rubber Stamp Travel Field Notes Poster" for each photo I upload, outputting each photo individually without collage or multi-image combinations.
@@ -14484,10 +14551,13 @@ function renderAdminDashboardHtml() {
           GET /v1/blog/posts/:slugOrId
         </code>
 
-        <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 3px;">4. Upload / Download Image Asset:</div>
-        <code style="display: block; background: #09090B; padding: 5px 8px; border-radius: 4px; color: #A78BFA; font-family: var(--font-mono); font-size: 10px; word-break: break-all;">
-          POST /v1/blog/media/upload {"imageUrl": "https://..."} or {"imageBase64": "..."}
+        <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 3px;">4. Upload Generated Image Asset (Multipart, Raw Binary, or JSON):</div>
+        <code style="display: block; background: #09090B; padding: 5px 8px; border-radius: 4px; color: #A78BFA; font-family: var(--font-mono); font-size: 10px; word-break: break-all; margin-bottom: 4px;">
+          POST /v1/blog/media/upload (-F "file=@img.jpg" OR {"imageBase64": "..."})
         </code>
+        <div style="font-size: 9px; color: var(--text-muted); margin-bottom: 8px; font-family: var(--font-mono);">
+          Returns: {"url": "https://travel-scrapbook.com/v1/blog/media/img.jpg"}
+        </div>
       </div>
     </div>
   </div>
@@ -17051,32 +17121,83 @@ app.post("/v1/blog/publish", async (c) => {
 });
 app.post("/v1/blog/media/upload", async (c) => {
   if (!verifyAgentAuth(c) && !verifyAdminAuth(c)) {
-    return c.json({ error: "UNAUTHORIZED" }, 401);
+    return c.json({
+      error: "UNAUTHORIZED",
+      message: "Invalid or missing agent API key. Send via Authorization: Bearer <KEY> or ?key=<KEY>"
+    }, 401);
   }
   try {
-    const body = await c.req.json();
+    const contentType = (c.req.header("content-type") || "").toLowerCase();
     let buffer;
+    let mimeType = "image/jpeg";
     let ext = "jpg";
-    if (body.imageUrl && typeof body.imageUrl === "string") {
-      const resp = await fetch(body.imageUrl);
-      if (!resp.ok) {
-        return c.json({ error: `Failed to download image from imageUrl: HTTP ${resp.status}` }, 400);
+    let preferredFilename = c.req.query("filename");
+    let altText = c.req.query("alt");
+    if (contentType.includes("multipart/form-data")) {
+      const formData = await c.req.formData();
+      const fileEntry = formData.get("file") || formData.get("image") || formData.get("media");
+      if (!fileEntry || typeof fileEntry === "string") {
+        return c.json({ error: "BAD_REQUEST", message: "No file or image provided in form data" }, 400);
       }
-      const arrayBuffer = await resp.arrayBuffer();
+      const fileObj = fileEntry;
+      const arrayBuffer = await fileObj.arrayBuffer();
       buffer = import_node_buffer.Buffer.from(arrayBuffer);
-      const contentType = resp.headers.get("content-type") || "";
-      ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
-    } else if (body.imageBase64 && typeof body.imageBase64 === "string") {
-      const cleanBase64 = body.imageBase64.replace(/^data:image\/[a-z]+;base64,/, "");
-      buffer = import_node_buffer.Buffer.from(cleanBase64, "base64");
-      ext = (body.mimeType || "image/jpeg").includes("png") ? "png" : (body.mimeType || "").includes("webp") ? "webp" : "jpg";
+      if (fileObj.type) mimeType = fileObj.type;
+      if (fileObj.name) preferredFilename = preferredFilename || fileObj.name;
+      const formAlt = formData.get("alt") || formData.get("altText");
+      if (typeof formAlt === "string") altText = formAlt;
+    } else if (contentType.startsWith("image/") || contentType === "application/octet-stream") {
+      const arrayBuffer = await c.req.arrayBuffer();
+      buffer = import_node_buffer.Buffer.from(arrayBuffer);
+      if (contentType.startsWith("image/")) mimeType = contentType.split(";")[0].trim();
     } else {
-      return c.json({ error: "Missing imageBase64 or imageUrl in payload" }, 400);
+      const body = await c.req.json().catch(() => ({}));
+      if (body.filename) preferredFilename = preferredFilename || body.filename;
+      if (body.altText || body.alt) altText = altText || body.altText || body.alt;
+      if (body.imageUrl && typeof body.imageUrl === "string") {
+        const resp = await fetch(body.imageUrl);
+        if (!resp.ok) {
+          return c.json({ error: `Failed to download image from imageUrl: HTTP ${resp.status}` }, 400);
+        }
+        const arrayBuffer = await resp.arrayBuffer();
+        buffer = import_node_buffer.Buffer.from(arrayBuffer);
+        const fetchedContentType = resp.headers.get("content-type") || "";
+        if (fetchedContentType.startsWith("image/")) {
+          mimeType = fetchedContentType.split(";")[0].trim();
+        }
+      } else {
+        const base64Str = body.imageBase64 || body.image || body.data;
+        if (base64Str && typeof base64Str === "string") {
+          const cleanBase64 = base64Str.replace(/^data:image\/[a-z]+;base64,/, "");
+          buffer = import_node_buffer.Buffer.from(cleanBase64, "base64");
+          if (body.mimeType) mimeType = body.mimeType;
+        }
+      }
     }
-    const filename = body.filename ? slugify(import_node_path2.default.basename(body.filename, import_node_path2.default.extname(body.filename))) + `.${ext}` : `media_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.${ext}`;
+    if (!buffer || buffer.length === 0) {
+      return c.json({
+        error: "BAD_REQUEST",
+        message: 'No image data detected. Provide a file via multipart/form-data (-F "file=@..."), raw binary with Content-Type: image/*, or JSON with imageBase64 / imageUrl.'
+      }, 400);
+    }
+    if (mimeType.includes("png")) ext = "png";
+    else if (mimeType.includes("webp")) ext = "webp";
+    else if (mimeType.includes("gif")) ext = "gif";
+    else if (mimeType.includes("svg")) ext = "svg";
+    else ext = "jpg";
+    let cleanName = preferredFilename ? slugify(import_node_path2.default.basename(preferredFilename, import_node_path2.default.extname(preferredFilename))) : `img_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    if (!cleanName || cleanName === "file" || cleanName === "image") {
+      cleanName = `img_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    }
+    const filename = `${cleanName}.${ext}`;
+    await saveBlogMedia({
+      filename,
+      mime_type: mimeType,
+      data_base64: buffer.toString("base64"),
+      byte_size: buffer.length
+    });
     const uploadDirs = [
       import_node_path2.default.resolve(process.cwd(), "public", "assets", "uploads"),
-      import_node_path2.default.resolve(process.cwd(), "server", "public", "assets", "uploads"),
       import_node_path2.default.resolve(process.cwd(), "dist", "assets", "uploads")
     ];
     for (const dir of uploadDirs) {
@@ -17086,17 +17207,61 @@ app.post("/v1/blog/media/upload", async (c) => {
       } catch {
       }
     }
-    const mediaUrl = `/assets/uploads/${filename}`;
+    const publicUrl = `https://travel-scrapbook.com/v1/blog/media/${filename}`;
+    const directUrl = `https://travel-scrapbook.com/assets/uploads/${filename}`;
     return c.json({
       success: true,
-      url: mediaUrl,
-      full_url: `https://travel-scrapbook.com${mediaUrl}`,
+      url: publicUrl,
+      direct_url: directUrl,
       filename,
       size_bytes: buffer.length,
-      alt_text: body.altText || filename
+      mime_type: mimeType,
+      alt_text: altText || cleanName.replace(/[-_]+/g, " "),
+      instructions: "You can now set this url directly as featured_image_url in PATCH /v1/blog/posts/:slug or POST /v1/blog/publish."
     });
   } catch (err) {
+    console.error("[Media Upload Error]:", err);
     return c.json({ error: err?.message || "Failed to process media upload" }, 500);
+  }
+});
+async function handleServeMedia(c) {
+  const filenameOrId = c.req.param("filenameOrId");
+  try {
+    const media = await getBlogMedia(filenameOrId);
+    if (!media) {
+      return c.text("Image not found", 404);
+    }
+    const buffer = import_node_buffer.Buffer.from(media.data_base64, "base64");
+    c.header("Content-Type", media.mime_type || "image/jpeg");
+    c.header("Cache-Control", "public, max-age=31536000, immutable");
+    c.header("Content-Disposition", `inline; filename="${media.filename}"`);
+    return c.body(buffer);
+  } catch (err) {
+    console.error("[Media Serve Error]:", err);
+    return c.text("Failed to load media", 500);
+  }
+}
+app.get("/v1/blog/media/:filenameOrId", handleServeMedia);
+app.get("/assets/uploads/:filenameOrId", handleServeMedia);
+app.get("/v1/blog/media", async (c) => {
+  try {
+    const limit = Math.min(100, Math.max(1, Number(c.req.query("limit") || 50)));
+    const mediaList = await listBlogMedia(limit);
+    return c.json({ success: true, count: mediaList.length, media: mediaList });
+  } catch (err) {
+    return c.json({ error: err?.message || "Failed to list media" }, 500);
+  }
+});
+app.delete("/v1/blog/media/:filenameOrId", async (c) => {
+  if (!verifyAgentAuth(c) && !verifyAdminAuth(c)) {
+    return c.json({ error: "UNAUTHORIZED" }, 401);
+  }
+  const filenameOrId = c.req.param("filenameOrId");
+  try {
+    const deleted = await deleteBlogMedia(filenameOrId);
+    return c.json({ success: deleted, message: deleted ? "Media deleted" : "Media not found" });
+  } catch (err) {
+    return c.json({ error: err?.message || "Failed to delete media" }, 500);
   }
 });
 app.get("/v1/blog/posts", async (c) => {

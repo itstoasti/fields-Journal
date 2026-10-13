@@ -110,6 +110,10 @@
       "destination": "/api"
     },
     {
+      "source": "/assets/uploads/(.*)",
+      "destination": "/api"
+    },
+    {
       "source": "/v1/(.*)",
       "destination": "/api"
     },

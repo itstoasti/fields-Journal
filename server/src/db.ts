@@ -192,6 +192,18 @@ export async function initDb(): Promise<void> {
     await client.execute(`CREATE UNIQUE INDEX IF NOT EXISTS idx_blog_posts_slug ON blog_posts (slug);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_blog_posts_status ON blog_posts (status);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_blog_posts_created ON blog_posts (created_at);`);
+
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS blog_media (
+        id TEXT PRIMARY KEY,
+        filename TEXT UNIQUE NOT NULL,
+        mime_type TEXT NOT NULL,
+        data_base64 TEXT NOT NULL,
+        byte_size INTEGER NOT NULL,
+        created_at TEXT NOT NULL
+      );
+    `);
+    await client.execute(`CREATE UNIQUE INDEX IF NOT EXISTS idx_blog_media_filename ON blog_media (filename);`);
     console.log(`[Database] Initialized successfully (${isTurso ? 'Turso Cloud' : 'Local SQLite'})`);
   } catch (err) {
     console.error('[Database] Schema initialization warning:', err);
@@ -1988,5 +2000,82 @@ export async function getBlogStats(): Promise<{
     totalViews: Number(row?.total_views || 0),
     avgSeoScore: Math.round(Number(row?.avg_seo_score || 0)),
   };
+}
+
+export interface BlogMediaRecord {
+  id: string;
+  filename: string;
+  mime_type: string;
+  data_base64: string;
+  byte_size: number;
+  created_at: string;
+}
+
+export async function saveBlogMedia(media: {
+  id?: string;
+  filename: string;
+  mime_type: string;
+  data_base64: string;
+  byte_size: number;
+}): Promise<BlogMediaRecord> {
+  const now = new Date().toISOString();
+  const id = media.id || `media_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  
+  await client.execute({
+    sql: `
+      INSERT OR REPLACE INTO blog_media (id, filename, mime_type, data_base64, byte_size, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `,
+    args: [id, media.filename, media.mime_type, media.data_base64, media.byte_size, now],
+  });
+
+  return {
+    id,
+    filename: media.filename,
+    mime_type: media.mime_type,
+    data_base64: media.data_base64,
+    byte_size: media.byte_size,
+    created_at: now,
+  };
+}
+
+export async function getBlogMedia(filenameOrId: string): Promise<BlogMediaRecord | null> {
+  const res = await client.execute({
+    sql: 'SELECT * FROM blog_media WHERE filename = ? OR id = ? LIMIT 1',
+    args: [filenameOrId, filenameOrId],
+  });
+  if (res.rows.length === 0) return null;
+  const row = res.rows[0];
+  return {
+    id: String(row.id),
+    filename: String(row.filename),
+    mime_type: String(row.mime_type),
+    data_base64: String(row.data_base64),
+    byte_size: Number(row.byte_size || 0),
+    created_at: String(row.created_at),
+  };
+}
+
+export async function listBlogMedia(limit = 50): Promise<Array<{ id: string; filename: string; mime_type: string; byte_size: number; created_at: string; url: string }>> {
+  const res = await client.execute({
+    sql: 'SELECT id, filename, mime_type, byte_size, created_at FROM blog_media ORDER BY created_at DESC LIMIT ?',
+    args: [limit],
+  });
+  return res.rows.map(row => ({
+    id: String(row.id),
+    filename: String(row.filename),
+    mime_type: String(row.mime_type),
+    byte_size: Number(row.byte_size || 0),
+    created_at: String(row.created_at),
+    url: `https://travel-scrapbook.com/v1/blog/media/${row.filename}`,
+  }));
+}
+
+export async function deleteBlogMedia(filenameOrId: string): Promise<boolean> {
+  const res = await client.execute({
+    sql: 'DELETE FROM blog_media WHERE filename = ? OR id = ?',
+    args: [filenameOrId, filenameOrId],
+  });
+  return (res.rowsAffected || 0) > 0;
 }
 
