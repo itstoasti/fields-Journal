@@ -742,10 +742,15 @@ export function renderAdminDashboardHtml(): string {
     <div class="panel">
       <div class="panel-head">
         <div class="panel-title">Conversion Funnel · Drop-off</div>
-        <span id="funnelConvBadge" class="kpi-badge badge-amber">0% Conversion</span>
+        <div style="display: flex; gap: 6px; align-items: center;">
+          <span id="funnelConvBadge" class="kpi-badge badge-amber">0% Conversion</span>
+          <button onclick="handleResetFunnel()" id="resetFunnelBtn" title="Reset conversion funnel stats to zero for a fresh start" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: var(--red); font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 6px; cursor: pointer;">
+            Reset
+          </button>
+        </div>
       </div>
       <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">
-        Audience retention from launching the app to completing a pressed field note.
+        Audience retention from launching the app to completing a pressed field note. <span id="funnelResetNotice" style="display: none; color: var(--cyan); font-weight: 600;">(Fresh start active)</span>
       </p>
 
       <div id="funnelContainer">
@@ -1137,6 +1142,11 @@ export function renderAdminDashboardHtml(): string {
           bottleneckBox.style.display = 'none';
         }
       }
+
+      const resetNotice = document.getElementById('funnelResetNotice');
+      if (resetNotice) {
+        resetNotice.style.display = funnel.resetAt ? 'inline' : 'none';
+      }
     }
 
     function formatEventDetails(eventName, meta) {
@@ -1443,6 +1453,39 @@ export function renderAdminDashboardHtml(): string {
         alert('Error saving model: ' + e.message);
       } finally {
         btn.textContent = 'APPLY ACTIVE MODEL';
+      }
+    }
+
+    async function handleResetFunnel() {
+      if (!confirm('Reset conversion funnel stats to zero for a fresh start?\\n\\n(This will NOT affect installs, notes pressed, credits, or any other data.)')) {
+        return;
+      }
+
+      const pin = getStoredPin();
+      if (!pin) return;
+
+      const btn = document.getElementById('resetFunnelBtn');
+      if (btn) btn.textContent = '...';
+
+      try {
+        const res = await fetch('/v1/admin/settings', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + pin,
+          },
+          body: JSON.stringify({ key: 'funnel_reset_at', value: new Date().toISOString() }),
+        });
+
+        if (res.ok) {
+          fetchStats();
+        } else {
+          alert('Failed to reset funnel. Please check PIN.');
+        }
+      } catch (err) {
+        alert('Error resetting funnel: ' + err.message);
+      } finally {
+        if (btn) btn.textContent = 'Reset';
       }
     }
 

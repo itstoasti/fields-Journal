@@ -925,6 +925,7 @@ export interface AdminStats {
     conversionRate: number;
     biggestDropoff: string;
     biggestDropoffPct: number;
+    resetAt?: string | null;
   };
   engagement: {
     dau: number;
@@ -1039,6 +1040,7 @@ export async function getAdminStats(): Promise<AdminStats> {
 
   const [
     activeModel,
+    funnelResetSetting,
     androidTotalRes,
     androidDayRes,
     androidThreeDayRes,
@@ -1066,6 +1068,7 @@ export async function getAdminStats(): Promise<AdminStats> {
     deepEventsRes,
   ] = await Promise.all([
     getSystemSetting('active_model', 'grok-imagine-image-2.0'),
+    getSystemSetting('funnel_reset_at', ''),
 
     // 1. Android App Devices (Google Play)
     client.execute(`SELECT COUNT(DISTINCT device_id) as c FROM users WHERE device_id LIKE 'android_%' AND ${testUserFilter}`),
@@ -1140,7 +1143,7 @@ export async function getAdminStats(): Promise<AdminStats> {
       LIMIT 20
     `),
 
-    // 8. Funnel event counts by event name
+    // 8. Funnel event counts by event name (respects funnel_reset_at if set)
     client.execute(`
       SELECT 
         event_name, 
@@ -1148,6 +1151,7 @@ export async function getAdminStats(): Promise<AdminStats> {
         COUNT(*) as total_hits
       FROM app_events 
       WHERE ${testEventFilter}
+        AND created_at >= COALESCE((SELECT value FROM app_settings WHERE key = 'funnel_reset_at'), '${LAUNCH_DATE}')
       GROUP BY event_name
     `).catch(() => ({ rows: [] })),
 
@@ -1230,13 +1234,22 @@ export async function getAdminStats(): Promise<AdminStats> {
     eventHits[name] = Number(r.total_hits || 0);
   }
 
-  const appOpens = Math.max(eventCounts['app_open'] || 0, androidTotal + iosTotal);
+  const isFunnelReset = Boolean(funnelResetSetting && funnelResetSetting.trim().length > 0);
+  const appOpens = isFunnelReset
+    ? (eventCounts['app_open'] || 0)
+    : Math.max(eventCounts['app_open'] || 0, androidTotal + iosTotal);
   const composeOpened = eventCounts['compose_opened'] || 0;
   const photoSelected = eventCounts['photo_selected'] || 0;
   const pressClicked = eventCounts['press_clicked'] || 0;
-  const pressingStarted = Math.max(eventCounts['pressing_started'] || 0, totalGens);
-  const generatedSuccess = Math.max(eventCounts['pressing_success'] || 0, successGens);
-  const generatedFailed = Math.max(eventCounts['pressing_failed'] || 0, Number(gRow.failed || 0));
+  const pressingStarted = isFunnelReset
+    ? (eventCounts['pressing_started'] || 0)
+    : Math.max(eventCounts['pressing_started'] || 0, totalGens);
+  const generatedSuccess = isFunnelReset
+    ? (eventCounts['pressing_success'] || 0)
+    : Math.max(eventCounts['pressing_success'] || 0, successGens);
+  const generatedFailed = isFunnelReset
+    ? (eventCounts['pressing_failed'] || 0)
+    : Math.max(eventCounts['pressing_failed'] || 0, Number(gRow.failed || 0));
 
   // Determine biggest dropoff
   const dropoffSteps = [
@@ -1511,6 +1524,7 @@ export async function getAdminStats(): Promise<AdminStats> {
       conversionRate,
       biggestDropoff: biggestDropoffName,
       biggestDropoffPct,
+      resetAt: isFunnelReset ? funnelResetSetting : null,
     },
     engagement: {
       dau,
