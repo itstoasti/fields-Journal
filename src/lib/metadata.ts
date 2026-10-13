@@ -100,7 +100,7 @@ export function generateKeywords(
   const country = (geo.country || '').toLowerCase();
 
   // === KEYWORD 1: Landmark / Specific Geographic Feature ===
-  let kw1 = 'Expedition record';
+  let kw1 = 'Travel memory';
   if (geo.district && !/^\d+$/.test(geo.district)) {
     kw1 = geo.district;
   } else if (geo.city) {
@@ -136,7 +136,7 @@ export function generateKeywords(
   // Greece / Mediterranean
   if (country.includes('greece') || city.includes('athens') || country.includes('cyprus')) {
     textures = ['Ancient marble', 'Aegean breeze', 'Olive grove', 'Parthenon crest', 'Moonlit stone', 'Temple column'];
-    if (kw1 === 'Expedition record') kw1 = 'Acropolis ridge';
+    if (kw1 === 'Travel memory') kw1 = 'Acropolis ridge';
   }
   // Italy / Southern Europe
   else if (country.includes('italy') || country.includes('rome') || country.includes('florence') || country.includes('venice')) {

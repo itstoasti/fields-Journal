@@ -1,7 +1,7 @@
 {
-  "name": "Fields: Travel Journal & Scrapbook",
-  "short_name": "Fields",
-  "description": "Transform your travel photographs into timeless carved stamp prints, vintage travel posters, and field note memories.",
+  "name": "Fields — Digital Travel Scrapbook",
+  "short_name": "Travel Scrapbook",
+  "description": "Create your digital travel scrapbook. Turn vacation photos into vintage travel stamps and keep a beautiful travel photo journal.",
   "start_url": "/app",
   "scope": "/",
   "display": "standalone",

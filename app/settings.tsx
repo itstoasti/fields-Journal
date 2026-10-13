@@ -454,10 +454,10 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* Expedition Guide & Tutorial */}
+        {/* Travel Scrapbook Guide & Tutorial */}
         <View style={styles.card}>
           <TypewriterText size="xs" bold color={colors.inkSecondary} letterSpacing={1.5}>
-            HELP &amp; EXPEDITION GUIDE
+            HELP &amp; TRAVEL SCRAPBOOK GUIDE
           </TypewriterText>
 
           <View style={styles.menuList}>
@@ -465,7 +465,7 @@ export default function SettingsScreen() {
               <View style={styles.menuItemLeft}>
                 <Ionicons name="book-outline" size={20} color={colors.brickRed} />
                 <TypewriterText size="sm" color={colors.charcoal} style={styles.menuItemText}>
-                  Expedition Field Guide (Tutorial)
+                  Travel Scrapbook Guide (Tutorial)
                 </TypewriterText>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.inkMuted} />

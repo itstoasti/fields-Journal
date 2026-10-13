@@ -689,8 +689,8 @@ export default function PressingScreen() {
                 >
                   <TypewriterText size="xs" color={colors.ochre} style={styles.reassuranceText}>
                     {elapsedSec >= 28
-                      ? 'Final artisanal touches… almost ready'
-                      : 'Intricate linocut relief in progress… taking extra care with details'}
+                      ? 'Final touches on your travel stamp… almost ready'
+                      : 'Crafting your travel scrapbook stamp… saving trip details'}
                   </TypewriterText>
                 </Animated.View>
               </>

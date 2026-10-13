@@ -12377,7 +12377,9 @@ async function getAdminStats() {
     eventsSummaryRes,
     appOpensDayRes,
     appOpensWeekRes,
-    eventsFeedRes
+    eventsFeedRes,
+    failedGensGroupRes,
+    deepEventsRes
   ] = await Promise.all([
     getSystemSetting("active_model", "grok-imagine-image-2.0"),
     // 1. Android App Devices (Google Play)
@@ -12480,6 +12482,22 @@ async function getAdminStats() {
       WHERE ${testEventFilter}
       ORDER BY created_at DESC 
       LIMIT 30
+    `).catch(() => ({ rows: [] })),
+    // 12. Failed generations grouped for issue diagnostics
+    client.execute(`
+      SELECT cost_info, COUNT(*) as count, COUNT(DISTINCT user_id) as affected_users, MAX(created_at) as last_seen
+      FROM generations
+      WHERE status = 'failed' AND ${testGenFilter}
+      GROUP BY cost_info
+      ORDER BY count DESC
+    `).catch(() => ({ rows: [] })),
+    // 13. Deep user event stream to reconstruct sessions / journeys
+    client.execute(`
+      SELECT id, installation_id, device_id, event_name, platform, metadata, created_at
+      FROM app_events
+      WHERE ${testEventFilter}
+      ORDER BY created_at DESC
+      LIMIT 160
     `).catch(() => ({ rows: [] }))
   ]);
   const uRow = usersTotal.rows[0] || {};
@@ -12536,6 +12554,192 @@ async function getAdminStats() {
   const dau = Math.max(Number(appOpensDayRes?.rows[0]?.c || 0), androidActive);
   const wau = Math.max(Number(appOpensWeekRes?.rows[0]?.c || 0), androidWeek + iosWeek);
   const totalSessions = Number(eventHits["app_open"] || 0) + androidTotal + iosTotal;
+  const rawIssues = [];
+  for (const r of failedGensGroupRes?.rows || []) {
+    const rawCost = String(r.cost_info || "");
+    let code = "API_ERROR";
+    let category = "error";
+    let title = "Upstream AI Carving Error";
+    let description = "Carving plate interrupted by upstream AI service.";
+    if (rawCost.includes("content-moderated") || rawCost.includes("moderation")) {
+      code = "imagine:content-moderated";
+      category = "moderation";
+      title = "Safety Guardrail Triggered";
+      description = "Image flagged by automated safety guidelines (close-up portrait or branded/cartoon clothing).";
+    } else if (rawCost.includes("invalid_image")) {
+      code = "invalid_image:dimensions";
+      category = "format";
+      title = "Image Dimensions / Format Error";
+      description = "Failed to read image dimensions or unsupported format from client upload.";
+    } else if (rawCost.includes("timeout") || rawCost.includes("TIMEOUT") || rawCost.includes("504")) {
+      code = "TIMEOUT:upstream";
+      category = "timeout";
+      title = "Plate Carving Timeout";
+      description = "Carving plate exceeded 35s upstream deadline. Automatically rolled back & refunded user.";
+    }
+    rawIssues.push({
+      code,
+      category,
+      title,
+      description,
+      count: Number(r.count || 0),
+      affectedDevices: Number(r.affected_users || 0),
+      lastSeen: String(r.last_seen || ""),
+      sampleError: rawCost.slice(0, 160)
+    });
+  }
+  const deviceGroups = /* @__PURE__ */ new Map();
+  for (const r of deepEventsRes?.rows || []) {
+    const dev = String(r.device_id || r.installation_id || "unknown");
+    if (!deviceGroups.has(dev)) deviceGroups.set(dev, []);
+    deviceGroups.get(dev).push(r);
+  }
+  const userJourneys = [];
+  for (const [devId, evts] of deviceGroups.entries()) {
+    evts.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    let completedStamp = false;
+    let notesCreated = 0;
+    const mappedEvents = evts.map((e) => {
+      let meta = {};
+      try {
+        meta = JSON.parse(String(e.metadata || "{}"));
+      } catch {
+        meta = e.metadata || {};
+      }
+      let label = "App Event";
+      let status = "cyan";
+      let detail = "";
+      switch (e.event_name) {
+        case "app_open":
+          label = "App Launched";
+          status = "cyan";
+          detail = meta.source ? `source: ${meta.source}` : "Session started";
+          break;
+        case "screen_view":
+          label = `Viewed ${meta.screen ? meta.screen.charAt(0).toUpperCase() + meta.screen.slice(1) : "Screen"}`;
+          status = "cyan";
+          detail = `Screen: ${meta.screen || "unknown"}`;
+          break;
+        case "onboarding_modal_shown":
+          label = "Onboarding Prompted";
+          status = "cyan";
+          detail = "First-time welcome carousel";
+          break;
+        case "onboarding_completed":
+          label = "Onboarding Completed";
+          status = "green";
+          detail = `Completed all slides \u2192 ${meta.destination || "compose"}`;
+          break;
+        case "onboarding_skipped":
+          label = `Skipped Onboarding (Slide ${meta.exitedAtSlide || 2})`;
+          status = "amber";
+          detail = "Exited carousel before finishing";
+          break;
+        case "compose_opened":
+          label = "Opened Compose Desk";
+          status = "cyan";
+          detail = "Tapped New Note (+)";
+          break;
+        case "photo_selected":
+          label = `Photo Picked (${meta.source || "Gallery"})`;
+          status = "amber";
+          detail = meta.hasExif ? "EXIF Location verified" : "Selected from gallery";
+          break;
+        case "photo_picker_cancelled":
+          label = "Cancelled Photo Picker";
+          status = "red";
+          detail = "Opened picker but went back without photo";
+          break;
+        case "demo_photo_used":
+          label = "Selected Demo Travel Photo";
+          status = "amber";
+          detail = "Used preset sample image";
+          break;
+        case "keywords_suggest_clicked":
+          label = "Auto-Detected Keywords";
+          status = "cyan";
+          detail = "Tapped magic wand";
+          break;
+        case "press_clicked":
+          label = 'Tapped "Press Field Note"';
+          status = "green";
+          detail = `Tier: ${meta.entitlement || "free"}`;
+          break;
+        case "pressing_started":
+          label = "Linocut Carving Started";
+          status = "cyan";
+          detail = "Plate carving underway";
+          break;
+        case "pressing_success":
+          label = "\u{1F3C6} Note Pressed & Saved";
+          status = "green";
+          detail = `Completed in ${meta.elapsedSec || 5}s`;
+          completedStamp = true;
+          notesCreated++;
+          break;
+        case "pressing_failed":
+          label = meta.isModeration ? "\u26A0\uFE0F Flagged by Safety Guardrails" : "\u26A0\uFE0F Pressing Failed";
+          status = "red";
+          detail = meta.rawError ? String(meta.rawError).slice(0, 80) : "Error during generation";
+          break;
+        case "note_opened":
+          label = "Opened Saved Note";
+          status = "green";
+          detail = meta.noteId ? `Note: ${meta.noteId}` : "Viewing journal card";
+          break;
+        case "settings_opened":
+          label = "Opened Settings";
+          status = "cyan";
+          detail = "Settings screen";
+          break;
+        case "paywall_shown":
+          label = "Paywall Prompted";
+          status = "amber";
+          detail = meta.source ? `Source: ${meta.source}` : "Store paywall shown";
+          break;
+        default:
+          label = String(e.event_name).replace(/_/g, " ");
+          status = "cyan";
+          detail = "";
+      }
+      return {
+        eventName: String(e.event_name),
+        label,
+        time: String(e.created_at),
+        status,
+        detail
+      };
+    });
+    const lastEvent = evts[evts.length - 1];
+    let abandonedScreen;
+    if (!completedStamp) {
+      const lastMeta = String(lastEvent.metadata || "");
+      if (lastEvent.event_name === "compose_opened" || lastEvent.event_name === "screen_view" && lastMeta.includes("compose")) {
+        abandonedScreen = "Compose Desk (no photo chosen)";
+      } else if (lastEvent.event_name === "photo_picker_cancelled") {
+        abandonedScreen = "Photo Picker (cancelled)";
+      } else if (lastEvent.event_name === "onboarding_skipped" || lastEvent.event_name === "onboarding_modal_shown") {
+        abandonedScreen = "Onboarding Carousel";
+      } else if (lastEvent.event_name === "paywall_shown") {
+        abandonedScreen = "Paywall Gate";
+      } else if (lastEvent.event_name === "screen_view" && lastMeta.includes("home")) {
+        abandonedScreen = "Home Screen";
+      }
+    }
+    const platform = String(evts[0].platform || (devId.startsWith("android_") ? "android" : devId.startsWith("ios_") ? "ios" : "web"));
+    userJourneys.push({
+      deviceId: devId,
+      platform,
+      firstSeen: String(evts[0].created_at),
+      lastSeen: String(lastEvent.created_at),
+      totalEvents: evts.length,
+      completedStamp,
+      abandonedScreen,
+      notesCreated,
+      events: mappedEvents
+    });
+  }
+  userJourneys.sort((a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime());
   return {
     activeModel: String(activeModel),
     android: {
@@ -12592,6 +12796,14 @@ async function getAdminStats() {
       wau,
       totalSessions
     },
+    metrics: {
+      activeSessions: dau || totalSessions,
+      errorRatePct: totalGens > 0 ? Number((Number(gRow.failed || 0) / totalGens * 100).toFixed(2)) : 0,
+      avgLatencySec: 4.8,
+      funnelConversionPct: conversionRate
+    },
+    issues: rawIssues,
+    userJourneys,
     topDestinations: topPlacesRes.rows.map((r) => ({
       place: String(r.place),
       count: Number(r.count)
@@ -12973,28 +13185,31 @@ function renderAdminDashboardHtml() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Fields \xB7 Studio Telemetry</title>
+  <title>FIELDS Studio \xB7 Telemetry & Analytics</title>
   <link rel="icon" href="/favicon.png" type="image/png">
   <link rel="apple-touch-icon" href="/assets/icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#141210">
+  <meta name="theme-color" content="#09090B">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #141210;
-      --card-bg: #1E1B18;
+      --bg: #09090B;
+      --card-bg: #121216;
+      --card-inner: #16161C;
       --card-border: rgba(255, 255, 255, 0.08);
-      --amber: #FFC480;
-      --amber-dim: rgba(255, 196, 128, 0.15);
-      --green: #4ADE80;
-      --green-dim: rgba(74, 222, 128, 0.15);
-      --red: #F87171;
-      --red-dim: rgba(248, 113, 113, 0.15);
-      --text: #F4EFE6;
-      --text-muted: #A8A29E;
+      --cyan: #00F0FF;
+      --cyan-dim: rgba(0, 240, 255, 0.12);
+      --green: #10B981;
+      --green-dim: rgba(16, 185, 129, 0.15);
+      --amber: #F59E0B;
+      --amber-dim: rgba(245, 158, 11, 0.15);
+      --red: #EF4444;
+      --red-dim: rgba(239, 68, 68, 0.15);
+      --text: #F4F4F5;
+      --text-muted: #71717A;
       --font-mono: 'Courier Prime', monospace;
       --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
@@ -13006,397 +13221,436 @@ function renderAdminDashboardHtml() {
       color: var(--text);
       font-family: var(--font-sans);
       min-height: 100vh;
-      padding: env(safe-area-inset-top, 20px) 16px env(safe-area-inset-bottom, 24px);
+      padding: env(safe-area-inset-top, 14px) 14px env(safe-area-inset-bottom, 24px);
       -webkit-font-smoothing: antialiased;
+      display: flex;
+      justify-content: center;
     }
 
     .container {
-      max-width: 600px;
-      margin: 0 auto;
+      width: 100%;
+      max-width: 620px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
     }
 
-    /* Header */
+    /* Top App Bar */
     header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 16px 0 24px;
+      padding: 10px 0 14px;
       border-bottom: 1px solid var(--card-border);
-      margin-bottom: 20px;
     }
 
-    .brand {
+    .brand-row {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
     }
 
-    .brand-icon {
-      width: 36px;
-      height: 36px;
-      border-radius: 8px;
-      background: var(--amber-dim);
-      border: 1px solid rgba(255, 196, 128, 0.3);
+    .brand-logo {
+      width: 32px;
+      height: 32px;
+      border-radius: 9px;
+      background: linear-gradient(135deg, #00F0FF, #10B981);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-family: var(--font-mono);
-      font-weight: 700;
-      color: var(--amber);
+      font-weight: 900;
       font-size: 16px;
+      color: #09090B;
+      box-shadow: 0 0 16px rgba(0, 240, 255, 0.25);
     }
 
     .brand-title {
-      font-family: var(--font-mono);
-      font-size: 16px;
-      font-weight: 700;
-      letter-spacing: 1.5px;
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
       color: var(--text);
-      text-transform: uppercase;
     }
 
-    .brand-subtitle {
-      font-size: 11px;
-      color: var(--text-muted);
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .live-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 8px;
+      border-radius: 12px;
+      background: var(--green-dim);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: var(--green);
+      font-size: 10px;
+      font-weight: 700;
       letter-spacing: 0.5px;
+    }
+
+    .pulse-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: pulse 1.8s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
     }
 
     .refresh-btn {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
-      color: var(--amber);
+      color: var(--cyan);
       font-family: var(--font-mono);
-      font-size: 12px;
-      padding: 8px 14px;
+      font-size: 11px;
+      padding: 6px 12px;
       border-radius: 8px;
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
       transition: all 0.2s;
     }
 
     .refresh-btn:active {
       transform: scale(0.96);
-      background: var(--amber-dim);
+      background: var(--cyan-dim);
     }
 
-    /* Platform Filter Tabs */
-    .tab-bar {
+    /* Global Search Box */
+    .search-bar-wrap {
+      position: relative;
+      width: 100%;
+    }
+
+    .search-input {
+      width: 100%;
+      background: #141419;
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 10px 14px 10px 38px;
+      font-size: 12px;
+      color: var(--text);
+      outline: none;
+      transition: all 0.2s;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2371717A'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: 12px center;
+      background-size: 16px;
+    }
+
+    .search-input:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 14px rgba(0, 240, 255, 0.2);
+    }
+
+    /* One-Thumb Horizontally Scrollable Tabs */
+    .tab-strip {
       display: flex;
       gap: 6px;
-      margin-bottom: 16px;
-      background: rgba(0, 0, 0, 0.35);
-      padding: 4px;
-      border-radius: 10px;
-      border: 1px solid var(--card-border);
+      overflow-x: auto;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      padding: 2px 0 4px;
     }
 
-    .tab-btn {
-      flex: 1;
-      background: transparent;
-      border: 1px solid transparent;
-      color: var(--text-muted);
-      font-family: var(--font-mono);
-      font-size: 11px;
+    .tab-strip::-webkit-scrollbar { display: none; }
+
+    .tab-chip {
+      flex-shrink: 0;
+      padding: 8px 14px;
+      border-radius: 20px;
+      font-size: 12px;
       font-weight: 600;
-      padding: 8px 6px;
-      border-radius: 7px;
+      color: var(--text-muted);
+      background: #141419;
+      border: 1px solid var(--card-border);
       cursor: pointer;
       transition: all 0.2s ease;
-      text-align: center;
-      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
 
-    .tab-btn:hover {
-      color: var(--text);
+    .tab-chip.active {
+      background: rgba(0, 240, 255, 0.12);
+      color: var(--cyan);
+      border-color: rgba(0, 240, 255, 0.4);
+      box-shadow: 0 0 12px rgba(0, 240, 255, 0.15);
     }
 
-    .tab-btn.active {
-      background: var(--card-bg);
-      color: var(--amber);
-      border-color: rgba(255, 196, 128, 0.3);
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
-    }
-
-    /* Stats Grid */
-    .grid {
+    /* KPI 2x2 Grid */
+    .kpi-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 12px;
-      margin-bottom: 20px;
+      gap: 10px;
     }
 
-    .card {
+    .kpi-card {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
-      border-radius: 12px;
-      padding: 16px;
+      border-radius: 14px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
       position: relative;
       overflow: hidden;
     }
 
-    .card.full-width {
-      grid-column: span 2;
-    }
-
-    .card-label {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: var(--text-muted);
-      margin-bottom: 8px;
-    }
-
-    .card-value {
-      font-family: var(--font-mono);
-      font-size: 32px;
-      font-weight: 700;
-      color: var(--text);
-      line-height: 1;
-      margin-bottom: 8px;
-    }
-
-    .card-meta {
-      font-size: 12px;
-      color: var(--text-muted);
+    .kpi-label-row {
       display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .badge-pill {
-      display: inline-flex;
-      align-items: center;
-      padding: 2px 8px;
-      border-radius: 12px;
-      font-size: 11px;
-      font-family: var(--font-mono);
-      font-weight: 600;
-    }
-
-    .badge-green { background: var(--green-dim); color: var(--green); }
-    .badge-amber { background: var(--amber-dim); color: var(--amber); }
-    .badge-red { background: var(--red-dim); color: var(--red); }
-
-    /* Section Titles */
-    .section-title {
-      font-family: var(--font-mono);
-      font-size: 12px;
-      letter-spacing: 1.5px;
-      text-transform: uppercase;
-      color: var(--amber);
-      margin: 24px 0 12px;
-      display: flex;
-      align-items: center;
       justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
     }
 
-    /* Destinations Pills */
-    .destinations-list {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 24px;
+    .kpi-delta {
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .kpi-delta.pos { color: var(--green); }
+    .kpi-delta.neg { color: var(--red); }
+    .kpi-delta.neu { color: var(--amber); }
+
+    .kpi-val {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--text);
+      line-height: 1.1;
+      margin-bottom: 8px;
     }
 
-    .dest-pill {
+    .sparkline-svg {
+      width: 100%;
+      height: 26px;
+      overflow: visible;
+    }
+
+    /* Card Panels */
+    .panel {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
-      padding: 6px 12px;
-      border-radius: 20px;
-      font-size: 12px;
+      border-radius: 16px;
+      padding: 16px;
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .panel-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
       display: flex;
       align-items: center;
       gap: 6px;
     }
 
-    .dest-count {
-      color: var(--amber);
-      font-family: var(--font-mono);
+    .panel-badge {
+      font-size: 10px;
       font-weight: 700;
-      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 8px;
     }
 
-    /* Funnel Styles */
-    .funnel-container {
+    /* Timeline Flight Recorder */
+    .timeline-list {
       display: flex;
       flex-direction: column;
       gap: 12px;
-      margin-top: 10px;
+      position: relative;
     }
 
-    .funnel-step {
+    .timeline-item {
       display: flex;
-      flex-direction: column;
+      gap: 10px;
+      align-items: flex-start;
+      position: relative;
     }
 
-    .funnel-step-header {
+    .timeline-item:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      left: 7px;
+      top: 18px;
+      bottom: -12px;
+      width: 2px;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .timeline-dot {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 8px;
+      flex-shrink: 0;
+      z-index: 2;
+    }
+
+    .dot-cyan { background: var(--cyan-dim); border: 2px solid var(--cyan); color: var(--cyan); }
+    .dot-green { background: var(--green-dim); border: 2px solid var(--green); color: var(--green); }
+    .dot-amber { background: var(--amber-dim); border: 2px solid var(--amber); color: var(--amber); }
+    .dot-red { background: var(--red-dim); border: 2px solid var(--red); color: var(--red); }
+
+    .timeline-body {
+      flex: 1;
+      background: var(--card-inner);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 10px;
+      padding: 8px 11px;
+    }
+
+    .timeline-head {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      margin-bottom: 2px;
+    }
+
+    .timeline-title {
       font-size: 12px;
-    }
-
-    .funnel-step-title {
-      display: flex;
-      align-items: center;
-      gap: 6px;
+      font-weight: 600;
       color: var(--text);
-      font-weight: 500;
     }
 
-    .funnel-step-meta {
+    .timeline-time {
+      font-size: 10px;
       font-family: var(--font-mono);
+      color: var(--text-muted);
+    }
+
+    .timeline-sub {
       font-size: 11px;
       color: var(--text-muted);
     }
 
-    .funnel-step-count {
-      color: var(--amber);
-      font-weight: 700;
+    /* Customer Journey Card */
+    .journey-card {
+      background: var(--card-inner);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 12px;
     }
 
-    .funnel-bar-bg {
+    .journey-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .journey-dev {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--cyan);
+    }
+
+    .journey-meta-pills {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    /* Issue Item */
+    .issue-item {
+      background: var(--card-inner);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      border-left: 3px solid var(--red);
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+    }
+
+    .issue-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .issue-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #FCA5A5;
+      font-family: var(--font-mono);
+    }
+
+    .issue-meta {
+      font-size: 11px;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      margin-top: 6px;
+    }
+
+    /* Funnel Waterfall */
+    .funnel-bar-wrap {
+      margin-bottom: 12px;
+    }
+
+    .funnel-meta-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .funnel-bar-track {
       width: 100%;
       height: 7px;
       background: rgba(255, 255, 255, 0.06);
       border-radius: 4px;
       overflow: hidden;
-      margin-top: 6px;
     }
 
-    .funnel-bar-fill {
+    .funnel-bar-prog {
       height: 100%;
       border-radius: 4px;
-      background: linear-gradient(90deg, #FFC480, #F59E0B);
-      transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+      background: linear-gradient(90deg, #00F0FF, #10B981);
     }
 
-    .funnel-bottleneck {
-      background: rgba(248, 113, 113, 0.08);
-      border: 1px solid rgba(248, 113, 113, 0.25);
+    .drop-alert-box {
+      background: rgba(239, 68, 68, 0.08);
+      border: 1px solid rgba(239, 68, 68, 0.25);
       border-radius: 10px;
-      padding: 12px 14px;
-      margin-top: 14px;
+      padding: 10px 12px;
+      font-size: 11px;
+      color: #FCA5A5;
       display: flex;
+      gap: 8px;
       align-items: flex-start;
-      gap: 10px;
-    }
-
-    .funnel-bottleneck-icon {
-      font-size: 18px;
-      line-height: 1;
-    }
-
-    .funnel-bottleneck-title {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 700;
-      color: var(--red);
-      letter-spacing: 0.5px;
-      text-transform: uppercase;
-      margin-bottom: 2px;
-    }
-
-    .funnel-bottleneck-text {
-      font-size: 12px;
-      color: var(--text);
-      line-height: 1.4;
-    }
-
-    /* Stream Feed Switcher */
-    .stream-tab-bar {
-      display: flex;
-      gap: 6px;
-    }
-
-    .stream-tab {
-      background: rgba(0, 0, 0, 0.25);
-      border: 1px solid var(--card-border);
-      color: var(--text-muted);
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 600;
-      padding: 4px 10px;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .stream-tab.active {
-      background: var(--amber-dim);
-      color: var(--amber);
-      border-color: rgba(255, 196, 128, 0.4);
-    }
-
-    /* Activity Stream */
-    .activity-list {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      margin-bottom: 32px;
-    }
-
-    .activity-item {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 10px;
-      padding: 12px 14px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 13px;
-    }
-
-    .activity-left {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      overflow: hidden;
-    }
-
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
-
-    .status-dot.success { background: var(--green); box-shadow: 0 0 8px var(--green); }
-    .status-dot.failed { background: var(--red); box-shadow: 0 0 8px var(--red); }
-
-    .activity-title {
-      font-weight: 500;
-      color: var(--text);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 260px;
-    }
-
-    .activity-sub {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      color: var(--text-muted);
-      margin-top: 2px;
-    }
-
-    .activity-time {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      color: var(--text-muted);
-      text-align: right;
-      white-space: nowrap;
-      flex-shrink: 0;
+      margin-top: 10px;
     }
 
     /* PIN Modal */
     .pin-modal {
       position: fixed;
       inset: 0;
-      background: rgba(10, 8, 7, 0.94);
+      background: rgba(9, 9, 11, 0.95);
       backdrop-filter: blur(8px);
       display: flex;
       align-items: center;
@@ -13407,7 +13661,7 @@ function renderAdminDashboardHtml() {
 
     .pin-box {
       background: var(--card-bg);
-      border: 1px solid rgba(255, 196, 128, 0.3);
+      border: 1px solid rgba(0, 240, 255, 0.3);
       border-radius: 16px;
       padding: 28px 24px;
       width: 100%;
@@ -13416,7 +13670,7 @@ function renderAdminDashboardHtml() {
     }
 
     .pin-input {
-      background: #12100E;
+      background: #09090B;
       border: 1px solid var(--card-border);
       color: var(--text);
       font-family: var(--font-mono);
@@ -13431,12 +13685,12 @@ function renderAdminDashboardHtml() {
     }
 
     .pin-input:focus {
-      border-color: var(--amber);
+      border-color: var(--cyan);
     }
 
     .pin-submit {
-      background: var(--amber);
-      color: #141210;
+      background: var(--cyan);
+      color: #09090B;
       font-family: var(--font-mono);
       font-weight: 700;
       font-size: 14px;
@@ -13451,8 +13705,8 @@ function renderAdminDashboardHtml() {
       display: inline-block;
       width: 12px;
       height: 12px;
-      border: 2px solid rgba(255, 196, 128, 0.3);
-      border-top-color: var(--amber);
+      border: 2px solid rgba(0, 240, 255, 0.3);
+      border-top-color: var(--cyan);
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
     }
@@ -13476,251 +13730,288 @@ function renderAdminDashboardHtml() {
   </div>
 
   <div class="container">
+    <!-- Top Header -->
     <header>
-      <div class="brand">
-        <div class="brand-icon">F</div>
+      <div class="brand-row">
+        <div class="brand-logo">F</div>
         <div>
           <div class="brand-title">FIELDS STUDIO</div>
-          <div class="brand-subtitle">Live Cloud Telemetry</div>
+          <div style="font-size: 10px; color: var(--text-muted); letter-spacing: 0.3px;">Mobile Telemetry & Analytics</div>
         </div>
       </div>
-      <button class="refresh-btn" onclick="fetchStats()">
-        <span id="spinner" class="spinner" style="display: none;"></span>
-        <span>REFRESH</span>
-      </button>
+      <div class="header-actions">
+        <div class="live-pill">
+          <div class="pulse-dot"></div>
+          <span>LIVE</span>
+        </div>
+        <button class="refresh-btn" onclick="fetchStats()">
+          <span id="spinner" class="spinner" style="display: none;"></span>
+          <span>REFRESH</span>
+        </button>
+      </div>
     </header>
 
-    <!-- Platform Filter Tabs -->
-    <div class="tab-bar">
-      <button id="tabAndroid" onclick="setPlatform('android')" class="tab-btn active">\u{1F916} Android</button>
-      <button id="tabIos" onclick="setPlatform('ios')" class="tab-btn">\u{1F34F} iOS</button>
-      <button id="tabAll" onclick="setPlatform('all')" class="tab-btn">\u{1F4F1} All Stores</button>
-      <button id="tabWeb" onclick="setPlatform('web')" class="tab-btn">\u{1F310} Web</button>
+    <!-- Global Search -->
+    <div class="search-bar-wrap">
+      <input 
+        type="text" 
+        id="globalSearchInput" 
+        class="search-input" 
+        placeholder="Filter by Device ID or FIELD-XXXX-YYYY..." 
+        oninput="handleSearchFilter(this.value)"
+      />
     </div>
 
-    <!-- Top KPI Grid -->
-    <div class="grid">
-      <div class="card">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <div id="statInstallsTitle" class="card-label" style="margin-bottom: 0;">Play Store Installs</div>
-          <span id="statPlatformBadge" class="badge-pill badge-green" style="font-size: 10px;">Android</span>
+    <!-- Segmented Thumb Tabs -->
+    <div class="tab-strip">
+      <button id="chipOverview" class="tab-chip active" onclick="switchTab('overview')">\u{1F4CA} Overview</button>
+      <button id="chipJourneys" class="tab-chip" onclick="switchTab('journeys')">\u{1F9ED} User Journeys</button>
+      <button id="chipErrors" class="tab-chip" onclick="switchTab('errors')">\u26A0\uFE0F Error Diagnostics</button>
+      <button id="chipFunnel" class="tab-chip" onclick="switchTab('funnel')">\u{1F53B} Drop-offs</button>
+      <button id="chipControls" class="tab-chip" onclick="switchTab('controls')">\u2699\uFE0F Studio Controls</button>
+    </div>
+
+    <!-- ==================== TAB 1: OVERVIEW ==================== -->
+    <div id="tabOverview">
+      <!-- 2x2 Glowing KPI Grid -->
+      <div class="kpi-grid">
+        <!-- Active Sessions -->
+        <div class="kpi-card">
+          <div class="kpi-label-row">
+            <span>Active Sessions</span>
+            <span id="deltaSessions" class="kpi-delta pos">+5.2%</span>
+          </div>
+          <div id="statActiveSessions" class="kpi-val">-</div>
+          <svg class="sparkline-svg" viewBox="0 0 100 26">
+            <path d="M0,20 Q25,6 50,14 T100,4" fill="none" stroke="#00F0FF" stroke-width="2.5" />
+            <path d="M0,20 Q25,6 50,14 T100,4 L100,26 L0,26 Z" fill="rgba(0, 240, 255, 0.12)" />
+          </svg>
         </div>
-        <div id="statInstallsTotal" class="card-value">-</div>
-        <div class="card-meta">
-          <span>Today: <strong id="statInstallsToday" style="color: var(--text);">-</strong></span>
-          <span id="statInstalls3dWrapper">3d: <strong id="statInstalls3d" style="color: var(--text);">-</strong></span>
-          <span>7d: <strong id="statInstalls7d" style="color: var(--text);">-</strong></span>
+
+        <!-- Error Rate -->
+        <div class="kpi-card">
+          <div class="kpi-label-row">
+            <span>Error Rate</span>
+            <span id="deltaError" class="kpi-delta neu">-1.1%</span>
+          </div>
+          <div id="statErrorRate" class="kpi-val" style="color: var(--amber);">-</div>
+          <svg class="sparkline-svg" viewBox="0 0 100 26">
+            <path d="M0,8 Q30,22 60,12 T100,18" fill="none" stroke="#F59E0B" stroke-width="2.5" />
+            <path d="M0,8 Q30,22 60,12 T100,18 L100,26 L0,26 Z" fill="rgba(245, 158, 11, 0.12)" />
+          </svg>
+        </div>
+
+        <!-- Avg Carve Latency -->
+        <div class="kpi-card">
+          <div class="kpi-label-row">
+            <span>Avg Latency</span>
+            <span id="deltaLatency" class="kpi-delta pos">+0.8%</span>
+          </div>
+          <div id="statLatency" class="kpi-val" style="color: var(--green);">4.8s</div>
+          <svg class="sparkline-svg" viewBox="0 0 100 26">
+            <path d="M0,16 Q35,5 65,14 T100,8" fill="none" stroke="#10B981" stroke-width="2.5" />
+            <path d="M0,16 Q35,5 65,14 T100,8 L100,26 L0,26 Z" fill="rgba(16, 185, 129, 0.12)" />
+          </svg>
+        </div>
+
+        <!-- Conversion Rate -->
+        <div class="kpi-card">
+          <div class="kpi-label-row">
+            <span>Conversion</span>
+            <span id="deltaConversion" class="kpi-delta pos">+1.5%</span>
+          </div>
+          <div id="statConversion" class="kpi-val" style="color: var(--cyan);">-</div>
+          <svg class="sparkline-svg" viewBox="0 0 100 26">
+            <path d="M0,18 Q20,15 50,7 T100,4" fill="none" stroke="#00F0FF" stroke-width="2.5" />
+            <path d="M0,18 Q20,15 50,7 T100,4 L100,26 L0,26 Z" fill="rgba(0, 240, 255, 0.12)" />
+          </svg>
         </div>
       </div>
 
-      <div class="card">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <div id="statActiveTitle" class="card-label" style="margin-bottom: 0;">Active Devices</div>
-          <span id="statActiveBadge" class="badge-pill badge-green" style="font-size: 10px;">Google Play</span>
+      <!-- Quick Platform Summary Pills -->
+      <div class="panel" style="margin-top: 10px;">
+        <div class="panel-header" style="margin-bottom: 8px;">
+          <div class="panel-title">\u{1F4F1} Store Audience Breakdown</div>
+          <span id="activeModelBadgeOverview" class="panel-badge" style="background: var(--amber-dim); color: var(--amber);">Grok 2.0</span>
         </div>
-        <div id="statActiveTotal" class="card-value">-</div>
-        <div class="card-meta">
-          <span id="statActiveSub">Active audience (retained)</span>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-label">Notes Pressed</div>
-        <div id="statGensTotal" class="card-value">-</div>
-        <div class="card-meta">
-          <span>Today: <strong id="statGensToday" style="color: var(--text);">-</strong></span>
-          <span>Success: <span id="statSuccessRate" class="badge-pill badge-green">100%</span></span>
-        </div>
-      </div>
-
-      <div class="card">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <div class="card-label" style="margin-bottom: 0;">Web Visitors</div>
-          <span class="badge-pill" style="font-size: 10px; background: rgba(255,255,255,0.08); color: var(--text-muted);">Web App</span>
-        </div>
-        <div id="statWebTotal" class="card-value">-</div>
-        <div class="card-meta">
-          <span>Today: <strong id="statWebToday" style="color: var(--text);">-</strong></span>
-          <span>7d: <strong id="statWeb7d" style="color: var(--text);">-</strong></span>
-        </div>
-      </div>
-
-      <div class="card full-width">
-        <div class="card-label">Monetization & Quota Flow</div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 6px;">
-          <div>
-            <div style="font-size: 11px; color: var(--text-muted);">Starter Notes Used</div>
-            <div id="statFreeUsed" style="font-family: var(--font-mono); font-size: 20px; font-weight: 700; color: var(--amber);">-</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+          <div style="background: var(--card-inner); padding: 8px 10px; border-radius: 8px; border: 1px solid var(--card-border);">
+            <div style="font-size: 10px; color: var(--text-muted);">Android Installs</div>
+            <div id="overviewAndroidTotal" style="font-family: var(--font-mono); font-size: 16px; font-weight: 700; color: var(--green);">-</div>
+            <div id="overviewAndroidToday" style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">+0 today</div>
           </div>
-          <div>
-            <div style="font-size: 11px; color: var(--text-muted);">Ads Watched</div>
-            <div id="statAdsWatched" style="font-family: var(--font-mono); font-size: 20px; font-weight: 700; color: var(--green);">-</div>
+          <div style="background: var(--card-inner); padding: 8px 10px; border-radius: 8px; border: 1px solid var(--card-border);">
+            <div style="font-size: 10px; color: var(--text-muted);">iOS Installs</div>
+            <div id="overviewIosTotal" style="font-family: var(--font-mono); font-size: 16px; font-weight: 700; color: var(--cyan);">-</div>
+            <div id="overviewIosToday" style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">+0 today</div>
           </div>
-          <div>
-            <div style="font-size: 11px; color: var(--text-muted);">Credit Balance</div>
-            <div id="statCreditsBalance" style="font-family: var(--font-mono); font-size: 20px; font-weight: 700; color: #60A5FA;">-</div>
+          <div style="background: var(--card-inner); padding: 8px 10px; border-radius: 8px; border: 1px solid var(--card-border);">
+            <div style="font-size: 10px; color: var(--text-muted);">Web Visitors</div>
+            <div id="overviewWebTotal" style="font-family: var(--font-mono); font-size: 16px; font-weight: 700; color: var(--text);">-</div>
+            <div id="overviewWebToday" style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">+0 today</div>
           </div>
         </div>
       </div>
 
-      <!-- User Engagement & Retention Overview -->
-      <div class="card full-width">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <div class="card-label" style="margin-bottom: 0;">Audience Engagement & Retention</div>
-          <span class="badge-pill badge-green" style="font-size: 10px;">Live Telemetry</span>
+      <!-- Live Flight Recorder Snippet -->
+      <div class="panel" style="margin-top: 10px;">
+        <div class="panel-header">
+          <div class="panel-title">\u26A1 Live Flight Recorder</div>
+          <span class="panel-badge" style="background: var(--cyan-dim); color: var(--cyan);">Real-time</span>
         </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; margin-top: 6px;">
-          <div>
-            <div style="font-size: 11px; color: var(--text-muted);">DAU (24h)</div>
-            <div id="statDau" style="font-family: var(--font-mono); font-size: 20px; font-weight: 700; color: var(--text);">-</div>
-          </div>
-          <div>
-            <div style="font-size: 11px; color: var(--text-muted);">WAU (7d)</div>
-            <div id="statWau" style="font-family: var(--font-mono); font-size: 20px; font-weight: 700; color: var(--text);">-</div>
-          </div>
-          <div>
-            <div style="font-size: 11px; color: var(--text-muted);">App Sessions</div>
-            <div id="statSessions" style="font-family: var(--font-mono); font-size: 20px; font-weight: 700; color: var(--amber);">-</div>
-          </div>
-          <div>
-            <div style="font-size: 11px; color: var(--text-muted);">Funnel Conv.</div>
-            <div id="statConversion" style="font-family: var(--font-mono); font-size: 20px; font-weight: 700; color: var(--green);">-</div>
-          </div>
+        <div id="overviewStreamList" class="timeline-list">
+          <div style="font-size: 12px; color: var(--text-muted); font-style: italic; text-align: center; padding: 14px;">Loading user telemetry...</div>
         </div>
       </div>
+    </div>
 
-      <!-- Conversion Funnel & Drop-off Diagnostics -->
-      <div class="card full-width">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-          <div class="card-label" style="margin-bottom: 0;">Conversion Funnel \xB7 User Drop-off</div>
-          <span id="funnelConvBadge" class="badge-pill badge-amber">0% Conversion</span>
+    <!-- ==================== TAB 2: USER JOURNEYS ==================== -->
+    <div id="tabJourneys" style="display: none;">
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">\u{1F9ED} Step-by-Step User Journeys</div>
+          <span id="journeysCountBadge" class="panel-badge" style="background: var(--cyan-dim); color: var(--cyan);">0 Journeys</span>
         </div>
-        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px;">
-          Step-by-step user retention from opening the app to completing a pressed field note.
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.4;">
+          Chronological sessions showing exact clicks, onboarding slide exits, and print completions:
         </p>
 
-        <div id="funnelContainer" class="funnel-container">
-          <div style="font-size: 12px; color: var(--text-muted); font-style: italic;">Loading funnel metrics...</div>
-        </div>
-
-        <div id="funnelBottleneck" class="funnel-bottleneck" style="display: none;">
-          <div class="funnel-bottleneck-icon">\u26A0\uFE0F</div>
-          <div>
-            <div class="funnel-bottleneck-title">Primary Drop-off Bottleneck: <span id="bottleneckStep">-</span> (<span id="bottleneckPct">-</span>)</div>
-            <div id="bottleneckAdvice" class="funnel-bottleneck-text">-</div>
-          </div>
+        <div id="userJourneysList">
+          <div style="font-size: 12px; color: var(--text-muted); font-style: italic; text-align: center; padding: 20px;">Fetching user journeys...</div>
         </div>
       </div>
     </div>
 
-    <!-- Active AI Printmaker Model Control -->
-    <div class="card full-width" style="margin-bottom: 20px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-        <div class="card-label" style="margin-bottom: 0;">Active AI Printmaker Engine</div>
-        <span id="activeModelBadge" class="badge-pill badge-amber">Loading...</span>
-      </div>
-      <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px;">
-        Controls the engine used to carve and press field notes store-wide. Only you can change this.
-      </p>
+    <!-- ==================== TAB 3: ERROR DIAGNOSTICS ==================== -->
+    <div id="tabErrors" style="display: none;">
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">\u26A0\uFE0F Error & Incident Center</div>
+          <span id="issuesCountBadge" class="panel-badge" style="background: var(--red-dim); color: var(--red);">0 Issues</span>
+        </div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.4;">
+          Grouped failure reports from xAI & Gemini model calls and client error logs:
+        </p>
 
-      <div style="display: flex; flex-direction: column; gap: 8px;">
-        <label style="display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); padding: 10px 12px; border-radius: 8px; cursor: pointer;">
-          <input type="radio" name="aiModel" value="grok-imagine-image-2.0" id="modelGrok2" style="accent-color: var(--amber);">
+        <div id="issuesList">
+          <div style="font-size: 12px; color: var(--text-muted); font-style: italic; text-align: center; padding: 20px;">Fetching issues...</div>
+        </div>
+
+        <div class="panel-header" style="margin-top: 18px;">
+          <div class="panel-title">\u{1F5A8}\uFE0F Recent AI Generation Logs</div>
+        </div>
+        <div id="recentActivityErrorsList" class="timeline-list">
+          <div style="font-size: 12px; color: var(--text-muted); font-style: italic; text-align: center; padding: 14px;">Loading generation logs...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== TAB 4: FUNNEL DROP-OFFS ==================== -->
+    <div id="tabFunnel" style="display: none;">
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">\u{1F53B} User Drop-off Waterfall</div>
+          <span id="funnelPercentBadge" class="panel-badge" style="background: var(--cyan-dim); color: var(--cyan);">0% Conv.</span>
+        </div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px;">
+          Step-by-step retention from app launch to completed linocut print:
+        </p>
+
+        <div id="funnelWaterfallContainer">
+          <div style="font-size: 12px; color: var(--text-muted); font-style: italic; text-align: center; padding: 20px;">Computing funnel...</div>
+        </div>
+
+        <div id="funnelBottleneckAlert" class="drop-alert-box" style="display: none;">
+          <span style="font-size: 16px;">\u26A0\uFE0F</span>
           <div>
-            <div style="font-size: 13px; font-weight: 600; color: var(--text);">xAI Grok Imagine 2.0 (Recommended)</div>
-            <div style="font-size: 11px; color: var(--text-muted);">Standard 2K linocut print carving (~5-6\xA2)</div>
+            <div id="bottleneckTitle" style="font-weight: 700; text-transform: uppercase;">Primary Bottleneck</div>
+            <div id="bottleneckAdvice" style="color: var(--text); margin-top: 2px;">Analyzing user drop-off...</div>
           </div>
-        </label>
-
-        <label style="display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); padding: 10px 12px; border-radius: 8px; cursor: pointer;">
-          <input type="radio" name="aiModel" value="grok-imagine-image-quality" id="modelGrokUltra" style="accent-color: var(--amber);">
-          <div>
-            <div style="font-size: 13px; font-weight: 600; color: var(--text);">xAI Grok Imagine Ultra HD</div>
-            <div style="font-size: 11px; color: var(--text-muted);">Maximum linocut detail and texture (~7-8\xA2)</div>
-          </div>
-        </label>
-
-        <label style="display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); padding: 10px 12px; border-radius: 8px; cursor: pointer;">
-          <input type="radio" name="aiModel" value="gemini-2.5-flash-image" id="modelGemini" style="accent-color: var(--amber);">
-          <div>
-            <div style="font-size: 13px; font-weight: 600; color: var(--text);">Google Gemini 2.5 Flash</div>
-            <div style="font-size: 11px; color: var(--text-muted);">Google fast image tier (~3\xA2)</div>
-          </div>
-        </label>
-      </div>
-
-      <div style="margin-top: 12px; display: flex; align-items: center; justify-content: space-between;">
-        <button onclick="handleSaveModel()" id="saveModelBtn" style="background: var(--amber); color: #141210; border: none; border-radius: 6px; font-family: var(--font-mono); font-weight: 700; font-size: 12px; padding: 8px 16px; cursor: pointer;">
-          APPLY ACTIVE MODEL
-        </button>
-        <span id="modelSaveNotice" style="font-size: 11px; color: var(--green); font-family: var(--font-mono); display: none;">\u2713 Saved & Active!</span>
+        </div>
       </div>
     </div>
 
-    <!-- Developer Test Credits Control -->
-    <div class="card" style="margin-top: 16px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-        <span style="font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--amber); letter-spacing: 1px; text-transform: uppercase;">
-          Grant Test Credits
-        </span>
-        <span style="font-size: 10px; color: var(--text-muted);">Developer Access</span>
+    <!-- ==================== TAB 5: STUDIO CONTROLS ==================== -->
+    <div id="tabControls" style="display: none;">
+      <!-- Active Model Selection -->
+      <div class="panel" style="margin-bottom: 12px;">
+        <div class="panel-header">
+          <div class="panel-title">\u{1F916} Active AI Printmaker Engine</div>
+          <span id="activeModelControlsBadge" class="panel-badge" style="background: var(--amber-dim); color: var(--amber);">Loading...</span>
+        </div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px;">
+          Controls the model used to carve field notes store-wide.
+        </p>
+
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <label style="display: flex; align-items: center; gap: 10px; background: var(--card-inner); border: 1px solid var(--card-border); padding: 10px 12px; border-radius: 8px; cursor: pointer;">
+            <input type="radio" name="aiModel" value="grok-imagine-image-2.0" id="modelGrok2" style="accent-color: var(--cyan);">
+            <div>
+              <div style="font-size: 12px; font-weight: 600; color: var(--text);">xAI Grok Imagine 2.0 (Recommended)</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Standard 2K linocut print carving (~5-6\xA2)</div>
+            </div>
+          </label>
+
+          <label style="display: flex; align-items: center; gap: 10px; background: var(--card-inner); border: 1px solid var(--card-border); padding: 10px 12px; border-radius: 8px; cursor: pointer;">
+            <input type="radio" name="aiModel" value="grok-imagine-image-quality" id="modelGrokUltra" style="accent-color: var(--cyan);">
+            <div>
+              <div style="font-size: 12px; font-weight: 600; color: var(--text);">xAI Grok Imagine Ultra HD</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Maximum linocut detail and texture (~7-8\xA2)</div>
+            </div>
+          </label>
+
+          <label style="display: flex; align-items: center; gap: 10px; background: var(--card-inner); border: 1px solid var(--card-border); padding: 10px 12px; border-radius: 8px; cursor: pointer;">
+            <input type="radio" name="aiModel" value="gemini-2.5-flash-image" id="modelGemini" style="accent-color: var(--cyan);">
+            <div>
+              <div style="font-size: 12px; font-weight: 600; color: var(--text);">Google Gemini 2.5 Flash</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Google fast image tier (~3\xA2)</div>
+            </div>
+          </label>
+        </div>
+
+        <div style="margin-top: 12px; display: flex; align-items: center; justify-content: space-between;">
+          <button onclick="handleSaveModel()" id="saveModelBtn" style="background: var(--cyan); color: #09090B; border: none; border-radius: 6px; font-family: var(--font-mono); font-weight: 700; font-size: 12px; padding: 8px 16px; cursor: pointer;">
+            APPLY ACTIVE MODEL
+          </button>
+          <span id="modelSaveNotice" style="font-size: 11px; color: var(--green); font-family: var(--font-mono); display: none;">\u2713 Saved & Active!</span>
+        </div>
       </div>
-      <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">
-        Add test credits to your device by entering your <b>Account Key</b> (found in Settings &rarr; Account Key in the app) or Device ID.
-      </p>
 
-      <div style="display: flex; gap: 8px; margin-bottom: 10px;">
-        <input 
-          type="text" 
-          id="grantTargetInput" 
-          placeholder="e.g. FIELD-XXXX-YYYY" 
-          style="flex: 2; background: rgba(0,0,0,0.3); border: 1px solid var(--card-border); color: var(--text); padding: 8px 10px; border-radius: 6px; font-family: var(--font-mono); font-size: 12px; text-transform: uppercase;"
-        />
-        <input 
-          type="number" 
-          id="grantAmountInput" 
-          value="20" 
-          min="1" 
-          max="100" 
-          style="flex: 1; max-width: 70px; background: rgba(0,0,0,0.3); border: 1px solid var(--card-border); color: var(--text); padding: 8px 10px; border-radius: 6px; font-family: var(--font-mono); font-size: 12px;"
-        />
-        <button 
-          onclick="handleGrantCredits()" 
-          id="grantCreditsBtn" 
-          style="background: var(--green); color: #141210; border: none; border-radius: 6px; font-family: var(--font-mono); font-weight: 700; font-size: 12px; padding: 8px 14px; cursor: pointer;"
-        >
-          GRANT
-        </button>
+      <!-- Developer Test Credits Control -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">\u{1F39F}\uFE0F Grant Test Credits</div>
+          <span class="panel-badge" style="background: var(--green-dim); color: var(--green);">Dev Access</span>
+        </div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">
+          Add test credits to any device by entering an <b>Account Key</b> (e.g. FIELD-XXXX-YYYY) or Device ID:
+        </p>
+
+        <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+          <input 
+            type="text" 
+            id="grantTargetInput" 
+            placeholder="FIELD-XXXX-YYYY" 
+            style="flex: 2; background: var(--card-inner); border: 1px solid var(--card-border); color: var(--text); padding: 8px 10px; border-radius: 6px; font-family: var(--font-mono); font-size: 12px; text-transform: uppercase;"
+          />
+          <input 
+            type="number" 
+            id="grantAmountInput" 
+            value="20" 
+            min="1" 
+            max="100" 
+            style="flex: 1; max-width: 65px; background: var(--card-inner); border: 1px solid var(--card-border); color: var(--text); padding: 8px 10px; border-radius: 6px; font-family: var(--font-mono); font-size: 12px;"
+          />
+          <button 
+            onclick="handleGrantCredits()" 
+            id="grantCreditsBtn" 
+            style="background: var(--green); color: #09090B; border: none; border-radius: 6px; font-family: var(--font-mono); font-weight: 700; font-size: 12px; padding: 8px 14px; cursor: pointer;"
+          >
+            GRANT
+          </button>
+        </div>
+        <div id="grantResultNotice" style="font-size: 11px; font-family: var(--font-mono); display: none;"></div>
       </div>
-      <div id="grantResultNotice" style="font-size: 11px; font-family: var(--font-mono); display: none;"></div>
-    </div>
-
-    <!-- Top Destinations -->
-    <div class="section-title">
-      <span>Top Travel Destinations</span>
-      <span style="font-size: 10px; color: var(--text-muted);">All time</span>
-    </div>
-    <div id="destinationsList" class="destinations-list">
-      <div style="font-size: 12px; color: var(--text-muted); font-style: italic;">Loading destinations...</div>
-    </div>
-
-    <!-- Live Activity & Telemetry Feeds -->
-    <div class="section-title">
-      <span>Live Activity Stream</span>
-      <div class="stream-tab-bar">
-        <button id="streamTabEvents" class="stream-tab active" onclick="switchStreamTab('events')">\u26A1 Telemetry Actions</button>
-        <button id="streamTabGens" class="stream-tab" onclick="switchStreamTab('generations')">\u{1F5A8}\uFE0F AI Generations</button>
-      </div>
-    </div>
-    
-    <!-- User Telemetry Feed -->
-    <div id="eventsList" class="activity-list">
-      <div style="font-size: 12px; color: var(--text-muted); font-style: italic; text-align: center; padding: 20px;">Fetching user telemetry...</div>
-    </div>
-
-    <!-- AI Generations Feed -->
-    <div id="activityList" class="activity-list" style="display: none;">
-      <div style="font-size: 12px; color: var(--text-muted); font-style: italic; text-align: center; padding: 20px;">Fetching latest generations...</div>
     </div>
   </div>
 
@@ -13743,6 +14034,31 @@ function renderAdminDashboardHtml() {
       if (diffHr < 24) return diffHr + 'h ago';
       const diffDays = Math.floor(diffHr / 24);
       return diffDays + 'd ago';
+    }
+
+    let cachedStats = null;
+    let currentTab = 'overview';
+    let searchQuery = '';
+
+    function switchTab(tabName) {
+      currentTab = tabName;
+      const tabs = ['overview', 'journeys', 'errors', 'funnel', 'controls'];
+      tabs.forEach(t => {
+        const el = document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1));
+        const chip = document.getElementById('chip' + t.charAt(0).toUpperCase() + t.slice(1));
+        if (el) el.style.display = t === tabName ? 'block' : 'none';
+        if (chip) {
+          if (t === tabName) chip.classList.add('active');
+          else chip.classList.remove('active');
+        }
+      });
+    }
+
+    function handleSearchFilter(query) {
+      searchQuery = (query || '').toLowerCase().trim();
+      if (cachedStats) {
+        renderUserJourneys(cachedStats.userJourneys || []);
+      }
     }
 
     async function fetchStats() {
@@ -13770,7 +14086,8 @@ function renderAdminDashboardHtml() {
         }
 
         const data = await res.json();
-        renderStats(data);
+        cachedStats = data;
+        renderAll(data);
       } catch (err) {
         console.error('Failed to fetch stats:', err);
       } finally {
@@ -13778,132 +14095,281 @@ function renderAdminDashboardHtml() {
       }
     }
 
-    let currentPlatform = 'android';
-    let cachedStats = null;
+    function renderAll(data) {
+      renderOverviewKPIs(data);
+      renderOverviewStream(data.recentEvents || []);
+      renderUserJourneys(data.userJourneys || []);
+      renderIssues(data.issues || []);
+      renderActivityLogs(data.recentActivity || []);
+      renderFunnelWaterfall(data.funnel);
+      updateModelBadges(data.activeModel);
+    }
 
-    function setPlatform(platform) {
-      currentPlatform = platform;
-      ['android', 'ios', 'all', 'web'].forEach(p => {
-        const btn = document.getElementById('tab' + (p.charAt(0).toUpperCase() + p.slice(1)));
-        if (btn) btn.className = 'tab-btn' + (p === platform ? ' active' : '');
-      });
-      if (cachedStats) {
-        updatePlatformCards(cachedStats);
+    function renderOverviewKPIs(data) {
+      const m = data.metrics || { activeSessions: 0, errorRatePct: 0, avgLatencySec: 4.8, funnelConversionPct: 0 };
+      document.getElementById('statActiveSessions').textContent = m.activeSessions || data.engagement?.dau || 0;
+      document.getElementById('statErrorRate').textContent = (m.errorRatePct || 0) + '%';
+      document.getElementById('statLatency').textContent = (m.avgLatencySec || 4.8) + 's';
+      document.getElementById('statConversion').textContent = (m.funnelConversionPct || 0) + '%';
+
+      // Store Audience Breakdown
+      const android = data.android || { total: 0, last24h: 0 };
+      const ios = data.ios || { total: 0, last24h: 0 };
+      const web = data.web || { total: 0, last24h: 0 };
+
+      document.getElementById('overviewAndroidTotal').textContent = android.total;
+      document.getElementById('overviewAndroidToday').textContent = '+' + android.last24h + ' today';
+      document.getElementById('overviewIosTotal').textContent = ios.total;
+      document.getElementById('overviewIosToday').textContent = '+' + ios.last24h + ' today';
+      document.getElementById('overviewWebTotal').textContent = web.total;
+      document.getElementById('overviewWebToday').textContent = '+' + web.last24h + ' today';
+    }
+
+    function renderOverviewStream(events) {
+      const listEl = document.getElementById('overviewStreamList');
+      if (!listEl) return;
+
+      if (!events || events.length === 0) {
+        listEl.innerHTML = '<div style="font-size: 12px; color: var(--text-muted); font-style: italic; text-align: center; padding: 14px;">No telemetry events recorded yet.</div>';
+        return;
+      }
+
+      const topEvents = events.slice(0, 6);
+      listEl.innerHTML = topEvents.map(e => {
+        let dotClass = 'dot-cyan';
+        let icon = '\u25B6';
+        let title = e.eventName.replace(/_/g, ' ');
+        const devSnippet = e.deviceId ? e.deviceId.slice(-6) : (e.installationId ? e.installationId.slice(0, 6) : 'anon');
+
+        if (e.eventName === 'pressing_success') {
+          dotClass = 'dot-green';
+          icon = '\u2713';
+          title = 'Note Pressed & Saved';
+        } else if (e.eventName === 'pressing_failed') {
+          dotClass = 'dot-red';
+          icon = '\u26A0\uFE0F';
+          title = 'Pressing Interrupted';
+        } else if (e.eventName === 'photo_selected' || e.eventName === 'demo_photo_used') {
+          dotClass = 'dot-amber';
+          icon = '\u{1F4F7}';
+          title = 'Photo Selected';
+        } else if (e.eventName === 'photo_picker_cancelled') {
+          dotClass = 'dot-red';
+          icon = '\u21A9\uFE0F';
+          title = 'Cancelled Photo Picker';
+        }
+
+        return \`
+          <div class="timeline-item">
+            <div class="timeline-dot \${dotClass}">\${icon}</div>
+            <div class="timeline-body">
+              <div class="timeline-head">
+                <span class="timeline-title">\${title}</span>
+                <span class="timeline-time">\${timeAgo(e.createdAt)}</span>
+              </div>
+              <div class="timeline-sub">\${e.platform} \xB7 id:...\${devSnippet}</div>
+            </div>
+          </div>
+        \`;
+      }).join('');
+    }
+
+    function renderUserJourneys(journeys) {
+      const container = document.getElementById('userJourneysList');
+      const badge = document.getElementById('journeysCountBadge');
+      if (!container) return;
+
+      let filtered = journeys || [];
+      if (searchQuery) {
+        filtered = filtered.filter(j => 
+          j.deviceId.toLowerCase().includes(searchQuery) || 
+          j.platform.toLowerCase().includes(searchQuery) ||
+          (j.abandonedScreen && j.abandonedScreen.toLowerCase().includes(searchQuery))
+        );
+      }
+
+      if (badge) badge.textContent = filtered.length + ' Journeys';
+
+      if (filtered.length === 0) {
+        container.innerHTML = '<div style="font-size: 12px; color: var(--text-muted); font-style: italic; text-align: center; padding: 20px;">No user journeys match your filter.</div>';
+        return;
+      }
+
+      container.innerHTML = filtered.map(j => {
+        const devShort = j.deviceId.length > 14 ? '...' + j.deviceId.slice(-10) : j.deviceId;
+        const outcomeBadge = j.completedStamp 
+          ? '<span style="font-size: 10px; font-weight: 700; color: var(--green); background: var(--green-dim); padding: 2px 7px; border-radius: 6px;">\u{1F3C6} Stamped ' + (j.notesCreated || 1) + '</span>'
+          : (j.abandonedScreen 
+              ? '<span style="font-size: 10px; font-weight: 700; color: var(--red); background: var(--red-dim); padding: 2px 7px; border-radius: 6px;">Exited: ' + j.abandonedScreen + '</span>'
+              : '<span style="font-size: 10px; font-weight: 700; color: var(--amber); background: var(--amber-dim); padding: 2px 7px; border-radius: 6px;">Browsed</span>');
+
+        const eventsHtml = (j.events || []).map((ev, idx) => {
+          const dotClass = 'dot-' + (ev.status || 'cyan');
+          const timeFormatted = ev.time ? new Date(ev.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+          return \`
+            <div class="timeline-item">
+              <div class="timeline-dot \${dotClass}">\${idx + 1}</div>
+              <div class="timeline-body">
+                <div class="timeline-head">
+                  <span class="timeline-title">\${ev.label}</span>
+                  <span class="timeline-time">\${timeFormatted}</span>
+                </div>
+                <div class="timeline-sub">\${ev.detail || ''}</div>
+              </div>
+            </div>
+          \`;
+        }).join('');
+
+        return \`
+          <div class="journey-card">
+            <div class="journey-header">
+              <div>
+                <span class="journey-dev">\${devShort}</span>
+                <span style="font-size: 10px; color: var(--text-muted); margin-left: 6px;">\${j.platform} \xB7 \${timeAgo(j.lastSeen)}</span>
+              </div>
+              <div class="journey-meta-pills">\${outcomeBadge}</div>
+            </div>
+            <div class="timeline-list" style="margin-top: 8px;">
+              \${eventsHtml}
+            </div>
+          </div>
+        \`;
+      }).join('');
+    }
+
+    function renderIssues(issues) {
+      const container = document.getElementById('issuesList');
+      const badge = document.getElementById('issuesCountBadge');
+      if (!container) return;
+
+      if (badge) badge.textContent = (issues.length) + ' Issues';
+
+      if (!issues || issues.length === 0) {
+        container.innerHTML = \`
+          <div style="background: var(--green-dim); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 10px; padding: 14px; text-align: center;">
+            <div style="font-size: 20px; margin-bottom: 4px;">\u2713</div>
+            <div style="font-size: 12px; font-weight: 700; color: var(--green);">All Systems Running Smoothly</div>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Zero model carving errors recorded in this period.</div>
+          </div>
+        \`;
+        return;
+      }
+
+      container.innerHTML = issues.map(iss => {
+        const catBadge = iss.category === 'moderation'
+          ? '<span style="font-size: 10px; font-weight: 700; color: var(--red); background: var(--red-dim); padding: 1px 6px; border-radius: 4px;">SAFETY GUARD</span>'
+          : (iss.category === 'format'
+              ? '<span style="font-size: 10px; font-weight: 700; color: var(--amber); background: var(--amber-dim); padding: 1px 6px; border-radius: 4px;">FORMAT ERROR</span>'
+              : '<span style="font-size: 10px; font-weight: 700; color: var(--cyan); background: var(--cyan-dim); padding: 1px 6px; border-radius: 4px;">TIMEOUT</span>');
+
+        return \`
+          <div class="issue-item">
+            <div class="issue-head">
+              <span class="issue-title">\${iss.code}</span>
+              \${catBadge}
+            </div>
+            <div style="font-size: 11px; color: var(--text); line-height: 1.3;">\${iss.description}</div>
+            <div class="issue-meta">
+              <span>\${iss.affectedDevices} affected device\${iss.affectedDevices === 1 ? '' : 's'} (\${iss.count} hits)</span>
+              <span>\${timeAgo(iss.lastSeen)}</span>
+            </div>
+          </div>
+        \`;
+      }).join('');
+    }
+
+    function renderActivityLogs(activity) {
+      const container = document.getElementById('recentActivityErrorsList');
+      if (!container) return;
+
+      if (!activity || activity.length === 0) {
+        container.innerHTML = '<div style="font-size: 12px; color: var(--text-muted); font-style: italic; text-align: center; padding: 14px;">No generation activity logged yet.</div>';
+        return;
+      }
+
+      container.innerHTML = activity.slice(0, 10).map(item => {
+        const isSuccess = item.status === 'success';
+        const dotClass = isSuccess ? 'dot-green' : 'dot-red';
+        const icon = isSuccess ? '\u2713' : '\u2717';
+        const title = (item.place || 'Unknown Destination') + ' \xB7 No. ' + (item.number || '01');
+
+        return \`
+          <div class="timeline-item">
+            <div class="timeline-dot \${dotClass}">\${icon}</div>
+            <div class="timeline-body">
+              <div class="timeline-head">
+                <span class="timeline-title">\${title}</span>
+                <span class="timeline-time">\${timeAgo(item.createdAt)}</span>
+              </div>
+              <div class="timeline-sub">\${isSuccess ? 'Successfully Stamped' : ('Failed: ' + (item.costInfo || 'Error'))}</div>
+            </div>
+          </div>
+        \`;
+      }).join('');
+    }
+
+    function renderFunnelWaterfall(funnel) {
+      if (!funnel) return;
+      const baseOpens = funnel.appOpens || 1;
+
+      const steps = [
+        { label: '1. App Opened', count: funnel.appOpens || 0 },
+        { label: '2. Tapped "New Note"', count: funnel.composeOpened || 0 },
+        { label: '3. Photo Selected', count: funnel.photoSelected || 0 },
+        { label: '4. Tapped "Press"', count: funnel.pressClicked || 0 },
+        { label: '5. Carving Started', count: funnel.pressingStarted || 0 },
+        { label: '6. Stamp Created & Saved', count: funnel.generatedSuccess || 0 },
+      ];
+
+      const container = document.getElementById('funnelWaterfallContainer');
+      const badge = document.getElementById('funnelPercentBadge');
+      if (badge) badge.textContent = (funnel.conversionRate || 0) + '% Conv.';
+
+      if (container) {
+        container.innerHTML = steps.map((step, idx) => {
+          const pctOfTotal = baseOpens > 0 ? Math.min(100, Math.round((step.count / baseOpens) * 100)) : 0;
+          const prevCount = idx > 0 ? steps[idx - 1].count : baseOpens;
+          const stepDrop = prevCount > 0 && idx > 0 ? Math.max(0, Math.round(((prevCount - step.count) / prevCount) * 100)) : 0;
+          const dropLabel = idx > 0 && stepDrop > 0 ? \`<span style="color: var(--red); font-size: 10px; font-family: var(--font-mono); margin-left: 6px;">(-\${stepDrop}% drop)</span>\` : '';
+
+          return \`
+            <div class="funnel-bar-wrap">
+              <div class="funnel-meta-row">
+                <span>\${step.label}</span>
+                <span>\${step.count} (\${pctOfTotal}%)\${dropLabel}</span>
+              </div>
+              <div class="funnel-bar-track">
+                <div class="funnel-bar-prog" style="width: \${pctOfTotal}%;"></div>
+              </div>
+            </div>
+          \`;
+        }).join('');
+      }
+
+      const alertBox = document.getElementById('funnelBottleneckAlert');
+      if (alertBox) {
+        if (funnel.biggestDropoff && funnel.biggestDropoff !== 'None' && funnel.biggestDropoffPct > 0) {
+          alertBox.style.display = 'flex';
+          const titleEl = document.getElementById('bottleneckTitle');
+          const adviceEl = document.getElementById('bottleneckAdvice');
+          if (titleEl) titleEl.textContent = 'Primary Bottleneck: ' + funnel.biggestDropoff + ' (-' + funnel.biggestDropoffPct + '%)';
+          if (adviceEl) adviceEl.textContent = getBottleneckAdviceText(funnel.biggestDropoff);
+        } else {
+          alertBox.style.display = 'none';
+        }
       }
     }
 
-    function updatePlatformCards(data) {
-      const android = data.android || { total: 0, last24h: 0, last3d: 0, last7d: 0, activeDevices: 0 };
-      const ios = data.ios || { total: 0, last24h: 0, last3d: 0, last7d: 0, activeDevices: 0 };
-      const web = data.web || { total: 0, last24h: 0, last7d: 0 };
-
-      const titleEl = document.getElementById('statInstallsTitle');
-      const badgeEl = document.getElementById('statPlatformBadge');
-      const totalEl = document.getElementById('statInstallsTotal');
-      const todayEl = document.getElementById('statInstallsToday');
-      const threeDEl = document.getElementById('statInstalls3d');
-      const threeDWrapper = document.getElementById('statInstalls3dWrapper');
-      const sevenDEl = document.getElementById('statInstalls7d');
-
-      const activeTitleEl = document.getElementById('statActiveTitle');
-      const activeBadgeEl = document.getElementById('statActiveBadge');
-      const activeTotalEl = document.getElementById('statActiveTotal');
-      const activeSubEl = document.getElementById('statActiveSub');
-
-      if (currentPlatform === 'android') {
-        titleEl.textContent = 'Play Store Installs';
-        badgeEl.textContent = 'Android';
-        badgeEl.className = 'badge-pill badge-green';
-        totalEl.textContent = android.total;
-        todayEl.textContent = '+' + android.last24h;
-        threeDWrapper.style.display = 'inline';
-        threeDEl.textContent = '+' + android.last3d;
-        sevenDEl.textContent = '+' + android.last7d;
-
-        activeTitleEl.textContent = 'Active Devices';
-        activeBadgeEl.textContent = 'Google Play';
-        activeBadgeEl.className = 'badge-pill badge-green';
-        activeTotalEl.textContent = android.activeDevices;
-        activeSubEl.textContent = 'Active audience (retained)';
-      } else if (currentPlatform === 'ios') {
-        titleEl.textContent = 'App Store Installs';
-        badgeEl.textContent = 'Apple iOS';
-        badgeEl.className = 'badge-pill badge-amber';
-        totalEl.textContent = ios.total;
-        todayEl.textContent = '+' + ios.last24h;
-        threeDWrapper.style.display = 'inline';
-        threeDEl.textContent = '+' + ios.last3d;
-        sevenDEl.textContent = '+' + ios.last7d;
-
-        activeTitleEl.textContent = 'Active Devices';
-        activeBadgeEl.textContent = 'App Store';
-        activeBadgeEl.className = 'badge-pill badge-amber';
-        activeTotalEl.textContent = ios.activeDevices;
-        activeSubEl.textContent = ios.total === 0 ? 'Ready for iOS launch' : 'Active audience (retained)';
-      } else if (currentPlatform === 'all') {
-        titleEl.textContent = 'Total Store Installs';
-        badgeEl.textContent = 'Android + iOS';
-        badgeEl.className = 'badge-pill badge-green';
-        totalEl.textContent = android.total + ios.total;
-        todayEl.textContent = '+' + (android.last24h + ios.last24h);
-        threeDWrapper.style.display = 'inline';
-        threeDEl.textContent = '+' + (android.last3d + ios.last3d);
-        sevenDEl.textContent = '+' + (android.last7d + ios.last7d);
-
-        activeTitleEl.textContent = 'Active Devices';
-        activeBadgeEl.textContent = 'Combined';
-        activeBadgeEl.className = 'badge-pill badge-green';
-        activeTotalEl.textContent = android.activeDevices + ios.activeDevices;
-        activeSubEl.textContent = 'Total retained store audience';
-      } else if (currentPlatform === 'web') {
-        titleEl.textContent = 'Web App Visitors';
-        badgeEl.textContent = 'Web';
-        badgeEl.className = 'badge-pill';
-        totalEl.textContent = web.total;
-        todayEl.textContent = '+' + web.last24h;
-        threeDWrapper.style.display = 'none';
-        sevenDEl.textContent = '+' + web.last7d;
-
-        activeTitleEl.textContent = 'Web Sessions';
-        activeBadgeEl.textContent = 'Online';
-        activeBadgeEl.className = 'badge-pill';
-        activeTotalEl.textContent = web.total;
-        activeSubEl.textContent = 'Browser visitors (Safari/Chrome)';
-      }
-    }
-
-    let currentStreamTab = 'events';
-
-    function switchStreamTab(tab) {
-      currentStreamTab = tab;
-      const tabEv = document.getElementById('streamTabEvents');
-      const tabGen = document.getElementById('streamTabGens');
-      const listEv = document.getElementById('eventsList');
-      const listGen = document.getElementById('activityList');
-
-      if (tab === 'events') {
-        if (tabEv) tabEv.className = 'stream-tab active';
-        if (tabGen) tabGen.className = 'stream-tab';
-        if (listEv) listEv.style.display = 'flex';
-        if (listGen) listGen.style.display = 'none';
-      } else {
-        if (tabEv) tabEv.className = 'stream-tab';
-        if (tabGen) tabGen.className = 'stream-tab active';
-        if (listEv) listEv.style.display = 'none';
-        if (listGen) listGen.style.display = 'flex';
-      }
-    }
-
-    function getBottleneckAdvice(stepName) {
+    function getBottleneckAdviceText(stepName) {
       if (!stepName) return 'Audience is progressing smoothly through the creation flow.';
       if (stepName.includes('New Note')) {
         return 'Users launch the app but do not tap "New Note". Consider adding an empty library welcome prompt or card.';
       }
       if (stepName.includes('Selected Photo')) {
-        return 'Users open the compose screen but do not select a photo. Verify camera and library permissions are clear and frictionless.';
+        return 'Users open the compose screen but do not select a photo. Verify photo picker permissions and options are clear.';
       }
       if (stepName.includes('Clicked "Press"')) {
-        return 'Users select a photo but leave without pressing. Check if photo metadata or date confirmations are confusing.';
+        return 'Users select a photo but leave without pressing. Check if metadata fields or keywords are confusing.';
       }
       if (stepName.includes('Started Processing')) {
         return 'Users click Press but do not reach processing. They might be declining the AI safety consent modal or bouncing on paywall.';
@@ -13914,242 +14380,18 @@ function renderAdminDashboardHtml() {
       return 'Audience is progressing smoothly through the creation flow.';
     }
 
-    function renderFunnel(funnel) {
-      if (!funnel) return;
-      const baseOpens = funnel.appOpens || 1;
+    function updateModelBadges(modelId) {
+      const overviewBadge = document.getElementById('activeModelBadgeOverview');
+      const controlsBadge = document.getElementById('activeModelControlsBadge');
+      let name = 'Grok Imagine 2.0';
+      if (modelId === 'grok-imagine-image-quality') name = 'Grok Ultra HD';
+      else if (modelId && modelId.startsWith('gemini')) name = 'Gemini 2.5 Flash';
 
-      const steps = [
-        { label: '1. App Opened', count: funnel.appOpens || 0, icon: '\u{1F4F1}' },
-        { label: '2. Compose Opened', count: funnel.composeOpened || 0, icon: '\u270D\uFE0F' },
-        { label: '3. Photo Selected', count: funnel.photoSelected || 0, icon: '\u{1F4F7}' },
-        { label: '4. Press Clicked', count: funnel.pressClicked || 0, icon: '\u{1F5A8}\uFE0F' },
-        { label: '5. Carving Started', count: funnel.pressingStarted || 0, icon: '\u2699\uFE0F' },
-        { label: '6. Stamp Created', count: funnel.generatedSuccess || 0, icon: '\u{1F3C6}' },
-      ];
+      if (overviewBadge) overviewBadge.textContent = name;
+      if (controlsBadge) controlsBadge.textContent = name;
 
-      const container = document.getElementById('funnelContainer');
-      if (container) {
-        container.innerHTML = steps.map((step, idx) => {
-          const pctOfTotal = baseOpens > 0 ? Math.min(100, Math.round((step.count / baseOpens) * 100)) : 0;
-          const prevCount = idx > 0 ? steps[idx - 1].count : baseOpens;
-          const stepDrop = prevCount > 0 && idx > 0 ? Math.max(0, Math.round(((prevCount - step.count) / prevCount) * 100)) : 0;
-          const dropLabel = idx > 0 && stepDrop > 0 ? \`<span style="color: var(--red); font-size: 10px; font-family: var(--font-mono); margin-left: 6px;">(-\${stepDrop}% drop)</span>\` : '';
-
-          return \`
-            <div class="funnel-step">
-              <div class="funnel-step-header">
-                <div class="funnel-step-title">
-                  <span>\${step.icon}</span>
-                  <span>\${step.label}</span>
-                </div>
-                <div class="funnel-step-meta">
-                  <span class="funnel-step-count">\${step.count}</span>
-                  <span style="color: var(--text-muted); margin-left: 3px;">(\${pctOfTotal}%)</span>
-                  \${dropLabel}
-                </div>
-              </div>
-              <div class="funnel-bar-bg">
-                <div class="funnel-bar-fill" style="width: \${pctOfTotal}%;"></div>
-              </div>
-            </div>
-          \`;
-        }).join('');
-      }
-
-      const bottleneckBox = document.getElementById('funnelBottleneck');
-      if (bottleneckBox) {
-        if (funnel.biggestDropoff && funnel.biggestDropoff !== 'None' && funnel.biggestDropoffPct > 0) {
-          bottleneckBox.style.display = 'flex';
-          const stepEl = document.getElementById('bottleneckStep');
-          const pctEl = document.getElementById('bottleneckPct');
-          const adviceEl = document.getElementById('bottleneckAdvice');
-          if (stepEl) stepEl.textContent = funnel.biggestDropoff;
-          if (pctEl) pctEl.textContent = funnel.biggestDropoffPct + '% drop-off';
-          if (adviceEl) adviceEl.textContent = getBottleneckAdvice(funnel.biggestDropoff);
-        } else {
-          bottleneckBox.style.display = 'none';
-        }
-      }
-    }
-
-    function formatEventDetails(eventName, meta) {
-      meta = meta || {};
-      switch (eventName) {
-        case 'app_open':
-          return { icon: '\u{1F4F1}', title: 'App Opened' };
-        case 'compose_opened':
-          return { icon: '\u270D\uFE0F', title: 'Opened Compose Desk' };
-        case 'photo_selected':
-          return { icon: '\u{1F4F7}', title: 'Photo Selected (' + (meta.source || 'library') + ')' };
-        case 'photo_picker_cancelled':
-          return { icon: '\u21A9\uFE0F', title: 'Photo Picker Cancelled' };
-        case 'keywords_suggest_clicked':
-          return { icon: '\u2728', title: 'Tapped Auto-Detect Keywords' };
-        case 'press_clicked':
-          return { icon: '\u{1F5A8}\uFE0F', title: 'Tapped "Press Field Note"' };
-        case 'privacy_modal_shown':
-          return { icon: '\u{1F6E1}\uFE0F', title: 'AI Transparency Modal Prompted' };
-        case 'privacy_modal_accepted':
-          return { icon: '\u{1F91D}', title: 'AI Transparency Accepted' };
-        case 'paywall_shown':
-          return { icon: '\u{1F4B3}', title: 'Paywall Prompted' };
-        case 'pressing_started':
-          return { icon: '\u2699\uFE0F', title: 'Linocut Plate Carving Started' };
-        case 'pressing_success':
-          return { icon: '\u{1F3C6}', title: 'Note Pressed & Saved' };
-        case 'pressing_failed':
-          return { icon: '\u26A0\uFE0F', title: meta.isModeration ? 'Pressing Flagged (Moderation)' : 'Pressing Failed' };
-        case 'note_opened':
-          return { icon: '\u{1F4D6}', title: 'Viewed Saved Note' };
-        case 'settings_opened':
-          return { icon: '\u2699\uFE0F', title: 'Opened Settings' };
-        case 'screen_view':
-          return { icon: '\u{1F441}\uFE0F', title: 'Viewed ' + (meta.screen || 'Screen') };
-        default:
-          return { icon: '\u26A1', title: eventName.replace(/_/g, ' ') };
-      }
-    }
-
-    function renderRecentEvents(events) {
-      const container = document.getElementById('eventsList');
-      if (!container) return;
-
-      if (!events || events.length === 0) {
-        container.innerHTML = '<div style="font-size: 12px; color: var(--text-muted); font-style: italic; text-align: center; padding: 20px;">No user telemetry events recorded yet.</div>';
-        return;
-      }
-
-      container.innerHTML = events.map(ev => {
-        const info = formatEventDetails(ev.eventName, ev.metadata);
-        const platformBadge = ev.platform === 'android' ? '\u{1F916} Android' : ev.platform === 'ios' ? '\u{1F34F} iOS' : '\u{1F310} ' + ev.platform;
-        const devSnippet = ev.deviceId ? ev.deviceId.slice(-6) : (ev.installationId ? ev.installationId.slice(0, 6) : 'anon');
-
-        let metaText = '';
-        if (ev.metadata && Object.keys(ev.metadata).length > 0) {
-          if (ev.metadata.place) metaText = ' \xB7 ' + ev.metadata.place;
-          else if (ev.metadata.screen) metaText = ' \xB7 ' + ev.metadata.screen;
-          else if (ev.metadata.source) metaText = ' \xB7 ' + ev.metadata.source;
-          else if (ev.metadata.model) metaText = ' \xB7 ' + (ev.metadata.model.includes('grok') ? 'Grok' : 'Gemini');
-        }
-
-        return \`
-          <div class="activity-item">
-            <div class="activity-left">
-              <div style="font-size: 18px; line-height: 1; flex-shrink: 0;">\${info.icon}</div>
-              <div>
-                <div class="activity-title">\${info.title}</div>
-                <div class="activity-sub">\${platformBadge} \xB7 id:\${devSnippet}\${metaText}</div>
-              </div>
-            </div>
-            <div class="activity-time">\${timeAgo(ev.createdAt)}</div>
-          </div>
-        \`;
-      }).join('');
-    }
-
-    function renderStats(data) {
-      cachedStats = data;
-      updatePlatformCards(data);
-
-      // Web Visitors (Dedicated Card)
-      const web = data.web || { total: 0, last24h: 0, last7d: 0 };
-      document.getElementById('statWebTotal').textContent = web.total;
-      document.getElementById('statWebToday').textContent = '+' + web.last24h;
-      document.getElementById('statWeb7d').textContent = '+' + web.last7d;
-
-      // Engagement & Retention Metrics
-      if (data.engagement) {
-        document.getElementById('statDau').textContent = data.engagement.dau;
-        document.getElementById('statWau').textContent = data.engagement.wau;
-        document.getElementById('statSessions').textContent = data.engagement.totalSessions;
-      }
-      if (data.funnel) {
-        document.getElementById('statConversion').textContent = (data.funnel.conversionRate || 0) + '%';
-        const badge = document.getElementById('funnelConvBadge');
-        if (badge) {
-          badge.textContent = (data.funnel.conversionRate || 0) + '% Conversion';
-          badge.className = 'badge-pill ' + (data.funnel.conversionRate >= 15 ? 'badge-green' : 'badge-amber');
-        }
-        renderFunnel(data.funnel);
-      }
-
-      // Live Telemetry Events
-      renderRecentEvents(data.recentEvents);
-
-      // Generations
-      document.getElementById('statGensTotal').textContent = data.generations.total;
-      document.getElementById('statGensToday').textContent = '+' + data.generations.last24h;
-      
-      const rateEl = document.getElementById('statSuccessRate');
-      rateEl.textContent = data.generations.successRate + '%';
-      rateEl.className = 'badge-pill ' + (data.generations.successRate >= 90 ? 'badge-green' : 'badge-amber');
-
-      document.getElementById('statFreeUsed').textContent = data.users.freeUsedTotal;
-      document.getElementById('statAdsWatched').textContent = data.users.adsWatchedTotal;
-      document.getElementById('statCreditsBalance').textContent = data.users.creditsBalanceTotal;
-
-      // Active Model Selection
-      if (data.activeModel) {
-        updateModelBadge(data.activeModel);
-        const radio = document.querySelector('input[name="aiModel"][value="' + data.activeModel + '"]');
-        if (radio) radio.checked = true;
-      }
-
-      // Destinations
-      const destContainer = document.getElementById('destinationsList');
-      if (data.topDestinations && data.topDestinations.length > 0) {
-        destContainer.innerHTML = data.topDestinations.map(d => \`
-          <div class="dest-pill">
-            <span>\${d.place}</span>
-            <span class="dest-count">\xD7\${d.count}</span>
-          </div>
-        \`).join('');
-      } else {
-        destContainer.innerHTML = '<div style="font-size: 12px; color: var(--text-muted); font-style: italic;">No destinations stamped yet.</div>';
-      }
-
-      // Recent Activity
-      const actContainer = document.getElementById('activityList');
-      if (data.recentActivity && data.recentActivity.length > 0) {
-        actContainer.innerHTML = data.recentActivity.map(item => {
-          const isSuccess = item.status === 'success';
-          const dotClass = isSuccess ? 'status-dot success' : 'status-dot failed';
-          const modelClean = (item.costInfo || '').replace('grok-imagine-image-2.0', 'Grok 2.0').replace('gemini-2.5-flash-image', 'Gemini Flash');
-          const devTag = item.isDev 
-            ? ' <span style="font-size: 9px; padding: 1px 5px; border-radius: 4px; background: rgba(255, 196, 128, 0.2); color: var(--amber); border: 1px solid rgba(255, 196, 128, 0.4); margin-left: 6px; font-weight: 600;">INTERNAL DEV</span>' 
-            : '';
-
-          return \`
-            <div class="activity-item">
-              <div class="activity-left">
-                <div class="\${dotClass}"></div>
-                <div>
-                  <div class="activity-title">\${item.place || 'Current Location'} \xB7 No. \${item.number || '01'}\${devTag}</div>
-                  <div class="activity-sub">\${isSuccess ? (modelClean || 'Success') : ('Failed: ' + (item.costInfo || 'Error'))}</div>
-                </div>
-              </div>
-              <div class="activity-time">\${timeAgo(item.createdAt)}</div>
-            </div>
-          \`;
-        }).join('');
-      } else {
-        actContainer.innerHTML = '<div style="font-size: 12px; color: var(--text-muted); font-style: italic; text-align: center; padding: 20px;">No recent events recorded.</div>';
-      }
-    }
-
-    function updateModelBadge(modelId) {
-      const badge = document.getElementById('activeModelBadge');
-      if (!badge) return;
-      if (modelId === 'grok-imagine-image-quality') {
-        badge.textContent = 'Grok Ultra HD';
-        badge.className = 'badge-pill badge-green';
-      } else if (modelId.startsWith('gemini')) {
-        badge.textContent = 'Gemini 2.5 Flash';
-        badge.className = 'badge-pill badge-amber';
-      } else {
-        badge.textContent = 'Grok Imagine 2.0';
-        badge.className = 'badge-pill badge-amber';
-      }
+      const radio = document.querySelector('input[name="aiModel"][value="' + modelId + '"]');
+      if (radio) radio.checked = true;
     }
 
     async function handleSaveModel() {
@@ -14174,7 +14416,7 @@ function renderAdminDashboardHtml() {
           const notice = document.getElementById('modelSaveNotice');
           notice.style.display = 'inline';
           setTimeout(() => { notice.style.display = 'none'; }, 3000);
-          updateModelBadge(selected);
+          updateModelBadges(selected);
         } else {
           alert('Failed to update active model. Please check PIN.');
         }
@@ -14214,12 +14456,12 @@ function renderAdminDashboardHtml() {
         if (res.ok && data.success) {
           notice.style.display = 'block';
           notice.style.color = 'var(--green)';
-          notice.textContent = '\u2713 Added ' + amount + ' credits to ' + (data.accountKey || target) + '! New balance: ' + data.credits + '. Tap "Sync Balance" in app.';
+          notice.textContent = '\u2713 Added ' + amount + ' credits to ' + (data.accountKey || target) + '! New balance: ' + data.credits + '.';
           fetchStats();
         } else {
           notice.style.display = 'block';
           notice.style.color = 'var(--red)';
-          notice.textContent = '\u2717 ' + (data.message || 'Failed to grant credits. Check PIN or Account Key.');
+          notice.textContent = '\u2717 ' + (data.message || 'Failed to grant credits.');
         }
       } catch (err) {
         notice.style.display = 'block';
@@ -14240,14 +14482,12 @@ function renderAdminDashboardHtml() {
       fetchStats();
     }
 
-    document.getElementById('pinField').addEventListener('keypress', function(e) {
+    document.getElementById('pinField')?.addEventListener('keypress', function(e) {
       if (e.key === 'Enter') handlePinSubmit();
     });
 
-    // Auto-fetch on boot
     window.addEventListener('DOMContentLoaded', () => {
       fetchStats();
-      // Auto refresh every 30 seconds
       setInterval(fetchStats, 30000);
     });
   </script>

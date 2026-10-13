@@ -13,10 +13,10 @@ export default function Root({ children }: { children: React.ReactNode }) {
           content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
         />
 
-        <title>Fields — Travel Journal & Scrapbook</title>
+        <title>Fields — Travel Scrapbook &amp; Digital Travel Journal</title>
         <meta
           name="description"
-          content="Transform your travel photographs into timeless carved stamp prints, vintage travel posters, and field note memories."
+          content="Create your digital travel scrapbook with Fields (travel-scrapbook.com). Turn vacation photos into vintage travel stamps and cherished trip memories."
         />
 
         {/* PWA Web App Manifest */}

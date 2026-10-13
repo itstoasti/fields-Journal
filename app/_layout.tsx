@@ -83,7 +83,7 @@ export default function RootLayout() {
         />
       </Stack>
 
-      {/* Global Field Notes Artisanal Alert Dialog */}
+      {/* Global Field Notes Alert Dialog */}
       <FieldAlertHost />
 
       {/* PWA iOS Add to Home Screen & Install Prompt */}

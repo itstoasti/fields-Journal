@@ -104,7 +104,7 @@ export default function HomeScreen() {
           <Pressable
             onPress={handleOpenGuide}
             style={styles.headerIconButton}
-            accessibilityLabel="Expedition Field Guide"
+            accessibilityLabel="Travel Scrapbook Guide"
             accessibilityRole="button"
             hitSlop={12}
           >

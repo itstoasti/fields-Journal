@@ -139,7 +139,7 @@ export default function OnboardingScreen() {
       <View style={styles.topBar}>
         <View style={styles.brandPill}>
           <TypewriterText size="xs" bold color={colors.charcoal} letterSpacing={1.5}>
-            ✦ FIELDS · EXPEDITION JOURNAL ✦
+            ✦ FIELDS · TRAVEL SCRAPBOOK ✦
           </TypewriterText>
         </View>
 

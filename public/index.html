@@ -3,13 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FIELDS — The Artisanal Travel Journal & Scrapbook</title>
-  <meta name="description" content="Turn your travel photos into hand-carved rubber stamp posters. Create your collectible digital travel journal with authentic spot-color inks and typewriter memories." />
+  <title>Travel Scrapbook — Digital Travel Journal | Fields</title>
+  <meta name="description" content="Create your digital travel scrapbook with Fields (travel-scrapbook.com). Turn vacation photos into vintage travel stamps, track trips, and preserve your travel memories." />
+  <meta name="keywords" content="travel scrapbook, digital travel scrapbook, travel journal, vacation scrapbook, travel photo book, travel stamps, trip memories" />
+  <link rel="canonical" href="https://travel-scrapbook.com/" />
   
   <!-- Open Graph -->
-  <meta property="og:title" content="FIELDS — The Artisanal Travel Journal & Scrapbook" />
-  <meta property="og:description" content="Turn your favorite travel photos into collectible hand-pressed rubber stamp prints on archival parchment." />
+  <meta property="og:title" content="Travel Scrapbook — Digital Travel Journal | Fields" />
+  <meta property="og:description" content="Turn your favorite vacation photos into a digital travel scrapbook with vintage travel stamps, locations, and trip memories." />
   <meta property="og:image" content="/assets/poster_kyoto.jpg" />
+  <meta property="og:url" content="https://travel-scrapbook.com/" />
   <meta property="og:type" content="website" />
 
   <!-- Favicon / Browser Tab Icons -->
@@ -235,7 +238,21 @@
         letter-spacing: 0.8px;
       }
       .hero {
-        padding: 38px 0 32px;
+        padding: 28px 0 24px;
+      }
+      .showcase-stage {
+        padding: 14px;
+        margin: 20px auto 36px;
+      }
+      .showcase-stage::before {
+        left: 20px;
+        width: 65px;
+        height: 20px;
+      }
+      .showcase-stage::after {
+        right: 20px;
+        width: 65px;
+        height: 20px;
       }
     }
 
@@ -422,7 +439,7 @@
 
     /* Hero Section */
     .hero {
-      padding: 68px 0 54px;
+      padding: 42px 0 32px;
       text-align: center;
     }
 
@@ -463,7 +480,7 @@
       font-size: clamp(14px, 1.8vw, 17px);
       color: var(--ink-muted);
       max-width: 680px;
-      margin: 0 auto 36px;
+      margin: 0 auto 24px;
       line-height: 1.75;
     }
 
@@ -486,12 +503,13 @@
 
     /* Showcase Stage */
     .showcase-stage {
-      margin: 44px auto 76px;
+      max-width: 660px;
+      margin: 32px auto 56px;
       background: var(--paper);
       border: 1.5px solid var(--border-dark);
       border-radius: 12px;
-      padding: 24px;
-      box-shadow: 6px 8px 0px rgba(28, 25, 23, 0.95);
+      padding: 20px;
+      box-shadow: 5px 6px 0px rgba(28, 25, 23, 0.95);
       position: relative;
     }
 
@@ -565,6 +583,9 @@
       border: 1px solid rgba(28, 25, 23, 0.15);
       background: #FFFFFF;
       aspect-ratio: 4 / 3;
+      max-height: 480px;
+      width: 100%;
+      margin: 0 auto;
       box-shadow: inset 0 0 0 1px rgba(0,0,0,0.04), 0 6px 24px rgba(0,0,0,0.07);
     }
 
@@ -956,10 +977,10 @@
   <div class="top-bar">
     <div class="top-bar-left">
       <span class="top-dot"></span>
-      <span>2026 Edition · Fields Travel Journal & Scrapbook</span>
+      <span>travel-scrapbook.com · Digital Travel Scrapbook &amp; Journal</span>
     </div>
     <div>
-      <span>Limited Free Launch Edition · 2 Custom Notes Included</span>
+      <span>Free Digital Travel Scrapbook · 2 Custom Stamps Included</span>
     </div>
   </div>
 
@@ -976,7 +997,7 @@
 
       <ul class="nav-links">
         <li><a href="#how-it-works" class="nav-link">How It Works</a></li>
-        <li><a href="#gallery" class="nav-link">Editions</a></li>
+        <li><a href="#gallery" class="nav-link">Scrapbook</a></li>
         <li><a href="#membership" class="nav-link">Fields Pro</a></li>
         <li><a href="/privacy" class="nav-link">Privacy</a></li>
         <li><a href="/terms" class="nav-link">Terms</a></li>
@@ -995,10 +1016,10 @@
       </div>
 
       <h1 class="hero-title">
-        The travel scrapbook for the digital wanderer.
+        The digital travel scrapbook for every journey.
       </h1>
 
-      <p class="hero-sub">
+      <p class="hero-desc">
         Turn your favorite vacation photos into vintage travel stamps. Save the dates, places, and memories from your trips in a digital scrapbook you'll love looking back on.
       </p>
 
@@ -1127,7 +1148,7 @@
 
       <div class="grid-3">
         <div class="card" style="padding: 16px;">
-          <img src="/assets/poster_kyoto.jpg" alt="Kyoto Field Note" style="width: 100%; border-radius: 4px; margin-bottom: 12px; border: 1px solid var(--border);" />
+          <img src="/assets/poster_kyoto.jpg" alt="Kyoto Travel Scrapbook Stamp" style="width: 100%; aspect-ratio: 4 / 3; object-fit: cover; max-height: 220px; border-radius: 4px; margin-bottom: 12px; border: 1px solid var(--border);" />
           <h4 style="font-family: 'Fraunces', serif; font-size: 18px; margin-bottom: 4px;">Kyoto Old District</h4>
           <p style="font-size: 12px; color: var(--ink-muted); margin-bottom: 12px;">No. 01 · Cedar trees · Temple bell · Dusk mist</p>
           <div class="card-meta">
@@ -1137,7 +1158,7 @@
         </div>
 
         <div class="card" style="padding: 16px;">
-          <img src="/assets/poster_yosemite.jpg" alt="Yosemite Field Note" style="width: 100%; border-radius: 4px; margin-bottom: 12px; border: 1px solid var(--border);" />
+          <img src="/assets/poster_yosemite.jpg" alt="Yosemite Travel Scrapbook Stamp" style="width: 100%; aspect-ratio: 4 / 3; object-fit: cover; max-height: 220px; border-radius: 4px; margin-bottom: 12px; border: 1px solid var(--border);" />
           <h4 style="font-family: 'Fraunces', serif; font-size: 18px; margin-bottom: 4px;">Yosemite Valley</h4>
           <p style="font-size: 12px; color: var(--ink-muted); margin-bottom: 12px;">No. 02 · Granite peak · Morning mist · Pine resin</p>
           <div class="card-meta">
@@ -1147,7 +1168,7 @@
         </div>
 
         <div class="card" style="padding: 16px;">
-          <img src="/assets/poster_amalfi.jpg" alt="Amalfi Field Note" style="width: 100%; border-radius: 4px; margin-bottom: 12px; border: 1px solid var(--border);" />
+          <img src="/assets/poster_amalfi.jpg" alt="Amalfi Travel Scrapbook Stamp" style="width: 100%; aspect-ratio: 4 / 3; object-fit: cover; max-height: 220px; border-radius: 4px; margin-bottom: 12px; border: 1px solid var(--border);" />
           <h4 style="font-family: 'Fraunces', serif; font-size: 18px; margin-bottom: 4px;">Amalfi Coast</h4>
           <p style="font-size: 12px; color: var(--ink-muted); margin-bottom: 12px;">No. 03 · Cobalt sea · Lemon groves · Cliffside breeze</p>
           <div class="card-meta">
@@ -1176,7 +1197,7 @@
 
         <div class="quote-card">
           <p class="quote-text">
-            “The rubber stamp look is unbelievable. The dry ink texture and typewriter font look exactly like something carved by hand in an artisan workshop.”
+            “The travel stamp look is unbelievable. It turns our vacation photos into the ultimate digital travel scrapbook without hours of manual crafting.”
           </p>
           <div class="quote-author">Marcus T. · Solo Backpacker</div>
           <div class="quote-loc">Documented: Dolomites, Patagonia, Banff</div>
@@ -1197,7 +1218,7 @@
       <span class="membership-badge">✦ The Explorer's Membership</span>
       <h2 class="membership-title">Never leave a memory unrecorded.</h2>
       <p class="membership-desc">
-        Start completely free with 2 custom field note prints included on install. When you're ready for unlimited journeys, unlock Fields Pro for unrestricted creations, high-res exports, and exclusive spot-color inks.
+        Start completely free with 2 custom travel scrapbook stamps included on install. When you're ready for unlimited journeys, unlock Fields Pro for unrestricted creations, high-res exports, and premium travel stamp styles.
       </p>
 
       <div class="pricing-cards">
@@ -1207,7 +1228,7 @@
             <h4 class="plan-name">Free Forever</h4>
             <p style="font-size: 13px; color: #D4C9BA;">Ideal for testing the craft on your latest trip.</p>
             <ul class="plan-feature-list">
-              <li>2 Custom Hand-Pressed Notes Free</li>
+              <li>2 Custom Travel Stamps Free</li>
               <li>Auto-Location & Date Extraction</li>
               <li>Standard 4:3 Digital Export</li>
               <li>Full Offline Journal Access</li>
@@ -1225,7 +1246,7 @@
             <ul class="plan-feature-list">
               <li>Unlimited Note Generations Forever</li>
               <li>Ultra High-Resolution Print Export</li>
-              <li>All Artisan Spot-Color Inks Unlocked</li>
+              <li>All Vintage Travel Stamp Inks Unlocked</li>
               <li>Ad-Free, Unrestricted Experience</li>
               <li>Early Access to New Journal Editions</li>
             </ul>
@@ -1239,13 +1260,13 @@
             <h4 class="plan-name" style="color: #FFFFFF; font-size: 26px; margin: 8px 0;">$2.99 <span style="font-size: 14px; font-weight: normal; color: #D4C9BA;">per pack</span></h4>
             <p style="font-size: 13px; color: #D4C9BA;">Pay as you travel. No subscription needed.</p>
             <ul class="plan-feature-list">
-              <li>20 Additional Note Credits</li>
+              <li>20 Travel Stamp Credits</li>
               <li>Credits Never Expire</li>
               <li>Full High-Resolution Export</li>
               <li>Use Across Any Number of Trips</li>
             </ul>
           </div>
-          <a href="#download" class="btn btn-outline" style="border-color: rgba(255,255,255,0.3); color: #FFFFFF; width: 100%;">Buy 20 Notes Pack</a>
+          <a href="#download" class="btn btn-outline" style="border-color: rgba(255,255,255,0.3); color: #FFFFFF; width: 100%;">Buy 20 Stamps Pack</a>
         </div>
       </div>
     </section>
@@ -1309,7 +1330,7 @@
             </div>
           </a>
           <p class="footer-brand-desc">
-            A simple travel scrapbook that turns your vacation photos into vintage travel stamps. Save the dates, places, and memories you love.
+            A simple digital travel scrapbook that turns your vacation photos into vintage travel stamps. Save the dates, places, and memories you love at travel-scrapbook.com.
           </p>
         </div>
 
@@ -1319,7 +1340,7 @@
             <li><a href="https://play.google.com/store/apps/details?id=app.fields.journal" class="footer-link" target="_blank" rel="noopener">Google Play Store</a></li>
             <li><a href="#download" class="footer-link" onclick="openAppStoreNotice(event)">Apple App Store (Coming Soon)</a></li>
             <li><a href="#membership" class="footer-link">Fields Pro Membership</a></li>
-            <li><a href="#features" class="footer-link">Artisanal Inks & Showcase</a></li>
+            <li><a href="#gallery" class="footer-link">Travel Scrapbook Gallery</a></li>
           </ul>
         </div>
 
@@ -1339,7 +1360,7 @@
           © 2026 FIELDS. All rights reserved.
         </div>
         <div class="colophon">
-          HAND-PRESSED ON DIGITAL PARCHMENT · ARTISANAL RUBBER STAMP EDITIONS
+          TRAVEL-SCRAPBOOK.COM · DIGITAL TRAVEL SCRAPBOOK &amp; PHOTO JOURNAL
         </div>
       </div>
     </div>
