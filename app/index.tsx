@@ -6,6 +6,7 @@ import {
   Image,
   FlatList,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,6 +24,21 @@ import { trackEvent, AnalyticsEvents } from '../src/lib/analytics';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const SAMPLE_KYOTO_POSTER = require('../assets/posters/poster_kyoto.jpg');
+
+function resolveAssetUri(source: any, fallback: string): string {
+  if (!source) return fallback;
+  if (typeof source === 'string') return source;
+  if (typeof source === 'object') {
+    if (typeof source.uri === 'string') return source.uri;
+    if (typeof source.default === 'string') return source.default;
+    if (source.default && typeof source.default.uri === 'string') return source.default.uri;
+  }
+  if (typeof Image.resolveAssetSource === 'function') {
+    const resolved = Image.resolveAssetSource(source);
+    if (resolved?.uri) return resolved.uri;
+  }
+  return fallback;
+}
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -65,7 +81,7 @@ export default function HomeScreen() {
 
   const handleOpenSampleNote = () => {
     trackEvent(AnalyticsEvents.SAMPLE_NOTE_OPENED);
-    const resolvedUri = Image.resolveAssetSource(SAMPLE_KYOTO_POSTER).uri;
+    const resolvedUri = resolveAssetUri(SAMPLE_KYOTO_POSTER, '/assets/poster_kyoto.jpg');
     router.push({
       pathname: '/result',
       params: {
@@ -161,9 +177,38 @@ export default function HomeScreen() {
               </View>
 
               <View style={styles.sampleCard}>
-                <Image source={SAMPLE_KYOTO_POSTER} style={styles.sampleImage} resizeMode="cover" />
-                <View style={styles.cornerTapeTop} />
-                <View style={styles.cornerTapeBottom} />
+                {Platform.OS === 'web' ? (
+                  <div
+                    style={{
+                      position: 'relative',
+                      width: '100%',
+                      paddingBottom: '75%',
+                      overflow: 'hidden',
+                      backgroundColor: '#FFFFFF',
+                    }}
+                  >
+                    <img
+                      src={resolveAssetUri(SAMPLE_KYOTO_POSTER, '/assets/poster_kyoto.jpg')}
+                      alt="Sample Kyoto field note"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = '/assets/poster_kyoto.jpg';
+                      }}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        display: 'block',
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <Image source={SAMPLE_KYOTO_POSTER} style={styles.sampleImage} resizeMode="cover" />
+                )}
+                <View style={styles.cornerTapeTop} pointerEvents="none" />
+                <View style={styles.cornerTapeBottom} pointerEvents="none" />
                 
                 <View style={styles.sampleDetailsBar}>
                   <View style={{ flex: 1 }}>
@@ -291,6 +336,7 @@ const styles = StyleSheet.create({
   },
   sampleCard: {
     width: '100%',
+    maxWidth: 340,
     backgroundColor: '#FFFFFF',
     borderRadius: 4,
     borderWidth: 1.5,
@@ -306,6 +352,7 @@ const styles = StyleSheet.create({
   sampleImage: {
     width: '100%',
     aspectRatio: layout.posterAspectRatio, // 4 / 3 true landscape ratio!
+    maxHeight: 255,
   },
   cornerTapeTop: {
     position: 'absolute',

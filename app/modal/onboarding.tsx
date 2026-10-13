@@ -3,7 +3,7 @@ import {
   View,
   StyleSheet,
   Pressable,
-  Dimensions,
+  useWindowDimensions,
   FlatList,
   Image,
   Platform,
@@ -18,15 +18,25 @@ import { colors, fonts, fontSizes, layout, spacing } from '../../src/theme';
 import { useAppStore } from '../../src/store/useAppStore';
 import { trackEvent, AnalyticsEvents } from '../../src/lib/analytics';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-
 const POSTER_KYOTO = require('../../assets/posters/poster_kyoto.jpg');
 const POSTER_AMALFI = require('../../assets/posters/poster_amalfi.jpg');
 const POSTER_YOSEMITE = require('../../assets/posters/poster_yosemite.jpg');
 
+export function getAssetUri(asset: any, fallback: string): string {
+  if (!asset) return fallback;
+  if (typeof asset === 'string') return asset;
+  if (typeof asset === 'object') {
+    if (typeof asset.uri === 'string') return asset.uri;
+    if (typeof asset.default === 'string') return asset.default;
+    if (asset.default && typeof asset.default.uri === 'string') return asset.default.uri;
+  }
+  return fallback;
+}
+
 interface OnboardingSlide {
   id: string;
   poster: any;
+  fallbackUrl: string;
   tag: string;
   headline: string;
   body: string;
@@ -41,6 +51,7 @@ const SLIDES: OnboardingSlide[] = [
   {
     id: 'craft',
     poster: POSTER_KYOTO,
+    fallbackUrl: '/assets/poster_kyoto.jpg',
     tag: '✦ YOUR MEMORIES DESERVE BETTER ✦',
     headline: "DON'T LET YOUR TRIPS GET LOST IN YOUR CAMERA ROLL",
     body:
@@ -52,6 +63,7 @@ const SLIDES: OnboardingSlide[] = [
   {
     id: 'archiving',
     poster: POSTER_AMALFI,
+    fallbackUrl: '/assets/poster_amalfi.jpg',
     tag: '✦ ZERO EFFORT · INSTANT MAGIC ✦',
     headline: 'SAVE THE PLACES & MEMORIES YOU LOVE',
     body:
@@ -65,6 +77,7 @@ const SLIDES: OnboardingSlide[] = [
   {
     id: 'scrapbook',
     poster: POSTER_YOSEMITE,
+    fallbackUrl: '/assets/poster_yosemite.jpg',
     tag: '✦ 2 FREE STAMPS ON US ✦',
     headline: 'START YOUR TRAVEL SCRAPBOOK TODAY',
     body:
@@ -80,6 +93,7 @@ export default function OnboardingScreen() {
   const setHasSeenOnboarding = useAppStore((state) => state.setHasSeenOnboarding);
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList<OnboardingSlide>>(null);
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   useEffect(() => {
     trackEvent(AnalyticsEvents.ONBOARDING_MODAL_SHOWN);
@@ -122,7 +136,7 @@ export default function OnboardingScreen() {
 
   const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const offsetX = e.nativeEvent.contentOffset.x;
-    const page = Math.round(offsetX / SCREEN_WIDTH);
+    const page = Math.round(offsetX / windowWidth);
     if (page >= 0 && page < SLIDES.length && page !== currentIndex) {
       setCurrentIndex(page);
     }
@@ -130,8 +144,9 @@ export default function OnboardingScreen() {
 
   const isLastSlide = currentIndex === SLIDES.length - 1;
 
-  // Width of the visual card and text block for balanced margins
-  const HERO_CARD_WIDTH = Math.min(SCREEN_WIDTH - spacing.lg * 2, 350);
+  // Responsive hero card width based on screen width and available vertical space
+  const maxCardByHeight = Math.max(160, (windowHeight - 320) * (4 / 3));
+  const HERO_CARD_WIDTH = Math.min(windowWidth - spacing.lg * 2, 340, maxCardByHeight);
 
   return (
     <PaperContainer>
@@ -168,7 +183,7 @@ export default function OnboardingScreen() {
         onMomentumScrollEnd={handleScroll}
         style={styles.carousel}
         renderItem={({ item, index }) => (
-          <View style={[styles.slidePage, { width: SCREEN_WIDTH }]}>
+          <View style={[styles.slidePage, { width: windowWidth }]}>
             {/* Visual Hero Stamp Card - True 4:3 landscape ratio so it NEVER cuts off */}
             <View style={styles.heroWrapper}>
               <View style={[styles.posterFrame, { width: HERO_CARD_WIDTH }]}>
@@ -182,8 +197,13 @@ export default function OnboardingScreen() {
                 <View style={styles.posterInner}>
                   {Platform.OS === 'web' ? (
                     <img
-                      src={item.poster}
+                      src={getAssetUri(item.poster, item.fallbackUrl)}
                       alt={item.headline}
+                      onError={(e) => {
+                        if ((e.currentTarget as HTMLImageElement).src !== item.fallbackUrl) {
+                          (e.currentTarget as HTMLImageElement).src = item.fallbackUrl;
+                        }
+                      }}
                       style={{
                         width: '100%',
                         height: '100%',
