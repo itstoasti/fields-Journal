@@ -16155,7 +16155,9 @@ function renderBlogPostHtml(post, relatedPosts = []) {
   const featuredImg = post.featured_image_url || "https://travel-scrapbook.com/assets/poster_kyoto.jpg";
   const canonicalUrl = post.canonical_url || `https://travel-scrapbook.com/blog/${post.slug}`;
   const effectiveTitle = post.seo_title || post.title;
-  const contentHtml = post.content_html || markdownToHtml(post.content_markdown);
+  let contentHtml = post.content_markdown ? markdownToHtml(post.content_markdown) : post.content_html || "";
+  contentHtml = contentHtml.replace(/^\s*<h1[^>]*>[\s\S]*?<\/h1>\s*/i, "");
+  contentHtml = contentHtml.replace(/<h1(\s+id="[^"]*")?>/gi, "<h2$1>").replace(/<\/h1>/gi, "</h2>");
   const blogPostingSchema = {
     "@context": "https://schema.org",
     "@type": "BlogPosting",
