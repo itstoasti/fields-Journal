@@ -16310,7 +16310,7 @@ function renderBlogIndexHtml(posts) {
     <div class="cta-journal-card" style="margin-top: 60px;">
       <span class="cta-tag">\u2726 Instant Scrapbook Crafting \u2726</span>
       <h2 class="cta-title">Turn any trip photo into a collectible travel stamp.</h2>
-      <p class="cta-desc">Fields extracts your location and 3 sensory memory words automatically. Start free in your browser or phone.</p>
+      <p class="cta-desc">Turn your favorite vacation photos into vintage travel stamps and scrapbook cards in seconds. Start free in your browser or on your phone.</p>
       <a href="/app" class="cta-btn">Create Your First Stamp Free</a>
     </div>
   </main>
@@ -16604,8 +16604,8 @@ It solves the problem of travel memories getting lost in unorganized camera roll
 
 ### Core Features
 - **Instant Travel Stamp Art**: Automatically turns travel pictures into woodblock / vintage rubber stamp art printed side-by-side with your photo.
-- **Automatic Metadata**: Extracts location and date metadata from camera roll photos with zero typing required.
-- **3 Memory Words**: AI suggests 3 evocative sensory keywords (e.g. "Cedar trees \xB7 Temple bell \xB7 Dusk mist") that can be customized by the traveler.
+- **Smart Date & Place Tags**: Automatically tags dates and destinations from camera roll photos with zero typing required.
+- **Evocative Memory Words**: AI suggests 3 poetic memory keywords (e.g. "Cedar trees \xB7 Temple bell \xB7 Dusk mist") that travelers can customize.
 - **3:2 Landscape Ratio**: High-resolution print-ready collectible format matching classic 35mm photography.
 - **Private & Local**: Photos are processed in memory and never stored or used to train models.
 
