@@ -1461,22 +1461,38 @@
 
     async function handleBuyPlan(plan, e) {
       if (e) e.preventDefault();
+      const defaultLifetime = 'https://buy.stripe.com/cNi28r8E7bDbeUn72L9bO00';
+      const defaultPack20 = 'https://buy.stripe.com/cNibJ1dYrePnaE73Qz9bO01';
+      let instId = '';
+      try {
+        instId = localStorage.getItem('fn_installation_id') || localStorage.getItem('fields_installation_id') || '';
+        if (!instId) {
+          const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+          let res = 'inst_';
+          for (let i = 0; i < 24; i++) res += chars.charAt(Math.floor(Math.random() * chars.length));
+          instId = res;
+          localStorage.setItem('fn_installation_id', instId);
+          localStorage.setItem('fields_installation_id', instId);
+        }
+      } catch {}
+
+      let targetUrl = plan === 'lifetime' ? defaultLifetime : defaultPack20;
       try {
         const res = await fetch('/v1/checkout/links');
         if (res.ok) {
           const data = await res.json();
-          const url = plan === 'lifetime' ? data.lifetime_url : data.pack20_url;
-          if (url && url.startsWith('http')) {
-            let instId = '';
-            try {
-              instId = localStorage.getItem('fields_installation_id') || '';
-            } catch {}
-            const finalUrl = instId ? `${url}${url.includes('?') ? '&' : '?'}client_reference_id=${encodeURIComponent(instId)}` : url;
-            window.location.href = finalUrl;
-            return;
+          const serverUrl = plan === 'lifetime' ? data.lifetime_url : data.pack20_url;
+          if (serverUrl && serverUrl.startsWith('http')) {
+            targetUrl = serverUrl;
           }
         }
       } catch (err) {}
+
+      if (targetUrl) {
+        const finalUrl = instId ? `${targetUrl}${targetUrl.includes('?') ? '&' : '?'}client_reference_id=${encodeURIComponent(instId)}` : targetUrl;
+        window.location.href = finalUrl;
+        return;
+      }
       window.location.href = '/app';
     }
   </script>

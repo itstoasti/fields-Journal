@@ -984,12 +984,12 @@ app.post('/v1/webhooks/revenuecat', async (c) => {
 // STRIPE WEB CHECKOUT & WEBHOOK APIS
 // ==========================================
 
-// Public Checkout Links (reads strictly from server environment variables)
+// Public Checkout Links (reads strictly from server environment variables with defaults)
 app.get('/v1/checkout/links', (c) => {
   return c.json({
     success: true,
-    lifetime_url: process.env.STRIPE_LIFETIME_URL || '',
-    pack20_url: process.env.STRIPE_PACK20_URL || '',
+    lifetime_url: process.env.STRIPE_LIFETIME_URL || 'https://buy.stripe.com/cNi28r8E7bDbeUn72L9bO00',
+    pack20_url: process.env.STRIPE_PACK20_URL || 'https://buy.stripe.com/cNibJ1dYrePnaE73Qz9bO01',
   });
 });
 
