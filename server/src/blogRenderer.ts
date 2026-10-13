@@ -17,7 +17,10 @@ export function slugify(text: string): string {
 export function markdownToHtml(md: string): string {
   if (!md) return '';
 
-  let html = md;
+  let html = md.trim();
+
+  // Strip leading H1 title if present to avoid duplicating the article header H1
+  html = html.replace(/^#\s+[^\r\n]+(?:\r?\n)+/, '');
 
   // Escape basic HTML inside code blocks
   const codeBlocks: string[] = [];
@@ -50,11 +53,11 @@ export function markdownToHtml(md: string): string {
     </div>`;
   });
 
-  // Headings H1 to H4 with slug IDs
+  // Headings H2 to H4 with slug IDs (demote any inner H1 to H2 to ensure single H1 per page)
   html = html.replace(/^####\s+(.+)$/gm, (_match, title) => `<h4 id="${slugify(title)}">${title}</h4>`);
   html = html.replace(/^###\s+(.+)$/gm, (_match, title) => `<h3 id="${slugify(title)}">${title}</h3>`);
   html = html.replace(/^##\s+(.+)$/gm, (_match, title) => `<h2 id="${slugify(title)}">${title}</h2>`);
-  html = html.replace(/^#\s+(.+)$/gm, (_match, title) => `<h1 id="${slugify(title)}">${title}</h1>`);
+  html = html.replace(/^#\s+(.+)$/gm, (_match, title) => `<h2 id="${slugify(title)}">${title}</h2>`);
 
   // Blockquotes
   html = html.replace(/^>\s+(.+)$/gm, '<blockquote class="blog-quote"><p>$1</p></blockquote>');
@@ -106,95 +109,234 @@ export function markdownToHtml(md: string): string {
 // Base CSS Styles for the Blog (Vintage travel journal aesthetic)
 const BASE_BLOG_STYLES = `
   :root {
-    --bg-cream: #F4EFE6;
+    --bg: #F5EFEB;
+    --bg-cream: #FAF6F0;
     --paper: #FAF8F5;
+    --card-bg: #FFFFFF;
     --charcoal: #1C1917;
-    --ink-muted: #57534E;
-    --ink-subtle: #78716C;
-    --border: #D7CFC2;
+    --ink-dark: #292524;
+    --ink-muted: #665E55;
+    --ink-subtle: #9E9484;
+    --border: #D8CEBE;
     --border-dark: #1C1917;
     --brick: #B9381E;
-    --terracotta: #C85A32;
-    --emerald: #2E5A44;
-    --cobalt: #1F4E79;
-    --tape: rgba(225, 215, 195, 0.88);
+    --brick-light: #FBF0ED;
+    --emerald: #23533E;
+    --ochre: #B87A24;
+    --cobalt: #1E468F;
+    --tape: rgba(224, 213, 191, 0.75);
+    --radius: 8px;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html {
+    scroll-behavior: smooth;
+    color-scheme: light;
+  }
+
   body {
-    background-color: var(--bg-cream);
+    background-color: var(--bg);
+    background-image: 
+      radial-gradient(#1C1917 0.45px, transparent 0.45px),
+      linear-gradient(to bottom, rgba(245, 239, 235, 0.85), rgba(245, 239, 235, 0.98));
+    background-size: 24px 24px, 100% 100%;
     color: var(--charcoal);
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    line-height: 1.7;
+    font-family: 'Space Mono', Courier, monospace;
+    line-height: 1.6;
     -webkit-font-smoothing: antialiased;
   }
 
   a { color: inherit; text-decoration: none; }
 
+  /* Top Utility Announcement Bar */
+  .top-bar {
+    border-bottom: 1px solid var(--border);
+    background: rgba(245, 239, 235, 0.92);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    padding: 9px 20px;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    font-family: 'Space Mono', Courier, monospace;
+  }
+
+  .top-bar-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .top-dot {
+    width: 7px;
+    height: 7px;
+    background: var(--brick);
+    border-radius: 50%;
+    display: inline-block;
+    box-shadow: 0 0 0 2px rgba(185, 56, 30, 0.25);
+  }
+
+  /* Sticky Navigation Header matching index.html */
   .site-header {
-    border-bottom: 1.5px solid var(--border-dark);
-    background: #FFFFFF;
+    border-bottom: 1px dashed var(--border);
+    background: rgba(245, 239, 235, 0.96);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     position: sticky;
     top: 0;
     z-index: 100;
   }
+
   .header-inner {
-    max-width: 1100px;
+    max-width: 1140px;
     margin: 0 auto;
     padding: 16px 24px;
     display: flex;
     justify-content: space-between;
     align-items: center;
   }
+
   .brand-lockup {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 14px;
+    text-decoration: none;
+    color: inherit;
   }
+
+  .brand-logo {
+    width: 44px;
+    height: 44px;
+    border-radius: 8px;
+    border: 1.5px solid var(--border-dark);
+    box-shadow: 2px 2px 0px var(--border-dark);
+    object-fit: cover;
+  }
+
+  .brand-names {
+    display: flex;
+    flex-direction: column;
+  }
+
   .brand-title {
-    font-family: 'Fraunces', Georgia, serif;
-    font-size: 24px;
-    font-weight: 700;
+    font-family: 'Caveat', cursive;
+    font-size: 34px;
+    line-height: 1;
     color: var(--charcoal);
+    font-weight: 700;
+    letter-spacing: 0.5px;
   }
-  .brand-tagline {
-    font-family: 'Space Mono', monospace;
+
+  .brand-subtitle {
+    font-family: 'Space Mono', Courier, monospace;
     font-size: 9px;
-    letter-spacing: 1.5px;
+    letter-spacing: 2px;
     text-transform: uppercase;
     color: var(--ink-muted);
+    margin-top: 2px;
   }
 
-  .nav-menu {
+  .nav-links {
     display: flex;
+    gap: 24px;
     align-items: center;
-    gap: 20px;
     list-style: none;
-    font-family: 'Space Mono', monospace;
+    font-family: 'Space Mono', Courier, monospace;
     font-size: 12px;
-    text-transform: uppercase;
     letter-spacing: 0.8px;
+    text-transform: uppercase;
   }
-  .nav-menu a:hover { color: var(--brick); }
+
+  .nav-link {
+    color: var(--charcoal);
+    transition: color 0.15s ease;
+  }
+
+  .nav-link:hover {
+    color: var(--brick);
+  }
 
   .btn-nav-app {
-    background: var(--charcoal);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 18px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
     color: #FFFFFF !important;
-    padding: 8px 16px;
-    border-radius: 4px;
-    font-weight: bold;
+    background: var(--charcoal);
     border: 1px solid var(--charcoal);
-    transition: transform 0.1s ease;
+    border-radius: 4px;
+    box-shadow: 1px 1px 0 var(--border-dark);
+    white-space: nowrap;
+    text-decoration: none;
+    transition: all 0.15s ease;
   }
+
   .btn-nav-app:hover {
     background: var(--brick);
+    border-color: var(--charcoal);
     transform: translateY(-1px);
+  }
+
+  .mobile-nav-cta {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 7px 14px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: #FFFFFF !important;
+    background: var(--charcoal);
+    border: 1px solid var(--charcoal);
+    border-radius: 4px;
+    text-decoration: none;
+    box-shadow: 1px 1px 0 var(--border-dark);
+    transition: all 0.15s ease;
+    white-space: nowrap;
+  }
+
+  .mobile-nav-cta:hover,
+  .mobile-nav-cta:active {
+    background: var(--brick);
+    border-color: var(--charcoal);
+  }
+
+  @media (max-width: 860px) {
+    .top-bar {
+      display: none !important;
+    }
+    .nav-links {
+      display: none !important;
+    }
+    .mobile-nav-cta {
+      display: inline-flex !important;
+    }
+    .header-inner {
+      padding: 12px 18px;
+    }
+    .brand-logo {
+      width: 40px;
+      height: 40px;
+    }
+    .brand-title {
+      font-size: 30px;
+    }
   }
 
   .container {
     max-width: 860px;
     margin: 0 auto;
-    padding: 48px 24px 80px;
+    padding: 40px 24px 80px;
   }
 
   /* Breadcrumbs */
@@ -480,22 +622,113 @@ const BASE_BLOG_STYLES = `
     line-height: 1.65;
   }
 
-  /* Footer */
+  /* Site Footer matching public/index.html */
   .site-footer {
-    border-top: 1px solid var(--border);
-    background: #FFFFFF;
-    padding: 40px 24px;
-    text-align: center;
-    font-size: 13px;
-    color: var(--ink-muted);
+    border-top: 2px solid var(--border-dark);
+    background: var(--paper);
+    padding: 64px 0 40px;
+    margin-top: 60px;
   }
-  .footer-links {
-    display: flex;
-    justify-content: center;
-    gap: 20px;
-    margin-bottom: 16px;
-    font-family: 'Space Mono', monospace;
+
+  .footer-container {
+    max-width: 1140px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  .footer-grid {
+    display: grid;
+    grid-template-columns: 1.8fr 1fr 1fr 1fr;
+    gap: 36px;
+    margin-bottom: 48px;
+  }
+
+  @media (max-width: 900px) {
+    .footer-grid {
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .footer-grid {
+      grid-template-columns: 1fr;
+      gap: 28px;
+    }
+  }
+
+  .footer-brand-desc {
+    font-size: 12px;
+    color: var(--ink-muted);
+    line-height: 1.7;
+    max-width: 380px;
+    margin-top: 12px;
+    font-family: 'Space Mono', Courier, monospace;
+  }
+
+  .footer-col-title {
     font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--charcoal);
+    font-weight: bold;
+    margin-bottom: 16px;
+    font-family: 'Space Mono', Courier, monospace;
+  }
+
+  .footer-links-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    font-family: 'Space Mono', Courier, monospace;
+  }
+
+  .footer-link {
+    font-size: 12px;
+    color: var(--ink-muted);
+    text-decoration: none;
+    transition: color 0.15s ease;
+  }
+
+  .footer-link:hover {
+    color: var(--brick);
+    text-decoration: underline;
+  }
+
+  .footer-bottom {
+    border-top: 1px dashed var(--border);
+    padding-top: 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    font-size: 11px;
+    color: var(--ink-subtle);
+    font-family: 'Space Mono', Courier, monospace;
+  }
+
+  .footer-bottom-links {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .footer-bottom-link {
+    color: var(--charcoal);
+    font-weight: 700;
+    text-decoration: underline;
+    transition: color 0.15s ease;
+  }
+
+  .footer-bottom-link:hover {
+    color: var(--brick);
+  }
+
+  .colophon {
+    letter-spacing: 1px;
     text-transform: uppercase;
   }
 
@@ -558,6 +791,110 @@ const BASE_BLOG_STYLES = `
     text-transform: uppercase;
   }
 `;
+
+// Shared Site Header matching public/index.html navbar
+export function renderSiteHeaderHtml(): string {
+  return `
+  <!-- Top Utility Announcement Bar -->
+  <div class="top-bar">
+    <div class="top-bar-left">
+      <span class="top-dot"></span>
+      <span>travel-scrapbook.com · Digital Travel Scrapbook &amp; Journal</span>
+    </div>
+    <div>
+      <span>Free Digital Travel Scrapbook · 2 Custom Stamps Included</span>
+    </div>
+  </div>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="/" class="brand-lockup">
+        <img src="/assets/tag_logo.png" alt="Fields Logo" class="brand-logo" />
+        <div class="brand-names">
+          <span class="brand-title">Fields</span>
+          <span class="brand-subtitle">Travel Journal &amp; Scrapbook</span>
+        </div>
+      </a>
+
+      <ul class="nav-links">
+        <li><a href="/" class="nav-link">Home</a></li>
+        <li><a href="/#how-it-works" class="nav-link">How It Works</a></li>
+        <li><a href="/#gallery" class="nav-link">Scrapbook</a></li>
+        <li><a href="/app" class="btn-nav-app">Launch Web App</a></li>
+      </ul>
+
+      <!-- Mobile quick launch button -->
+      <a href="/app" class="mobile-nav-cta">Launch App</a>
+    </div>
+  </header>`;
+}
+
+// Shared Site Footer matching public/index.html footer
+export function renderSiteFooterHtml(): string {
+  return `
+  <footer class="site-footer">
+    <div class="footer-container">
+      <div class="footer-grid">
+        <div>
+          <a href="/" class="brand-lockup">
+            <img src="/assets/tag_logo.png" alt="Fields Logo" style="width: 36px; height: 36px; border-radius: 6px; border: 1.5px solid var(--border-dark);" />
+            <div class="brand-names">
+              <span class="brand-title" style="font-size: 26px;">Fields</span>
+              <span class="brand-subtitle">Travel Journal &amp; Scrapbook</span>
+            </div>
+          </a>
+          <p class="footer-brand-desc">
+            A simple digital travel scrapbook that turns your vacation photos into vintage travel stamps. Save the dates, places, and memories you love at travel-scrapbook.com.
+          </p>
+        </div>
+
+        <div>
+          <h5 class="footer-col-title">Travel Blog</h5>
+          <ul class="footer-links-list">
+            <li><a href="/blog" class="footer-link" style="font-weight: 700; color: var(--brick);">Blog &amp; Guides Hub</a></li>
+            <li><a href="/blog/how-to-create-digital-travel-scrapbook-iphone-photos" class="footer-link">Digital Scrapbook Guide (2026)</a></li>
+            <li><a href="/blog/what-to-do-with-travel-photos-12-ideas-beyond-the-camera-roll" class="footer-link">Travel Photo Ideas</a></li>
+            <li><a href="/about" class="footer-link">About Fields</a></li>
+          </ul>
+        </div>
+
+        <div>
+          <h5 class="footer-col-title">Scrapbook App</h5>
+          <ul class="footer-links-list">
+            <li><a href="/app" class="footer-link">Launch Web App</a></li>
+            <li><a href="https://play.google.com/store/apps/details?id=app.fields.journal" class="footer-link" target="_blank" rel="noopener">Google Play Store</a></li>
+            <li><a href="/#membership" class="footer-link">Fields Pro Lifetime</a></li>
+            <li><a href="/#how-it-works" class="footer-link">How It Works</a></li>
+          </ul>
+        </div>
+
+        <div>
+          <h5 class="footer-col-title">Legal &amp; Contact</h5>
+          <ul class="footer-links-list">
+            <li><a href="/privacy" class="footer-link">Privacy Policy</a></li>
+            <li><a href="/terms" class="footer-link">Terms of Service</a></li>
+            <li><a href="mailto:deanfields48@gmail.com" class="footer-link">Developer Contact</a></li>
+            <li><a href="/health" class="footer-link">API Status</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <div>&copy; 2026 FIELDS. All rights reserved.</div>
+        <div class="footer-bottom-links">
+          <a href="/blog" class="footer-bottom-link">Blog</a> &middot;
+          <a href="/app" class="footer-bottom-link">Web App</a> &middot;
+          <a href="/about" class="footer-bottom-link">About</a> &middot;
+          <a href="/privacy" class="footer-bottom-link">Privacy</a> &middot;
+          <a href="/terms" class="footer-bottom-link">Terms</a>
+        </div>
+        <div class="colophon">
+          TRAVEL-SCRAPBOOK.COM &middot; DIGITAL TRAVEL SCRAPBOOK &amp; PHOTO JOURNAL
+        </div>
+      </div>
+    </div>
+  </footer>`;
+}
 
 // Render Public Blog Index (/blog)
 export function renderBlogIndexHtml(posts: BlogPost[]): string {
@@ -636,29 +973,14 @@ export function renderBlogIndexHtml(posts: BlogPost[]): string {
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..700&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
 
   <script type="application/ld+json">${schemaJson}</script>
 
   <style>${BASE_BLOG_STYLES}</style>
 </head>
 <body>
-  <header class="site-header">
-    <div class="header-inner">
-      <a href="/" class="brand-lockup">
-        <img src="/assets/tag_logo.png" alt="Fields Logo" style="width: 36px; height: 36px; border-radius: 6px; border: 1px solid var(--border-dark);" />
-        <div>
-          <div class="brand-title">Fields</div>
-          <div class="brand-tagline">Travel Scrapbook &amp; Journal</div>
-        </div>
-      </a>
-      <ul class="nav-menu">
-        <li><a href="/">Home</a></li>
-        <li><a href="/blog" style="color: var(--brick); font-weight: bold;">Journal</a></li>
-        <li><a href="/app" class="btn-nav-app">Open App</a></li>
-      </ul>
-    </div>
-  </header>
+  ${renderSiteHeaderHtml()}
 
   <main class="container">
     <div class="breadcrumbs">
@@ -687,17 +1009,7 @@ export function renderBlogIndexHtml(posts: BlogPost[]): string {
     </div>
   </main>
 
-  <footer class="site-footer">
-    <div class="footer-links">
-      <a href="/">Home</a>
-      <a href="/blog">Journal</a>
-      <a href="/app">Web App</a>
-      <a href="/about">About</a>
-      <a href="/privacy">Privacy</a>
-      <a href="/terms">Terms</a>
-    </div>
-    <div>&copy; 2026 Fields · travel-scrapbook.com. All rights reserved.</div>
-  </footer>
+  ${renderSiteFooterHtml()}
 </body>
 </html>`;
 }
@@ -850,7 +1162,7 @@ export function renderBlogPostHtml(post: BlogPost, relatedPosts: BlogPost[] = []
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..700&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
 
   <!-- Structured Data JSON-LD -->
   <script type="application/ld+json">${JSON.stringify(blogPostingSchema)}</script>
@@ -860,22 +1172,7 @@ export function renderBlogPostHtml(post: BlogPost, relatedPosts: BlogPost[] = []
   <style>${BASE_BLOG_STYLES}</style>
 </head>
 <body>
-  <header class="site-header">
-    <div class="header-inner">
-      <a href="/" class="brand-lockup">
-        <img src="/assets/tag_logo.png" alt="Fields Logo" style="width: 36px; height: 36px; border-radius: 6px; border: 1px solid var(--border-dark);" />
-        <div>
-          <div class="brand-title">Fields</div>
-          <div class="brand-tagline">Travel Scrapbook &amp; Journal</div>
-        </div>
-      </a>
-      <ul class="nav-menu">
-        <li><a href="/">Home</a></li>
-        <li><a href="/blog" style="color: var(--brick); font-weight: bold;">Journal</a></li>
-        <li><a href="/app" class="btn-nav-app">Open App</a></li>
-      </ul>
-    </div>
-  </header>
+  ${renderSiteHeaderHtml()}
 
   <main class="container">
     <nav class="breadcrumbs" aria-label="Breadcrumb">
@@ -896,7 +1193,6 @@ export function renderBlogPostHtml(post: BlogPost, relatedPosts: BlogPost[] = []
           <time datetime="${publishedDate}">${readableDate}</time>
           <span>·</span>
           <span>${post.reading_time_minutes} min read</span>
-          ${post.seo_score ? `<span>·</span><span style="color: var(--emerald); font-weight: bold;">SEO Score: ${post.seo_score}/100</span>` : ''}
         </div>
       </header>
 
@@ -931,17 +1227,7 @@ export function renderBlogPostHtml(post: BlogPost, relatedPosts: BlogPost[] = []
     ` : ''}
   </main>
 
-  <footer class="site-footer">
-    <div class="footer-links">
-      <a href="/">Home</a>
-      <a href="/blog">Journal</a>
-      <a href="/app">Web App</a>
-      <a href="/about">About</a>
-      <a href="/privacy">Privacy</a>
-      <a href="/terms">Terms</a>
-    </div>
-    <div>&copy; 2026 Fields · travel-scrapbook.com. All rights reserved.</div>
-  </footer>
+  ${renderSiteFooterHtml()}
 </body>
 </html>`;
 }
