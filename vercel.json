@@ -94,6 +94,10 @@
       "destination": "/api"
     },
     {
+      "source": "/fields-indexnow-2026.txt",
+      "destination": "/api"
+    },
+    {
       "source": "/admin",
       "destination": "/api"
     },
