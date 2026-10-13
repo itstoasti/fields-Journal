@@ -187,29 +187,8 @@
       list-style: none;
     }
 
-    .mobile-nav-actions {
-      display: none;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .mobile-nav-blog {
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.8px;
-      text-transform: uppercase;
-      color: var(--charcoal);
-      text-decoration: none;
-      padding: 6px 2px;
-    }
-
-    .mobile-nav-blog:hover {
-      color: var(--brick);
-      text-decoration: underline;
-    }
-
     .mobile-nav-cta {
-      display: inline-flex;
+      display: none;
       align-items: center;
       justify-content: center;
       padding: 7px 14px;
@@ -241,8 +220,8 @@
       .nav-links {
         display: none !important;
       }
-      .mobile-nav-actions {
-        display: inline-flex !important;
+      .mobile-nav-cta {
+        display: inline-flex;
       }
       nav {
         padding: 14px 0;
@@ -1044,18 +1023,14 @@
       <ul class="nav-links">
         <li><a href="#how-it-works" class="nav-link">How It Works</a></li>
         <li><a href="#gallery" class="nav-link">Scrapbook</a></li>
-        <li><a href="/blog" class="nav-link" style="font-weight: 700; color: var(--brick);">Blog</a></li>
         <li><a href="#membership" class="nav-link">Fields Pro</a></li>
         <li><a href="/privacy" class="nav-link">Privacy</a></li>
         <li><a href="/terms" class="nav-link">Terms</a></li>
         <li><a href="/app" class="btn btn-primary" style="padding: 8px 18px; font-size: 11px;">Launch Web App</a></li>
       </ul>
 
-      <!-- Mobile quick actions -->
-      <div class="mobile-nav-actions">
-        <a href="/blog" class="mobile-nav-blog">Blog</a>
-        <a href="/app" class="mobile-nav-cta">Launch App</a>
-      </div>
+      <!-- Mobile quick launch button -->
+      <a href="/app" class="mobile-nav-cta">Launch App</a>
     </nav>
 
     <!-- Hero Section -->
