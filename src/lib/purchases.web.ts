@@ -123,21 +123,74 @@ export async function presentCustomerCenter(): Promise<void> {
   );
 }
 
-export async function buyLifetimePackage(): Promise<{
-  success: boolean;
-  isPro: boolean;
-  error?: string;
-}> {
+export async function getStripeCheckoutLinks(): Promise<{ lifetimeUrl: string; pack20Url: string }> {
+  try {
+    const res = await fetch('/v1/checkout/links');
+    if (res.ok) {
+      const data = await res.json();
+      return {
+        lifetimeUrl: data.lifetime_url || '',
+        pack20Url: data.pack20_url || '',
+      };
+    }
+  } catch {}
   return {
-    success: false,
-    isPro: false,
-    error: 'Fields Pro subscription is available in the FIELDS mobile app for iOS and Android.',
+    lifetimeUrl: process.env.EXPO_PUBLIC_STRIPE_LIFETIME_URL || '',
+    pack20Url: process.env.EXPO_PUBLIC_STRIPE_PACK20_URL || '',
   };
 }
 
-export async function buyNotes20Package(): Promise<{ success: boolean; error?: string; transactionId?: string }> {
+export async function buyLifetimePackage(installationId?: string): Promise<{
+  success: boolean;
+  isPro: boolean;
+  error?: string;
+  checkoutUrl?: string;
+}> {
+  try {
+    const { lifetimeUrl } = await getStripeCheckoutLinks();
+    if (lifetimeUrl && lifetimeUrl.startsWith('http')) {
+      const targetUrl = installationId
+        ? `${lifetimeUrl}${lifetimeUrl.includes('?') ? '&' : '?'}client_reference_id=${encodeURIComponent(installationId)}`
+        : lifetimeUrl;
+      if (typeof window !== 'undefined') {
+        window.location.href = targetUrl;
+      }
+      return { success: true, isPro: false, checkoutUrl: targetUrl };
+    }
+  } catch (err: any) {
+    console.warn('[Purchases Web] Checkout error:', err);
+  }
+
   return {
     success: false,
-    error: 'Note credit packs are available in the FIELDS mobile app for iOS and Android.',
+    isPro: false,
+    error: 'Stripe web checkout is currently being connected. In the meantime, you can unlock Lifetime in the mobile app or sync an account key from Settings.',
+  };
+}
+
+export async function buyNotes20Package(installationId?: string): Promise<{
+  success: boolean;
+  error?: string;
+  transactionId?: string;
+  checkoutUrl?: string;
+}> {
+  try {
+    const { pack20Url } = await getStripeCheckoutLinks();
+    if (pack20Url && pack20Url.startsWith('http')) {
+      const targetUrl = installationId
+        ? `${pack20Url}${pack20Url.includes('?') ? '&' : '?'}client_reference_id=${encodeURIComponent(installationId)}`
+        : pack20Url;
+      if (typeof window !== 'undefined') {
+        window.location.href = targetUrl;
+      }
+      return { success: true, checkoutUrl: targetUrl };
+    }
+  } catch (err: any) {
+    console.warn('[Purchases Web] Checkout error:', err);
+  }
+
+  return {
+    success: false,
+    error: 'Stripe web checkout is currently being connected. In the meantime, you can purchase note packs in the mobile app or sync an account key from Settings.',
   };
 }

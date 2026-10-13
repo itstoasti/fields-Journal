@@ -1257,7 +1257,7 @@
               <li>Full Offline Journal Access</li>
             </ul>
           </div>
-          <a href="#download" class="btn btn-outline" style="border-color: rgba(255,255,255,0.3); color: #FFFFFF; width: 100%;">Get Started Free</a>
+          <a href="/app" class="btn btn-outline" style="border-color: rgba(255,255,255,0.3); color: #FFFFFF; width: 100%;">Get Started Free</a>
         </div>
 
         <div class="plan-card featured">
@@ -1274,7 +1274,7 @@
               <li>Early Access to New Journal Editions</li>
             </ul>
           </div>
-          <a href="#download" class="btn btn-brick" style="background: #FFC480; color: #1C1917; border-color: #FFC480; width: 100%;">Unlock Lifetime Access</a>
+          <a href="/app?checkout=lifetime" class="btn btn-brick" onclick="handleBuyPlan('lifetime', event)" style="background: #FFC480; color: #1C1917; border-color: #FFC480; width: 100%;">Unlock Lifetime Access</a>
         </div>
 
         <div class="plan-card">
@@ -1289,7 +1289,7 @@
               <li>Use Across Any Number of Trips</li>
             </ul>
           </div>
-          <a href="#download" class="btn btn-outline" style="border-color: rgba(255,255,255,0.3); color: #FFFFFF; width: 100%;">Buy 20 Stamps Pack</a>
+          <a href="/app?checkout=pack20" class="btn btn-outline" onclick="handleBuyPlan('pack20', event)" style="border-color: rgba(255,255,255,0.3); color: #FFFFFF; width: 100%;">Buy 20 Stamps Pack</a>
         </div>
       </div>
     </section>
@@ -1457,6 +1457,27 @@
           toast.classList.remove('visible');
         }, 4500);
       }
+    }
+
+    async function handleBuyPlan(plan, e) {
+      if (e) e.preventDefault();
+      try {
+        const res = await fetch('/v1/checkout/links');
+        if (res.ok) {
+          const data = await res.json();
+          const url = plan === 'lifetime' ? data.lifetime_url : data.pack20_url;
+          if (url && url.startsWith('http')) {
+            let instId = '';
+            try {
+              instId = localStorage.getItem('fields_installation_id') || '';
+            } catch {}
+            const finalUrl = instId ? `${url}${url.includes('?') ? '&' : '?'}client_reference_id=${encodeURIComponent(instId)}` : url;
+            window.location.href = finalUrl;
+            return;
+          }
+        }
+      } catch (err) {}
+      window.location.href = '/app';
     }
   </script>
 

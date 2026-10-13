@@ -980,6 +980,91 @@ app.post('/v1/webhooks/revenuecat', async (c) => {
   }
 });
 
+// ==========================================
+// STRIPE WEB CHECKOUT & WEBHOOK APIS
+// ==========================================
+
+// Public Checkout Links configuration (for website and web app)
+app.get('/v1/checkout/links', async (c) => {
+  try {
+    const lifetimeUrl = await getSystemSetting('stripe_lifetime_url', process.env.STRIPE_LIFETIME_URL || '');
+    const pack20Url = await getSystemSetting('stripe_pack20_url', process.env.STRIPE_PACK20_URL || '');
+    return c.json({
+      success: true,
+      lifetime_url: lifetimeUrl,
+      pack20_url: pack20Url,
+    });
+  } catch (err: any) {
+    return c.json({ error: err?.message || 'Failed to load checkout links' }, 500);
+  }
+});
+
+// Admin endpoint to configure Stripe Payment Links
+app.post('/v1/admin/checkout-links', async (c) => {
+  if (!verifyAdminAuth(c) && !verifyAgentAuth(c)) {
+    return c.json({ error: 'UNAUTHORIZED' }, 401);
+  }
+
+  try {
+    const body = await c.req.json();
+    if (body.lifetime_url !== undefined) {
+      await setSystemSetting('stripe_lifetime_url', String(body.lifetime_url).trim());
+    }
+    if (body.pack20_url !== undefined) {
+      await setSystemSetting('stripe_pack20_url', String(body.pack20_url).trim());
+    }
+
+    const lifetimeUrl = await getSystemSetting('stripe_lifetime_url', process.env.STRIPE_LIFETIME_URL || '');
+    const pack20Url = await getSystemSetting('stripe_pack20_url', process.env.STRIPE_PACK20_URL || '');
+
+    return c.json({
+      success: true,
+      message: 'Checkout links updated successfully',
+      lifetime_url: lifetimeUrl,
+      pack20_url: pack20Url,
+    });
+  } catch (err: any) {
+    return c.json({ error: err?.message || 'Failed to update checkout links' }, 500);
+  }
+});
+
+// Stripe Webhook for Web Purchases (checkout.session.completed)
+app.post('/v1/webhooks/stripe', async (c) => {
+  try {
+    const body = await c.req.json();
+    const event = body.event || body;
+    const type = event.type || body.type;
+
+    console.log(`[Stripe Webhook] Received event: ${type}`);
+
+    if (type === 'checkout.session.completed') {
+      const session = event.data?.object || body.data?.object || {};
+      const clientReferenceId = session.client_reference_id;
+      const amountTotal = session.amount_total || 0; // cents: 2999 = $29.99, 299 = $2.99
+      const txId = session.id || `stripe_${Date.now()}`;
+
+      if (clientReferenceId) {
+        if (amountTotal >= 1500) {
+          // Lifetime Access ($29.99)
+          console.log(`[Stripe Webhook] Granting Lifetime Pro to user: ${clientReferenceId}`);
+          await setProStatus(clientReferenceId, true, null);
+        } else {
+          // 20 Notes Pack ($2.99)
+          console.log(`[Stripe Webhook] Granting 20 credits to user: ${clientReferenceId}`);
+          await recordVerifiedPurchase(txId, clientReferenceId, 'notes_20', 20);
+        }
+      } else {
+        console.warn('[Stripe Webhook] Received checkout.session.completed without client_reference_id');
+      }
+    }
+
+    return c.json({ received: true });
+  } catch (err: any) {
+    console.error('[Stripe Webhook] Error:', err);
+    return c.json({ error: 'STRIPE_WEBHOOK_ERROR', message: err?.message }, 500);
+  }
+});
+
 // User profile & entitlements
 app.get('/v1/me', async (c) => {
   const authHeader = c.req.header('Authorization');

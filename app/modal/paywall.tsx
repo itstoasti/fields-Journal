@@ -66,7 +66,11 @@ export default function PaywallModal() {
   const handlePurchaseLifetime = async () => {
     setIsPurchasing(true);
     try {
-      const { success, isPro, error } = await buyLifetimePackage();
+      const { success, isPro, error, checkoutUrl } = await (buyLifetimePackage as any)(installationId);
+      if (checkoutUrl) {
+        // Web redirecting to Stripe
+        return;
+      }
       if (isPro || success) {
         updateEntitlements({ isPro: true, entitlement: 'pro' });
         FieldAlert.alert(
@@ -89,7 +93,11 @@ export default function PaywallModal() {
   const handlePurchase20 = async () => {
     setIsPurchasing(true);
     try {
-      const result = await buyNotes20Package();
+      const result: any = await (buyNotes20Package as any)(installationId);
+      if (result.checkoutUrl) {
+        // Web redirecting to Stripe
+        return;
+      }
       if (result.success) {
         const updatedState = await syncPurchasedCredits(
           installationId,
