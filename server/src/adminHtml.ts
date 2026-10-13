@@ -926,13 +926,35 @@ export function renderAdminDashboardHtml(): string {
       </div>
 
       <!-- Agent Setup Box -->
-      <div style="background: var(--card-inner); border: 1px solid var(--card-border); border-radius: 6px; padding: 10px; font-size: 11px;">
-        <div style="font-weight: 600; color: var(--cyan); margin-bottom: 4px; font-family: var(--font-mono);">🤖 Autonomous Agent Publish Endpoint</div>
-        <div style="color: var(--text-muted); font-size: 10px; margin-bottom: 6px;">Give this endpoint to Muse / OpenClaw / Hermes:</div>
-        <code style="display: block; background: #09090B; padding: 7px; border-radius: 4px; color: #10B981; font-family: var(--font-mono); font-size: 10px; word-break: break-all; margin-bottom: 6px;">
-          https://travel-scrapbook.com/v1/blog/publish
+      <div style="background: var(--card-inner); border: 1px solid var(--card-border); border-radius: 6px; padding: 12px; font-size: 11px;">
+        <div style="font-weight: 700; color: var(--cyan); margin-bottom: 6px; font-family: var(--font-mono);">🤖 Autonomous Agent Endpoints (Muse / OpenClaw / Hermes)</div>
+        <div style="color: var(--text-muted); font-size: 10px; margin-bottom: 4px;">Authentication (all endpoints):</div>
+        <code style="display: block; background: #09090B; padding: 5px 8px; border-radius: 4px; color: var(--text); font-family: var(--font-mono); font-size: 10px; margin-bottom: 8px;">
+          Authorization: Bearer &lt;AGENT_API_KEY&gt;
         </code>
-        <div style="color: var(--text-muted); font-size: 10px;">Header: <code style="color: var(--text);">Authorization: Bearer &lt;AGENT_API_KEY&gt;</code></div>
+
+        <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 3px;">1. Edit / Change Featured Image &amp; Post:</div>
+        <code style="display: block; background: #09090B; padding: 5px 8px; border-radius: 4px; color: #10B981; font-family: var(--font-mono); font-size: 10px; word-break: break-all; margin-bottom: 4px;">
+          PATCH /v1/blog/posts/:slugOrId
+        </code>
+        <div style="font-size: 9px; color: var(--text-muted); margin-bottom: 8px; font-family: var(--font-mono);">
+          Payload: {"featured_image_url": "https://...", "featured_image_alt": "..."}
+        </div>
+
+        <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 3px;">2. Publish New or Update Existing Article:</div>
+        <code style="display: block; background: #09090B; padding: 5px 8px; border-radius: 4px; color: #00F0FF; font-family: var(--font-mono); font-size: 10px; word-break: break-all; margin-bottom: 8px;">
+          POST /v1/blog/publish
+        </code>
+
+        <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 3px;">3. Fetch Full Article &amp; Markdown to Edit:</div>
+        <code style="display: block; background: #09090B; padding: 5px 8px; border-radius: 4px; color: #F59E0B; font-family: var(--font-mono); font-size: 10px; word-break: break-all; margin-bottom: 8px;">
+          GET /v1/blog/posts/:slugOrId
+        </code>
+
+        <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 3px;">4. Upload / Download Image Asset:</div>
+        <code style="display: block; background: #09090B; padding: 5px 8px; border-radius: 4px; color: #A78BFA; font-family: var(--font-mono); font-size: 10px; word-break: break-all;">
+          POST /v1/blog/media/upload {"imageUrl": "https://..."} or {"imageBase64": "..."}
+        </code>
       </div>
     </div>
   </div>

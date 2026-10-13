@@ -1,4 +1,4 @@
-export const INDEXNOW_KEY = 'fields_indexnow_2026';
+export const INDEXNOW_KEY = 'fields-indexnow-2026';
 export const INDEXNOW_KEY_LOCATION = `https://travel-scrapbook.com/${INDEXNOW_KEY}.txt`;
 export const SITE_HOST = 'travel-scrapbook.com';
 

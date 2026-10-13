@@ -1787,6 +1787,101 @@ export async function getBlogPostBySlug(slug: string): Promise<BlogPost | null> 
   return mapRowToBlogPost(res.rows[0]);
 }
 
+export async function getBlogPost(slugOrId: string): Promise<BlogPost | null> {
+  const res = await client.execute({
+    sql: 'SELECT * FROM blog_posts WHERE slug = ? OR id = ? LIMIT 1',
+    args: [slugOrId, slugOrId],
+  });
+  if (res.rows.length === 0) return null;
+  return mapRowToBlogPost(res.rows[0]);
+}
+
+export async function updateBlogPost(
+  slugOrId: string,
+  updates: Partial<BlogPost>
+): Promise<BlogPost | null> {
+  const existing = await getBlogPost(slugOrId);
+  if (!existing) return null;
+
+  const now = new Date().toISOString();
+  const newTitle = updates.title !== undefined ? updates.title.trim() : existing.title;
+  const newMarkdown = updates.content_markdown !== undefined ? updates.content_markdown : existing.content_markdown;
+  const newHtml = updates.content_html !== undefined ? updates.content_html : existing.content_html;
+  const newSlug = updates.slug !== undefined ? updates.slug : existing.slug;
+
+  const wordCount = newMarkdown.trim().split(/\s+/).filter(Boolean).length;
+  const readingTime = Math.max(1, Math.ceil(wordCount / 200));
+
+  const focusKeywords = updates.focus_keywords !== undefined ? updates.focus_keywords : existing.focus_keywords;
+  const faqItems = updates.faq_items !== undefined ? updates.faq_items : existing.faq_items;
+  const seoFeedback = updates.seo_feedback !== undefined ? updates.seo_feedback : existing.seo_feedback;
+
+  const featuredImageUrl = updates.featured_image_url !== undefined ? updates.featured_image_url : existing.featured_image_url;
+  const featuredImageAlt = updates.featured_image_alt !== undefined ? updates.featured_image_alt : existing.featured_image_alt;
+  const featuredImageCaption = updates.featured_image_caption !== undefined ? updates.featured_image_caption : existing.featured_image_caption;
+
+  const seoTitle = updates.seo_title !== undefined ? updates.seo_title.trim() : existing.seo_title;
+  const metaDescription = updates.meta_description !== undefined ? updates.meta_description.trim() : existing.meta_description;
+  const canonicalUrl = updates.canonical_url !== undefined ? updates.canonical_url : existing.canonical_url;
+  const robots = updates.robots !== undefined ? updates.robots : existing.robots;
+  const schemaType = updates.schema_type !== undefined ? updates.schema_type : existing.schema_type;
+  const author = updates.author !== undefined ? updates.author : existing.author;
+  const seoScore = updates.seo_score !== undefined ? updates.seo_score : existing.seo_score;
+  const status = updates.status !== undefined ? updates.status : existing.status;
+
+  await client.execute({
+    sql: `
+      UPDATE blog_posts SET
+        slug = ?,
+        title = ?,
+        seo_title = ?,
+        meta_description = ?,
+        content_markdown = ?,
+        content_html = ?,
+        focus_keywords = ?,
+        featured_image_url = ?,
+        featured_image_alt = ?,
+        featured_image_caption = ?,
+        canonical_url = ?,
+        robots = ?,
+        schema_type = ?,
+        faq_items = ?,
+        author = ?,
+        seo_score = ?,
+        seo_feedback = ?,
+        status = ?,
+        reading_time_minutes = ?,
+        updated_at = ?
+      WHERE id = ?
+    `,
+    args: [
+      newSlug,
+      newTitle,
+      seoTitle,
+      metaDescription,
+      newMarkdown,
+      newHtml,
+      JSON.stringify(focusKeywords),
+      featuredImageUrl,
+      featuredImageAlt,
+      featuredImageCaption,
+      canonicalUrl,
+      robots,
+      schemaType,
+      JSON.stringify(faqItems),
+      author,
+      seoScore,
+      JSON.stringify(seoFeedback),
+      status,
+      readingTime,
+      now,
+      existing.id,
+    ],
+  });
+
+  return await getBlogPost(existing.id);
+}
+
 export async function listBlogPosts(options: { status?: 'all' | 'published' | 'draft'; limit?: number; offset?: number } = {}): Promise<BlogPost[]> {
   const { status = 'all', limit = 50, offset = 0 } = options;
   let sql = 'SELECT * FROM blog_posts';
