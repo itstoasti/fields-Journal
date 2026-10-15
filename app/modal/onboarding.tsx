@@ -183,20 +183,24 @@ export default function OnboardingScreen() {
 
   const isLastSlide = currentIndex === SLIDES.length - 1;
 
-  // Balanced responsive sizing: 300px on large displays (>= 850px), 240px on 13" MacBook Air & laptops
-  const isLargeScreen = windowHeight >= 850;
-  const HERO_CARD_WIDTH = isLargeScreen ? 300 : 240;
+  // Balanced responsive sizing:
+  // On large displays (e.g. 27" monitor, windowHeight >= 800), full 340px card with generous 24px margins.
+  // On compact viewports (e.g. 13" MacBook Air, windowHeight < 800), 280px card with compact spacing so it never scrolls.
+  const isCompact = windowHeight < 800;
+  const HERO_CARD_WIDTH = isCompact
+    ? Math.min(280, Math.max(220, windowWidth - spacing.lg * 2))
+    : Math.min(340, windowWidth - spacing.lg * 2);
 
   const renderSlide = (item: OnboardingSlide) => (
     <View style={[styles.slidePage, Platform.OS === 'web' ? styles.webSlidePage : { width: windowWidth }]}>
       {/* Visual Hero Stamp Card - True 4:3 landscape ratio so it NEVER cuts off */}
-      <View style={styles.heroWrapper}>
+      <View style={[styles.heroWrapper, isCompact && { marginBottom: 12 }]}>
         <View style={[styles.posterFrame, { width: HERO_CARD_WIDTH }]}>
           {/* 4 Diagonal Translucent Masking Tape Strips on corners */}
-          <View style={[styles.tape, styles.tapeTopLeft]} pointerEvents="none" />
-          <View style={[styles.tape, styles.tapeTopRight]} pointerEvents="none" />
-          <View style={[styles.tape, styles.tapeBottomLeft]} pointerEvents="none" />
-          <View style={[styles.tape, styles.tapeBottomRight]} pointerEvents="none" />
+          <View style={[styles.tape, styles.tapeTopLeft, isCompact && styles.tapeCompact]} pointerEvents="none" />
+          <View style={[styles.tape, styles.tapeTopRight, isCompact && styles.tapeCompact]} pointerEvents="none" />
+          <View style={[styles.tape, styles.tapeBottomLeft, isCompact && styles.tapeCompact]} pointerEvents="none" />
+          <View style={[styles.tape, styles.tapeBottomRight, isCompact && styles.tapeCompact]} pointerEvents="none" />
 
           {/* The Uncropped 4:3 Poster */}
           <View style={styles.posterInner}>
@@ -221,9 +225,9 @@ export default function OnboardingScreen() {
             )}
 
             {/* Stamp Badge Overlay in bottom-right corner */}
-            <View style={styles.floatingSealBadge}>
-              <Ionicons name="sparkles" size={9} color={colors.oxblood} />
-              <TypewriterText size="xs" bold color={colors.oxblood} letterSpacing={0.8} style={{ marginLeft: 3, fontSize: 10 }}>
+            <View style={[styles.floatingSealBadge, isCompact && styles.floatingSealBadgeCompact]}>
+              <Ionicons name="sparkles" size={isCompact ? 9 : 10} color={colors.oxblood} />
+              <TypewriterText size="xs" bold color={colors.oxblood} letterSpacing={0.8} style={{ marginLeft: 3, fontSize: isCompact ? 10 : 11 }}>
                 {item.badgeLabel}
               </TypewriterText>
             </View>
@@ -232,14 +236,14 @@ export default function OnboardingScreen() {
 
         {/* Slide 2: Archival Metadata Inset Tag */}
         {item.metaPlace && (
-          <View style={[styles.metaPillBox, { width: HERO_CARD_WIDTH }]}>
+          <View style={[styles.metaPillBox, { width: HERO_CARD_WIDTH }, isCompact && styles.metaPillBoxCompact]}>
             <View style={styles.metaPillHeader}>
-              <Ionicons name="location-sharp" size={11} color={colors.brickRed} />
-              <TypewriterText size="xs" bold color={colors.charcoal} letterSpacing={0.8} style={{ marginLeft: 3, fontSize: 10.5 }}>
+              <Ionicons name="location-sharp" size={isCompact ? 11 : 12} color={colors.brickRed} />
+              <TypewriterText size="xs" bold color={colors.charcoal} letterSpacing={0.8} style={{ marginLeft: 3, fontSize: isCompact ? 10.5 : 11 }}>
                 {item.metaPlace}
               </TypewriterText>
             </View>
-            <TypewriterText size="xs" color={colors.inkSecondary} style={[styles.metaPillSub, { fontSize: 9.5 }]}>
+            <TypewriterText size="xs" color={colors.inkSecondary} style={[styles.metaPillSub, isCompact && { fontSize: 10 }]}>
               {item.metaDetails}
             </TypewriterText>
           </View>
@@ -248,18 +252,18 @@ export default function OnboardingScreen() {
 
       {/* Content & Excitement Text Section */}
       <View style={styles.textSection}>
-        <View style={styles.tagBadge}>
-          <TypewriterText size="xs" bold color={colors.brickRed} letterSpacing={1.1} style={{ fontSize: 10 }}>
+        <View style={[styles.tagBadge, isCompact && { marginBottom: 2 }]}>
+          <TypewriterText size="xs" bold color={colors.brickRed} letterSpacing={1.2} style={isCompact ? { fontSize: 10 } : undefined}>
             {item.tag}
           </TypewriterText>
         </View>
 
         <TypewriterText
-          size={isLargeScreen ? 'lg' : 'md'}
+          size={isCompact ? 'md' : 'lg'}
           bold
           color={colors.charcoal}
           letterSpacing={1.2}
-          style={[styles.headline, !isLargeScreen && { lineHeight: 20, marginBottom: 4 }]}
+          style={[styles.headline, isCompact && { lineHeight: 20, marginBottom: 4 }]}
         >
           {item.headline}
         </TypewriterText>
@@ -267,22 +271,22 @@ export default function OnboardingScreen() {
         <TypewriterText
           size="xs"
           color={colors.inkSecondary}
-          style={[styles.bodyText, !isLargeScreen && { lineHeight: 16, marginBottom: 6 }]}
+          style={[styles.bodyText, isCompact && { lineHeight: 16, marginBottom: 6 }]}
         >
           {item.body}
         </TypewriterText>
 
         {/* Value Feature Pills Row */}
-        <View style={styles.featurePillsRow}>
-          <View style={styles.featurePill}>
-            <Ionicons name="checkmark-circle" size={12} color={colors.deepGreen} />
-            <TypewriterText size="xs" bold color={colors.charcoal} style={{ marginLeft: 4, fontSize: 11 }}>
+        <View style={[styles.featurePillsRow, isCompact && { gap: 6, marginBottom: spacing.xs }]}>
+          <View style={[styles.featurePill, isCompact && { paddingHorizontal: 8, paddingVertical: 4 }]}>
+            <Ionicons name="checkmark-circle" size={isCompact ? 12 : 13} color={colors.deepGreen} />
+            <TypewriterText size="xs" bold color={colors.charcoal} style={{ marginLeft: 5, fontSize: isCompact ? 11 : 12 }}>
               {item.pill1}
             </TypewriterText>
           </View>
-          <View style={styles.featurePill}>
-            <Ionicons name="checkmark-circle" size={12} color={colors.deepGreen} />
-            <TypewriterText size="xs" bold color={colors.charcoal} style={{ marginLeft: 4, fontSize: 11 }}>
+          <View style={[styles.featurePill, isCompact && { paddingHorizontal: 8, paddingVertical: 4 }]}>
+            <Ionicons name="checkmark-circle" size={isCompact ? 12 : 13} color={colors.deepGreen} />
+            <TypewriterText size="xs" bold color={colors.charcoal} style={{ marginLeft: 5, fontSize: isCompact ? 11 : 12 }}>
               {item.pill2}
             </TypewriterText>
           </View>
@@ -294,7 +298,7 @@ export default function OnboardingScreen() {
   return (
     <PaperContainer>
       {/* Top Header Bar */}
-      <View style={styles.topBar}>
+      <View style={[styles.topBar, isCompact && { paddingBottom: spacing.xs }]}>
         <View style={styles.brandPill}>
           <TypewriterText size="xs" bold color={colors.charcoal} letterSpacing={1.5}>
             ✦ FIELDS · TRAVEL SCRAPBOOK ✦
@@ -352,9 +356,9 @@ export default function OnboardingScreen() {
       )}
 
       {/* Bottom Sticky Action Zone */}
-      <View style={styles.bottomControls}>
+      <View style={[styles.bottomControls, isCompact && { paddingBottom: spacing.md }]}>
         {/* Pagination Dots */}
-        <View style={styles.paginationDots}>
+        <View style={[styles.paginationDots, isCompact && { marginBottom: 6 }]}>
           {SLIDES.map((_, idx) => (
             <Pressable
               key={idx}
@@ -400,9 +404,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xs,
-    paddingBottom: spacing.xs,
+    paddingBottom: spacing.sm,
     width: '100%',
-    maxWidth: 500,
+    maxWidth: 540,
     alignSelf: 'center',
   },
   brandPill: {
@@ -433,20 +437,20 @@ const styles = StyleSheet.create({
   heroWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.lg,
   },
   posterFrame: {
     aspectRatio: layout.posterAspectRatio, // 4 / 3 true landscape ratio!
     backgroundColor: '#FFFFFF',
     borderRadius: 4,
-    padding: 7,
+    padding: 8,
     borderWidth: 1.5,
     borderColor: colors.charcoal,
     shadowColor: colors.charcoal,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 10,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
+    elevation: 8,
     position: 'relative',
     alignSelf: 'center',
   },
@@ -463,8 +467,8 @@ const styles = StyleSheet.create({
   },
   tape: {
     position: 'absolute',
-    width: 42,
-    height: 15,
+    width: 48,
+    height: 18,
     backgroundColor: colors.tape,
     borderColor: colors.tapeBorder,
     borderWidth: 0.5,
@@ -474,6 +478,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 2,
     elevation: 4,
+  },
+  tapeCompact: {
+    width: 42,
+    height: 15,
   },
   tapeTopLeft: {
     top: 2,
@@ -497,35 +505,46 @@ const styles = StyleSheet.create({
   },
   floatingSealBadge: {
     position: 'absolute',
-    bottom: 6,
-    right: 6,
+    bottom: 8,
+    right: 8,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(244, 239, 230, 0.94)',
     borderColor: colors.oxblood,
     borderWidth: 1.5,
     borderRadius: 4,
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 3,
     elevation: 3,
   },
+  floatingSealBadgeCompact: {
+    bottom: 6,
+    right: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+  },
   metaPillBox: {
     backgroundColor: colors.paperCard,
     borderWidth: 1,
     borderColor: colors.paperBorder,
     borderRadius: 6,
-    paddingVertical: 4,
-    paddingHorizontal: spacing.sm,
-    marginTop: 6,
+    paddingVertical: 6,
+    paddingHorizontal: spacing.md,
+    marginTop: 8,
     shadowColor: colors.charcoal,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 2,
+  },
+  metaPillBoxCompact: {
+    paddingVertical: 4,
+    paddingHorizontal: spacing.sm,
+    marginTop: 5,
   },
   metaPillHeader: {
     flexDirection: 'row',
@@ -533,7 +552,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   metaPillSub: {
-    fontSize: 10,
+    fontSize: 11,
     fontStyle: 'italic',
   },
   textSection: {
@@ -543,21 +562,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xs,
   },
   tagBadge: {
-    marginBottom: 2,
+    marginBottom: 4,
   },
   headline: {
-    lineHeight: 22,
-    marginBottom: 4,
+    lineHeight: 24,
+    marginBottom: 8,
     fontWeight: '900',
   },
   bodyText: {
-    lineHeight: 17,
-    marginBottom: spacing.xs,
+    lineHeight: 19,
+    marginBottom: spacing.sm,
   },
   featurePillsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: spacing.sm,
     marginBottom: spacing.xs,
   },
   featurePill: {
@@ -567,27 +586,27 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     borderWidth: 1,
     borderColor: colors.paperBorder,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
   },
   bottomControls: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.lg,
     paddingTop: spacing.xs,
     width: '100%',
-    maxWidth: 500,
+    maxWidth: 540,
     alignSelf: 'center',
   },
   webSlideContainer: {
     flex: 1,
-    width: '100%',
-    alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 2,
+    alignItems: 'center',
+    width: '100%',
   },
   webSlidePage: {
+    flex: 1,
     width: '100%',
-    maxWidth: 500,
+    maxWidth: 540,
     alignSelf: 'center',
     alignItems: 'center',
     justifyContent: 'center',
@@ -598,7 +617,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    marginBottom: 6,
+    marginBottom: spacing.sm,
   },
   dot: {
     height: 6,
@@ -614,9 +633,7 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     width: '100%',
-    maxWidth: 440,
-    alignSelf: 'center',
-    minHeight: 46,
+    minHeight: 48,
   },
   secondaryLinkRow: {
     alignItems: 'center',
