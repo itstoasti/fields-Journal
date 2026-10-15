@@ -183,9 +183,9 @@ export default function OnboardingScreen() {
 
   const isLastSlide = currentIndex === SLIDES.length - 1;
 
-  // Responsive hero card width based on screen width and available vertical space
-  const maxCardByHeight = Math.max(180, (windowHeight - 320) * (4 / 3));
-  const HERO_CARD_WIDTH = Math.min(windowWidth - spacing.lg * 2, 340, maxCardByHeight);
+  // Balanced responsive sizing: 300px on large displays (>= 850px), 240px on 13" MacBook Air & laptops
+  const isLargeScreen = windowHeight >= 850;
+  const HERO_CARD_WIDTH = isLargeScreen ? 300 : 240;
 
   const renderSlide = (item: OnboardingSlide) => (
     <View style={[styles.slidePage, Platform.OS === 'web' ? styles.webSlidePage : { width: windowWidth }]}>
@@ -222,8 +222,8 @@ export default function OnboardingScreen() {
 
             {/* Stamp Badge Overlay in bottom-right corner */}
             <View style={styles.floatingSealBadge}>
-              <Ionicons name="sparkles" size={10} color={colors.oxblood} />
-              <TypewriterText size="xs" bold color={colors.oxblood} letterSpacing={0.8} style={{ marginLeft: 3 }}>
+              <Ionicons name="sparkles" size={9} color={colors.oxblood} />
+              <TypewriterText size="xs" bold color={colors.oxblood} letterSpacing={0.8} style={{ marginLeft: 3, fontSize: 10 }}>
                 {item.badgeLabel}
               </TypewriterText>
             </View>
@@ -234,12 +234,12 @@ export default function OnboardingScreen() {
         {item.metaPlace && (
           <View style={[styles.metaPillBox, { width: HERO_CARD_WIDTH }]}>
             <View style={styles.metaPillHeader}>
-              <Ionicons name="location-sharp" size={12} color={colors.brickRed} />
-              <TypewriterText size="xs" bold color={colors.charcoal} letterSpacing={1} style={{ marginLeft: 4 }}>
+              <Ionicons name="location-sharp" size={11} color={colors.brickRed} />
+              <TypewriterText size="xs" bold color={colors.charcoal} letterSpacing={0.8} style={{ marginLeft: 3, fontSize: 10.5 }}>
                 {item.metaPlace}
               </TypewriterText>
             </View>
-            <TypewriterText size="xs" color={colors.inkSecondary} style={styles.metaPillSub}>
+            <TypewriterText size="xs" color={colors.inkSecondary} style={[styles.metaPillSub, { fontSize: 9.5 }]}>
               {item.metaDetails}
             </TypewriterText>
           </View>
@@ -249,30 +249,40 @@ export default function OnboardingScreen() {
       {/* Content & Excitement Text Section */}
       <View style={styles.textSection}>
         <View style={styles.tagBadge}>
-          <TypewriterText size="xs" bold color={colors.brickRed} letterSpacing={1.2}>
+          <TypewriterText size="xs" bold color={colors.brickRed} letterSpacing={1.1} style={{ fontSize: 10 }}>
             {item.tag}
           </TypewriterText>
         </View>
 
-        <TypewriterText size="lg" bold color={colors.charcoal} letterSpacing={1.5} style={styles.headline}>
+        <TypewriterText
+          size={isLargeScreen ? 'lg' : 'md'}
+          bold
+          color={colors.charcoal}
+          letterSpacing={1.2}
+          style={[styles.headline, !isLargeScreen && { lineHeight: 20, marginBottom: 4 }]}
+        >
           {item.headline}
         </TypewriterText>
 
-        <TypewriterText size="xs" color={colors.inkSecondary} style={styles.bodyText}>
+        <TypewriterText
+          size="xs"
+          color={colors.inkSecondary}
+          style={[styles.bodyText, !isLargeScreen && { lineHeight: 16, marginBottom: 6 }]}
+        >
           {item.body}
         </TypewriterText>
 
         {/* Value Feature Pills Row */}
         <View style={styles.featurePillsRow}>
           <View style={styles.featurePill}>
-            <Ionicons name="checkmark-circle" size={13} color={colors.deepGreen} />
-            <TypewriterText size="xs" bold color={colors.charcoal} style={{ marginLeft: 5 }}>
+            <Ionicons name="checkmark-circle" size={12} color={colors.deepGreen} />
+            <TypewriterText size="xs" bold color={colors.charcoal} style={{ marginLeft: 4, fontSize: 11 }}>
               {item.pill1}
             </TypewriterText>
           </View>
           <View style={styles.featurePill}>
-            <Ionicons name="checkmark-circle" size={13} color={colors.deepGreen} />
-            <TypewriterText size="xs" bold color={colors.charcoal} style={{ marginLeft: 5 }}>
+            <Ionicons name="checkmark-circle" size={12} color={colors.deepGreen} />
+            <TypewriterText size="xs" bold color={colors.charcoal} style={{ marginLeft: 4, fontSize: 11 }}>
               {item.pill2}
             </TypewriterText>
           </View>
@@ -390,9 +400,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xs,
-    paddingBottom: spacing.sm,
+    paddingBottom: spacing.xs,
     width: '100%',
-    maxWidth: 540,
+    maxWidth: 500,
     alignSelf: 'center',
   },
   brandPill: {
@@ -423,21 +433,22 @@ const styles = StyleSheet.create({
   heroWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.sm,
   },
   posterFrame: {
     aspectRatio: layout.posterAspectRatio, // 4 / 3 true landscape ratio!
     backgroundColor: '#FFFFFF',
     borderRadius: 4,
-    padding: 8,
+    padding: 7,
     borderWidth: 1.5,
     borderColor: colors.charcoal,
     shadowColor: colors.charcoal,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.22,
-    shadowRadius: 14,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    elevation: 6,
     position: 'relative',
+    alignSelf: 'center',
   },
   posterInner: {
     width: '100%',
@@ -452,8 +463,8 @@ const styles = StyleSheet.create({
   },
   tape: {
     position: 'absolute',
-    width: 48,
-    height: 18,
+    width: 42,
+    height: 15,
     backgroundColor: colors.tape,
     borderColor: colors.tapeBorder,
     borderWidth: 0.5,
@@ -486,16 +497,16 @@ const styles = StyleSheet.create({
   },
   floatingSealBadge: {
     position: 'absolute',
-    bottom: 8,
-    right: 8,
+    bottom: 6,
+    right: 6,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(244, 239, 230, 0.94)',
     borderColor: colors.oxblood,
     borderWidth: 1.5,
     borderRadius: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
@@ -507,9 +518,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.paperBorder,
     borderRadius: 6,
-    paddingVertical: 6,
-    paddingHorizontal: spacing.md,
-    marginTop: 8,
+    paddingVertical: 4,
+    paddingHorizontal: spacing.sm,
+    marginTop: 6,
     shadowColor: colors.charcoal,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
@@ -522,31 +533,31 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   metaPillSub: {
-    fontSize: 11,
+    fontSize: 10,
     fontStyle: 'italic',
   },
   textSection: {
     width: '100%',
-    maxWidth: 350,
+    maxWidth: 360,
     alignSelf: 'center',
     paddingHorizontal: spacing.xs,
   },
   tagBadge: {
-    marginBottom: 4,
+    marginBottom: 2,
   },
   headline: {
-    lineHeight: 24,
-    marginBottom: 8,
+    lineHeight: 22,
+    marginBottom: 4,
     fontWeight: '900',
   },
   bodyText: {
-    lineHeight: 19,
-    marginBottom: spacing.sm,
+    lineHeight: 17,
+    marginBottom: spacing.xs,
   },
   featurePillsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    gap: 6,
     marginBottom: spacing.xs,
   },
   featurePill: {
@@ -556,15 +567,15 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     borderWidth: 1,
     borderColor: colors.paperBorder,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   bottomControls: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.lg,
+    paddingBottom: spacing.md,
     paddingTop: spacing.xs,
     width: '100%',
-    maxWidth: 540,
+    maxWidth: 500,
     alignSelf: 'center',
   },
   webSlideContainer: {
@@ -575,9 +586,8 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   webSlidePage: {
-    flex: 1,
     width: '100%',
-    maxWidth: 540,
+    maxWidth: 500,
     alignSelf: 'center',
     alignItems: 'center',
     justifyContent: 'center',
@@ -588,7 +598,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    marginBottom: spacing.sm,
+    marginBottom: 6,
   },
   dot: {
     height: 6,
@@ -604,7 +614,9 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     width: '100%',
-    minHeight: 48,
+    maxWidth: 440,
+    alignSelf: 'center',
+    minHeight: 46,
   },
   secondaryLinkRow: {
     alignItems: 'center',
