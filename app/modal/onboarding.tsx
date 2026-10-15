@@ -94,6 +94,7 @@ export default function OnboardingScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList<OnboardingSlide>>(null);
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const contentWidth = Platform.OS === 'web' ? Math.min(windowWidth, 480) : windowWidth;
 
   useEffect(() => {
     trackEvent(AnalyticsEvents.ONBOARDING_MODAL_SHOWN);
@@ -136,7 +137,7 @@ export default function OnboardingScreen() {
 
   const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const offsetX = e.nativeEvent.contentOffset.x;
-    const page = Math.round(offsetX / windowWidth);
+    const page = Math.round(offsetX / contentWidth);
     if (page >= 0 && page < SLIDES.length && page !== currentIndex) {
       setCurrentIndex(page);
     }
@@ -146,7 +147,7 @@ export default function OnboardingScreen() {
 
   // Responsive hero card width based on screen width and available vertical space
   const maxCardByHeight = Math.max(160, (windowHeight - 320) * (4 / 3));
-  const HERO_CARD_WIDTH = Math.min(windowWidth - spacing.lg * 2, 340, maxCardByHeight);
+  const HERO_CARD_WIDTH = Math.min(contentWidth - spacing.lg * 2, 340, maxCardByHeight);
 
   return (
     <PaperContainer>
@@ -181,9 +182,14 @@ export default function OnboardingScreen() {
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         onMomentumScrollEnd={handleScroll}
-        style={styles.carousel}
+        getItemLayout={(_data, index) => ({
+          length: contentWidth,
+          offset: contentWidth * index,
+          index,
+        })}
+        style={[styles.carousel, { width: contentWidth }]}
         renderItem={({ item, index }) => (
-          <View style={[styles.slidePage, { width: windowWidth }]}>
+          <View style={[styles.slidePage, { width: contentWidth }]}>
             {/* Visual Hero Stamp Card - True 4:3 landscape ratio so it NEVER cuts off */}
             <View style={styles.heroWrapper}>
               <View style={[styles.posterFrame, { width: HERO_CARD_WIDTH }]}>
@@ -331,6 +337,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xs,
     paddingBottom: spacing.sm,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
   brandPill: {
     backgroundColor: '#EBE2D0',
@@ -349,9 +358,10 @@ const styles = StyleSheet.create({
   },
   carousel: {
     flex: 1,
+    alignSelf: 'center',
   },
   slidePage: {
-    flex: 1,
+    flexShrink: 0,
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xs,
@@ -500,6 +510,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.lg,
     paddingTop: spacing.xs,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
   paginationDots: {
     flexDirection: 'row',
@@ -522,6 +535,8 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     width: '100%',
+    maxWidth: 440,
+    alignSelf: 'center',
     minHeight: 48,
   },
   secondaryLinkRow: {

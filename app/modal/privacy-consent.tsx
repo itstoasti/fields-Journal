@@ -148,6 +148,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 6,
     elevation: 10,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
   notch: {
     width: 36,

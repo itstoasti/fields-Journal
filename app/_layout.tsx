@@ -15,18 +15,31 @@ export default function RootLayout() {
     // Run background app initialization
     initApp();
 
-    // Register PWA Service Worker on web
+    // Register PWA Service Worker on web (production only; unregister & purge on localhost)
     if (Platform.OS === 'web' && typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker
-          .register('/sw.js')
-          .then((registration) => {
-            console.log('[SW] ServiceWorker registered with scope:', registration.scope);
-          })
-          .catch((err) => {
-            console.warn('[SW] ServiceWorker registration failed:', err);
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        navigator.serviceWorker.getRegistrations().then((registrations) => {
+          for (const reg of registrations) {
+            reg.unregister();
+          }
+        });
+        if ('caches' in window) {
+          caches.keys().then((keys) => {
+            keys.forEach((key) => caches.delete(key));
           });
-      });
+        }
+      } else {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker
+            .register('/sw.js')
+            .then((registration) => {
+              console.log('[SW] ServiceWorker registered with scope:', registration.scope);
+            })
+            .catch((err) => {
+              console.warn('[SW] ServiceWorker registration failed:', err);
+            });
+        });
+      }
     }
 
     // Guaranteed splash dismissal after 1.0s max, never blocks user UI
@@ -46,42 +59,44 @@ export default function RootLayout() {
   return (
     <View style={styles.root}>
       <StatusBar style="dark" />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: colors.paper },
-          animation: 'fade',
-        }}
-      >
-        <Stack.Screen name="index" />
-        <Stack.Screen name="app" />
-        <Stack.Screen name="compose" />
-        <Stack.Screen name="pressing" />
-        <Stack.Screen name="result" />
-        <Stack.Screen name="settings" />
-        <Stack.Screen name="privacy" />
-        <Stack.Screen
-          name="modal/paywall"
-          options={{
-            presentation: 'transparentModal',
+      <View style={styles.appContainer}>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: colors.paper },
             animation: 'fade',
           }}
-        />
-        <Stack.Screen
-          name="modal/privacy-consent"
-          options={{
-            presentation: 'transparentModal',
-            animation: 'fade',
-          }}
-        />
-        <Stack.Screen
-          name="modal/onboarding"
-          options={{
-            presentation: 'fullScreenModal',
-            animation: 'fade',
-          }}
-        />
-      </Stack>
+        >
+          <Stack.Screen name="index" />
+          <Stack.Screen name="app" />
+          <Stack.Screen name="compose" />
+          <Stack.Screen name="pressing" />
+          <Stack.Screen name="result" />
+          <Stack.Screen name="settings" />
+          <Stack.Screen name="privacy" />
+          <Stack.Screen
+            name="modal/paywall"
+            options={{
+              presentation: 'transparentModal',
+              animation: 'fade',
+            }}
+          />
+          <Stack.Screen
+            name="modal/privacy-consent"
+            options={{
+              presentation: 'transparentModal',
+              animation: 'fade',
+            }}
+          />
+          <Stack.Screen
+            name="modal/onboarding"
+            options={{
+              presentation: Platform.OS === 'web' ? 'card' : 'fullScreenModal',
+              animation: 'fade',
+            }}
+          />
+        </Stack>
+      </View>
 
       {/* Global Field Notes Alert Dialog */}
       <FieldAlertHost />
@@ -122,10 +137,33 @@ export default function RootLayout() {
   );
 }
 
+const isWeb = Platform.OS === 'web';
+
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+    backgroundColor: isWeb ? '#EFE9DD' : colors.paper,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    height: '100%',
+  },
+  appContainer: {
+    flex: 1,
+    width: '100%',
+    maxWidth: isWeb ? 480 : undefined,
+    height: '100%',
     backgroundColor: colors.paper,
+    position: 'relative',
+    overflow: 'hidden',
+    ...(isWeb
+      ? {
+          boxShadow: '0 4px 36px rgba(28, 25, 23, 0.12)',
+          borderLeftWidth: 1,
+          borderRightWidth: 1,
+          borderColor: '#DED6C6',
+        }
+      : {}),
   },
   splashContainer: {
     ...StyleSheet.absoluteFillObject,

@@ -4,6 +4,7 @@ import {
   StyleSheet,
   Image,
   Dimensions,
+  useWindowDimensions,
   Pressable,
   Animated,
   FlatList,
@@ -21,10 +22,11 @@ import { useAppStore } from '../src/store/useAppStore';
 import { reportInappropriateContentApi } from '../src/lib/api';
 import { Note } from '../src/types';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
 export default function ResultScreen() {
   const router = useRouter();
+  const { width: windowWidth } = useWindowDimensions();
+  const contentWidth = Platform.OS === 'web' ? Math.min(windowWidth, 480) : windowWidth;
+
   const params = useLocalSearchParams<{
     noteId: string;
     posterUri: string;
@@ -136,7 +138,7 @@ export default function ResultScreen() {
 
   const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const offsetX = e.nativeEvent.contentOffset.x;
-    const index = Math.round(offsetX / SCREEN_WIDTH);
+    const index = Math.round(offsetX / contentWidth);
     if (index >= 0 && index < displayNotes.length && index !== currentIndex) {
       setCurrentIndex(index);
       setSavedSuccess(false);
@@ -295,13 +297,14 @@ export default function ResultScreen() {
           showsHorizontalScrollIndicator={false}
           onMomentumScrollEnd={handleScroll}
           initialScrollIndex={initialIndex > 0 && initialIndex < displayNotes.length ? initialIndex : undefined}
+          style={{ width: contentWidth }}
           getItemLayout={(_data, index) => ({
-            length: SCREEN_WIDTH,
-            offset: SCREEN_WIDTH * index,
+            length: contentWidth,
+            offset: contentWidth * index,
             index,
           })}
           renderItem={({ item }) => (
-            <View style={styles.pageContainer}>
+            <View style={[styles.pageContainer, { width: contentWidth }]}>
               <View style={styles.posterCard}>
                 {Platform.OS === 'web' ? (
                   <img
@@ -447,7 +450,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pageContainer: {
-    width: SCREEN_WIDTH,
+    flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.md,
