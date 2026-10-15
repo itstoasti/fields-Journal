@@ -94,11 +94,12 @@ export default function OnboardingScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList<OnboardingSlide>>(null);
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
-  const contentWidth = Platform.OS === 'web' ? Math.min(windowWidth, 480) : windowWidth;
 
   useEffect(() => {
     trackEvent(AnalyticsEvents.ONBOARDING_MODAL_SHOWN);
   }, []);
+
+  const touchStartX = useRef<number | null>(null);
 
   const triggerHaptic = () => {
     if (Platform.OS !== 'web') {
@@ -128,26 +129,157 @@ export default function OnboardingScreen() {
     triggerHaptic();
     if (currentIndex < SLIDES.length - 1) {
       const nextIdx = currentIndex + 1;
-      flatListRef.current?.scrollToIndex({ index: nextIdx, animated: true });
       setCurrentIndex(nextIdx);
+      if (Platform.OS !== 'web' && flatListRef.current) {
+        try {
+          flatListRef.current.scrollToIndex({ index: nextIdx, animated: true });
+        } catch {
+          flatListRef.current.scrollToOffset({ offset: nextIdx * windowWidth, animated: true });
+        }
+      }
     } else {
       handleFinish('compose');
     }
   };
 
+  const handleDotPress = (idx: number) => {
+    triggerHaptic();
+    setCurrentIndex(idx);
+    if (Platform.OS !== 'web' && flatListRef.current) {
+      try {
+        flatListRef.current.scrollToIndex({ index: idx, animated: true });
+      } catch {
+        flatListRef.current.scrollToOffset({ offset: idx * windowWidth, animated: true });
+      }
+    }
+  };
+
   const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const offsetX = e.nativeEvent.contentOffset.x;
-    const page = Math.round(offsetX / contentWidth);
+    const page = Math.round(offsetX / windowWidth);
     if (page >= 0 && page < SLIDES.length && page !== currentIndex) {
       setCurrentIndex(page);
     }
+  };
+
+  const handleTouchStart = (e: any) => {
+    touchStartX.current = e.nativeEvent?.pageX ?? e.nativeEvent?.clientX ?? null;
+  };
+
+  const handleTouchEnd = (e: any) => {
+    if (touchStartX.current === null) return;
+    const currentX = e.nativeEvent?.pageX ?? e.nativeEvent?.clientX ?? null;
+    if (currentX !== null) {
+      const diff = touchStartX.current - currentX;
+      if (diff > 40 && currentIndex < SLIDES.length - 1) {
+        handleNext();
+      } else if (diff < -40 && currentIndex > 0) {
+        triggerHaptic();
+        setCurrentIndex((prev) => prev - 1);
+      }
+    }
+    touchStartX.current = null;
   };
 
   const isLastSlide = currentIndex === SLIDES.length - 1;
 
   // Responsive hero card width based on screen width and available vertical space
   const maxCardByHeight = Math.max(160, (windowHeight - 320) * (4 / 3));
-  const HERO_CARD_WIDTH = Math.min(contentWidth - spacing.lg * 2, 340, maxCardByHeight);
+  const HERO_CARD_WIDTH = Math.min(windowWidth - spacing.lg * 2, 340, maxCardByHeight);
+
+  const renderSlide = (item: OnboardingSlide) => (
+    <View style={[styles.slidePage, Platform.OS === 'web' ? styles.webSlidePage : { width: windowWidth }]}>
+      {/* Visual Hero Stamp Card - True 4:3 landscape ratio so it NEVER cuts off */}
+      <View style={styles.heroWrapper}>
+        <View style={[styles.posterFrame, { width: HERO_CARD_WIDTH }]}>
+          {/* 4 Diagonal Translucent Masking Tape Strips on corners */}
+          <View style={[styles.tape, styles.tapeTopLeft]} pointerEvents="none" />
+          <View style={[styles.tape, styles.tapeTopRight]} pointerEvents="none" />
+          <View style={[styles.tape, styles.tapeBottomLeft]} pointerEvents="none" />
+          <View style={[styles.tape, styles.tapeBottomRight]} pointerEvents="none" />
+
+          {/* The Uncropped 4:3 Poster */}
+          <View style={styles.posterInner}>
+            {Platform.OS === 'web' ? (
+              <img
+                src={getAssetUri(item.poster, item.fallbackUrl)}
+                alt={item.headline}
+                onError={(e) => {
+                  if ((e.currentTarget as HTMLImageElement).src !== item.fallbackUrl) {
+                    (e.currentTarget as HTMLImageElement).src = item.fallbackUrl;
+                  }
+                }}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  display: 'block',
+                }}
+              />
+            ) : (
+              <Image source={item.poster} style={styles.posterImage} resizeMode="cover" />
+            )}
+
+            {/* Stamp Badge Overlay in bottom-right corner */}
+            <View style={styles.floatingSealBadge}>
+              <Ionicons name="sparkles" size={10} color={colors.oxblood} />
+              <TypewriterText size="xs" bold color={colors.oxblood} letterSpacing={0.8} style={{ marginLeft: 3 }}>
+                {item.badgeLabel}
+              </TypewriterText>
+            </View>
+          </View>
+        </View>
+
+        {/* Slide 2: Archival Metadata Inset Tag */}
+        {item.metaPlace && (
+          <View style={[styles.metaPillBox, { width: HERO_CARD_WIDTH }]}>
+            <View style={styles.metaPillHeader}>
+              <Ionicons name="location-sharp" size={12} color={colors.brickRed} />
+              <TypewriterText size="xs" bold color={colors.charcoal} letterSpacing={1} style={{ marginLeft: 4 }}>
+                {item.metaPlace}
+              </TypewriterText>
+            </View>
+            <TypewriterText size="xs" color={colors.inkSecondary} style={styles.metaPillSub}>
+              {item.metaDetails}
+            </TypewriterText>
+          </View>
+        )}
+      </View>
+
+      {/* Content & Excitement Text Section */}
+      <View style={styles.textSection}>
+        <View style={styles.tagBadge}>
+          <TypewriterText size="xs" bold color={colors.brickRed} letterSpacing={1.2}>
+            {item.tag}
+          </TypewriterText>
+        </View>
+
+        <TypewriterText size="lg" bold color={colors.charcoal} letterSpacing={1.5} style={styles.headline}>
+          {item.headline}
+        </TypewriterText>
+
+        <TypewriterText size="xs" color={colors.inkSecondary} style={styles.bodyText}>
+          {item.body}
+        </TypewriterText>
+
+        {/* Value Feature Pills Row */}
+        <View style={styles.featurePillsRow}>
+          <View style={styles.featurePill}>
+            <Ionicons name="checkmark-circle" size={13} color={colors.deepGreen} />
+            <TypewriterText size="xs" bold color={colors.charcoal} style={{ marginLeft: 5 }}>
+              {item.pill1}
+            </TypewriterText>
+          </View>
+          <View style={styles.featurePill}>
+            <Ionicons name="checkmark-circle" size={13} color={colors.deepGreen} />
+            <TypewriterText size="xs" bold color={colors.charcoal} style={{ marginLeft: 5 }}>
+              {item.pill2}
+            </TypewriterText>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
 
   return (
     <PaperContainer>
@@ -173,115 +305,41 @@ export default function OnboardingScreen() {
         </Pressable>
       </View>
 
-      {/* Main Full-Screen Swipeable FlatList */}
-      <FlatList
-        ref={flatListRef}
-        data={SLIDES}
-        keyExtractor={(item) => item.id}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={handleScroll}
-        getItemLayout={(_data, index) => ({
-          length: contentWidth,
-          offset: contentWidth * index,
-          index,
-        })}
-        style={[styles.carousel, { width: contentWidth }]}
-        renderItem={({ item, index }) => (
-          <View style={[styles.slidePage, { width: contentWidth }]}>
-            {/* Visual Hero Stamp Card - True 4:3 landscape ratio so it NEVER cuts off */}
-            <View style={styles.heroWrapper}>
-              <View style={[styles.posterFrame, { width: HERO_CARD_WIDTH }]}>
-                {/* 4 Diagonal Translucent Masking Tape Strips on corners */}
-                <View style={[styles.tape, styles.tapeTopLeft]} pointerEvents="none" />
-                <View style={[styles.tape, styles.tapeTopRight]} pointerEvents="none" />
-                <View style={[styles.tape, styles.tapeBottomLeft]} pointerEvents="none" />
-                <View style={[styles.tape, styles.tapeBottomRight]} pointerEvents="none" />
-
-                {/* The Uncropped 4:3 Poster */}
-                <View style={styles.posterInner}>
-                  {Platform.OS === 'web' ? (
-                    <img
-                      src={getAssetUri(item.poster, item.fallbackUrl)}
-                      alt={item.headline}
-                      onError={(e) => {
-                        if ((e.currentTarget as HTMLImageElement).src !== item.fallbackUrl) {
-                          (e.currentTarget as HTMLImageElement).src = item.fallbackUrl;
-                        }
-                      }}
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'cover',
-                        display: 'block',
-                      }}
-                    />
-                  ) : (
-                    <Image source={item.poster} style={styles.posterImage} resizeMode="cover" />
-                  )}
-
-                  {/* Stamp Badge Overlay in bottom-right corner */}
-                  <View style={styles.floatingSealBadge}>
-                    <Ionicons name="sparkles" size={10} color={colors.oxblood} />
-                    <TypewriterText size="xs" bold color={colors.oxblood} letterSpacing={0.8} style={{ marginLeft: 3 }}>
-                      {item.badgeLabel}
-                    </TypewriterText>
-                  </View>
-                </View>
-              </View>
-
-              {/* Slide 2: Archival Metadata Inset Tag */}
-              {item.metaPlace && (
-                <View style={[styles.metaPillBox, { width: HERO_CARD_WIDTH }]}>
-                  <View style={styles.metaPillHeader}>
-                    <Ionicons name="location-sharp" size={12} color={colors.brickRed} />
-                    <TypewriterText size="xs" bold color={colors.charcoal} letterSpacing={1} style={{ marginLeft: 4 }}>
-                      {item.metaPlace}
-                    </TypewriterText>
-                  </View>
-                  <TypewriterText size="xs" color={colors.inkSecondary} style={styles.metaPillSub}>
-                    {item.metaDetails}
-                  </TypewriterText>
-                </View>
-              )}
-            </View>
-
-            {/* Content & Excitement Text Section */}
-            <View style={styles.textSection}>
-              <View style={styles.tagBadge}>
-                <TypewriterText size="xs" bold color={colors.brickRed} letterSpacing={1.2}>
-                  {item.tag}
-                </TypewriterText>
-              </View>
-
-              <TypewriterText size="lg" bold color={colors.charcoal} letterSpacing={1.5} style={styles.headline}>
-                {item.headline}
-              </TypewriterText>
-
-              <TypewriterText size="xs" color={colors.inkSecondary} style={styles.bodyText}>
-                {item.body}
-              </TypewriterText>
-
-              {/* Value Feature Pills Row */}
-              <View style={styles.featurePillsRow}>
-                <View style={styles.featurePill}>
-                  <Ionicons name="checkmark-circle" size={13} color={colors.deepGreen} />
-                  <TypewriterText size="xs" bold color={colors.charcoal} style={{ marginLeft: 5 }}>
-                    {item.pill1}
-                  </TypewriterText>
-                </View>
-                <View style={styles.featurePill}>
-                  <Ionicons name="checkmark-circle" size={13} color={colors.deepGreen} />
-                  <TypewriterText size="xs" bold color={colors.charcoal} style={{ marginLeft: 5 }}>
-                    {item.pill2}
-                  </TypewriterText>
-                </View>
-              </View>
-            </View>
-          </View>
-        )}
-      />
+      {/* Main Slide Presentation */}
+      {Platform.OS === 'web' ? (
+        <View
+          style={[styles.carousel, styles.webSlideContainer]}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
+          {renderSlide(SLIDES[currentIndex])}
+        </View>
+      ) : (
+        <FlatList
+          ref={flatListRef}
+          data={SLIDES}
+          keyExtractor={(item) => item.id}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onMomentumScrollEnd={handleScroll}
+          getItemLayout={(_data, index) => ({
+            length: windowWidth,
+            offset: windowWidth * index,
+            index,
+          })}
+          onScrollToIndexFailed={(info) => {
+            setTimeout(() => {
+              flatListRef.current?.scrollToOffset({
+                offset: info.index * windowWidth,
+                animated: true,
+              });
+            }, 50);
+          }}
+          style={styles.carousel}
+          renderItem={({ item }) => renderSlide(item)}
+        />
+      )}
 
       {/* Bottom Sticky Action Zone */}
       <View style={styles.bottomControls}>
@@ -290,11 +348,7 @@ export default function OnboardingScreen() {
           {SLIDES.map((_, idx) => (
             <Pressable
               key={idx}
-              onPress={() => {
-                triggerHaptic();
-                flatListRef.current?.scrollToIndex({ index: idx, animated: true });
-                setCurrentIndex(idx);
-              }}
+              onPress={() => handleDotPress(idx)}
               hitSlop={10}
             >
               <View style={[styles.dot, idx === currentIndex ? styles.activeDot : styles.inactiveDot]} />
@@ -338,7 +392,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xs,
     paddingBottom: spacing.sm,
     width: '100%',
-    maxWidth: 480,
+    maxWidth: 540,
     alignSelf: 'center',
   },
   brandPill: {
@@ -358,10 +412,9 @@ const styles = StyleSheet.create({
   },
   carousel: {
     flex: 1,
-    alignSelf: 'center',
   },
   slidePage: {
-    flexShrink: 0,
+    flex: 1,
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xs,
@@ -511,7 +564,19 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.lg,
     paddingTop: spacing.xs,
     width: '100%',
-    maxWidth: 480,
+    maxWidth: 540,
+    alignSelf: 'center',
+  },
+  webSlideContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+  },
+  webSlidePage: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 540,
     alignSelf: 'center',
   },
   paginationDots: {
@@ -535,8 +600,6 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     width: '100%',
-    maxWidth: 440,
-    alignSelf: 'center',
     minHeight: 48,
   },
   secondaryLinkRow: {

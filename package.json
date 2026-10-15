@@ -7,7 +7,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
-    "build:web": "expo export -p web && cp public/*.html dist/ && cp public/sw.js public/manifest.json dist/ && cp -r public/assets/* dist/assets/ && cp public/robots.txt public/llms.txt public/fields*.txt dist/ 2>/dev/null || true",
+    "build:web": "expo export -p web && cp public/*.html dist/ && cp -r public/assets/* dist/assets/ && cp public/robots.txt public/llms.txt public/fields*.txt dist/ 2>/dev/null || true",
     "build:api": "npx esbuild server/api/index.ts --bundle --platform=node --target=node20 --outfile=api/index.js",
     "build": "npm run build:web && npm run build:api",
     "grant:credits": "node server/scripts/grant_credits.cjs",

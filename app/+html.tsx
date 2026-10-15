@@ -65,12 +65,6 @@ export default function Root({ children }: { children: React.ReactNode }) {
                 min-height: 100%;
                 width: 100%;
                 background-color: #F4EFE6;
-                justify-content: center;
-              }
-              @media (min-width: 601px) {
-                html, body, #root {
-                  background-color: #EFE9DD !important;
-                }
               }
             `,
           }}

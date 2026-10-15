@@ -1,9 +1,7 @@
 import React from 'react';
-import { View, StyleSheet, ViewStyle, StatusBar, ImageBackground, Platform } from 'react-native';
+import { View, StyleSheet, ViewStyle, StatusBar, ImageBackground } from 'react-native';
 import { useSafeAreaInsets, EdgeInsets } from 'react-native-safe-area-context';
 import { colors } from '../theme';
-
-const isWeb = Platform.OS === 'web';
 
 interface PaperContainerProps {
   children: React.ReactNode;
@@ -47,13 +45,8 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.paper,
-    width: '100%',
-    maxWidth: isWeb ? 480 : undefined,
-    alignSelf: 'center',
   },
   content: {
     flex: 1,
-    width: '100%',
-    position: 'relative',
   },
 });

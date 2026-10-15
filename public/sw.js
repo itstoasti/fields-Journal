@@ -1,5 +1,5 @@
-// Fields PWA Service Worker v1.0.1
-const CACHE_NAME = 'fields-pwa-v2';
+// Fields PWA Service Worker v1.0.0
+const CACHE_NAME = 'fields-pwa-v1';
 
 const STATIC_ASSETS = [
   '/',
@@ -45,11 +45,6 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
-
-  // Never cache in local development or Metro bundler
-  if (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.port === '8081') {
-    return;
-  }
 
   // Do not cache API endpoints (/api/, /v1/) or non-GET requests
   if (
