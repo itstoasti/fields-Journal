@@ -184,34 +184,19 @@ export default function OnboardingScreen() {
   const isLastSlide = currentIndex === SLIDES.length - 1;
 
   // Responsive hero card width based on screen width and available vertical space
-  const isCompactHeight = windowHeight < 800;
-  const isVeryCompactHeight = windowHeight < 680;
-
-  // Strict card sizing so hero + text never exceeds available vertical screen height
-  const targetCardHeight = isVeryCompactHeight ? 120 : isCompactHeight ? 140 : 185;
-  const HERO_CARD_WIDTH = Math.round(targetCardHeight * (4 / 3));
+  const maxCardByHeight = Math.max(180, (windowHeight - 320) * (4 / 3));
+  const HERO_CARD_WIDTH = Math.min(windowWidth - spacing.lg * 2, 340, maxCardByHeight);
 
   const renderSlide = (item: OnboardingSlide) => (
     <View style={[styles.slidePage, Platform.OS === 'web' ? styles.webSlidePage : { width: windowWidth }]}>
       {/* Visual Hero Stamp Card - True 4:3 landscape ratio so it NEVER cuts off */}
-      <View style={[styles.heroWrapper, isCompactHeight && { marginBottom: 4 }]}>
-        <View
-          style={[
-            styles.posterFrame,
-            {
-              width: HERO_CARD_WIDTH,
-              maxWidth: HERO_CARD_WIDTH,
-              height: targetCardHeight,
-              maxHeight: targetCardHeight,
-            },
-            isCompactHeight && { padding: 5 },
-          ]}
-        >
+      <View style={styles.heroWrapper}>
+        <View style={[styles.posterFrame, { width: HERO_CARD_WIDTH }]}>
           {/* 4 Diagonal Translucent Masking Tape Strips on corners */}
-          <View style={[styles.tape, styles.tapeTopLeft, isCompactHeight && styles.tapeCompact]} pointerEvents="none" />
-          <View style={[styles.tape, styles.tapeTopRight, isCompactHeight && styles.tapeCompact]} pointerEvents="none" />
-          <View style={[styles.tape, styles.tapeBottomLeft, isCompactHeight && styles.tapeCompact]} pointerEvents="none" />
-          <View style={[styles.tape, styles.tapeBottomRight, isCompactHeight && styles.tapeCompact]} pointerEvents="none" />
+          <View style={[styles.tape, styles.tapeTopLeft]} pointerEvents="none" />
+          <View style={[styles.tape, styles.tapeTopRight]} pointerEvents="none" />
+          <View style={[styles.tape, styles.tapeBottomLeft]} pointerEvents="none" />
+          <View style={[styles.tape, styles.tapeBottomRight]} pointerEvents="none" />
 
           {/* The Uncropped 4:3 Poster */}
           <View style={styles.posterInner}>
@@ -236,20 +221,9 @@ export default function OnboardingScreen() {
             )}
 
             {/* Stamp Badge Overlay in bottom-right corner */}
-            <View
-              style={[
-                styles.floatingSealBadge,
-                isCompactHeight && { paddingHorizontal: 5, paddingVertical: 2, bottom: 4, right: 4 },
-              ]}
-            >
-              <Ionicons name="sparkles" size={isCompactHeight ? 8 : 10} color={colors.oxblood} />
-              <TypewriterText
-                size="xs"
-                bold
-                color={colors.oxblood}
-                letterSpacing={0.8}
-                style={{ marginLeft: 3, fontSize: isCompactHeight ? 9 : 11 }}
-              >
+            <View style={styles.floatingSealBadge}>
+              <Ionicons name="sparkles" size={10} color={colors.oxblood} />
+              <TypewriterText size="xs" bold color={colors.oxblood} letterSpacing={0.8} style={{ marginLeft: 3 }}>
                 {item.badgeLabel}
               </TypewriterText>
             </View>
@@ -258,30 +232,14 @@ export default function OnboardingScreen() {
 
         {/* Slide 2: Archival Metadata Inset Tag */}
         {item.metaPlace && (
-          <View
-            style={[
-              styles.metaPillBox,
-              { width: HERO_CARD_WIDTH, maxWidth: HERO_CARD_WIDTH },
-              isCompactHeight && { marginTop: 4, paddingVertical: 2, paddingHorizontal: 6 },
-            ]}
-          >
+          <View style={[styles.metaPillBox, { width: HERO_CARD_WIDTH }]}>
             <View style={styles.metaPillHeader}>
-              <Ionicons name="location-sharp" size={10} color={colors.brickRed} />
-              <TypewriterText
-                size="xs"
-                bold
-                color={colors.charcoal}
-                letterSpacing={0.8}
-                style={{ marginLeft: 3, fontSize: isCompactHeight ? 9.5 : 11 }}
-              >
+              <Ionicons name="location-sharp" size={12} color={colors.brickRed} />
+              <TypewriterText size="xs" bold color={colors.charcoal} letterSpacing={1} style={{ marginLeft: 4 }}>
                 {item.metaPlace}
               </TypewriterText>
             </View>
-            <TypewriterText
-              size="xs"
-              color={colors.inkSecondary}
-              style={[styles.metaPillSub, isCompactHeight && { fontSize: 8.5 }]}
-            >
+            <TypewriterText size="xs" color={colors.inkSecondary} style={styles.metaPillSub}>
               {item.metaDetails}
             </TypewriterText>
           </View>
@@ -289,58 +247,32 @@ export default function OnboardingScreen() {
       </View>
 
       {/* Content & Excitement Text Section */}
-      <View style={[styles.textSection, isCompactHeight && { maxWidth: 380 }]}>
-        <View style={[styles.tagBadge, isCompactHeight && { marginBottom: 2 }]}>
-          <TypewriterText
-            size="xs"
-            bold
-            color={colors.brickRed}
-            letterSpacing={1.1}
-            style={isCompactHeight ? { fontSize: 9.5 } : undefined}
-          >
+      <View style={styles.textSection}>
+        <View style={styles.tagBadge}>
+          <TypewriterText size="xs" bold color={colors.brickRed} letterSpacing={1.2}>
             {item.tag}
           </TypewriterText>
         </View>
 
-        <TypewriterText
-          size={isCompactHeight ? 'sm' : 'lg'}
-          bold
-          color={colors.charcoal}
-          letterSpacing={1.2}
-          style={[styles.headline, isCompactHeight && { lineHeight: 18, marginBottom: 3, fontSize: 14 }]}
-        >
+        <TypewriterText size="lg" bold color={colors.charcoal} letterSpacing={1.5} style={styles.headline}>
           {item.headline}
         </TypewriterText>
 
-        <TypewriterText
-          size="xs"
-          color={colors.inkSecondary}
-          style={[styles.bodyText, isCompactHeight && { lineHeight: 14, marginBottom: 4, fontSize: 11 }]}
-        >
+        <TypewriterText size="xs" color={colors.inkSecondary} style={styles.bodyText}>
           {item.body}
         </TypewriterText>
 
         {/* Value Feature Pills Row */}
-        <View style={[styles.featurePillsRow, isCompactHeight && { gap: 6, marginBottom: 0 }]}>
-          <View style={[styles.featurePill, isCompactHeight && { paddingHorizontal: 6, paddingVertical: 2 }]}>
-            <Ionicons name="checkmark-circle" size={11} color={colors.deepGreen} />
-            <TypewriterText
-              size="xs"
-              bold
-              color={colors.charcoal}
-              style={{ marginLeft: 3, fontSize: isCompactHeight ? 10 : 12 }}
-            >
+        <View style={styles.featurePillsRow}>
+          <View style={styles.featurePill}>
+            <Ionicons name="checkmark-circle" size={13} color={colors.deepGreen} />
+            <TypewriterText size="xs" bold color={colors.charcoal} style={{ marginLeft: 5 }}>
               {item.pill1}
             </TypewriterText>
           </View>
-          <View style={[styles.featurePill, isCompactHeight && { paddingHorizontal: 6, paddingVertical: 2 }]}>
-            <Ionicons name="checkmark-circle" size={11} color={colors.deepGreen} />
-            <TypewriterText
-              size="xs"
-              bold
-              color={colors.charcoal}
-              style={{ marginLeft: 3, fontSize: isCompactHeight ? 10 : 12 }}
-            >
+          <View style={styles.featurePill}>
+            <Ionicons name="checkmark-circle" size={13} color={colors.deepGreen} />
+            <TypewriterText size="xs" bold color={colors.charcoal} style={{ marginLeft: 5 }}>
               {item.pill2}
             </TypewriterText>
           </View>
@@ -409,10 +341,10 @@ export default function OnboardingScreen() {
         />
       )}
 
-      {/* Bottom Sticky Action Zone - PINNED TO BOTTOM, ALWAYS IN VIEW WITHOUT SCROLLING */}
-      <View style={[styles.bottomControls, isCompactHeight && { paddingBottom: spacing.sm, paddingTop: 2 }]}>
+      {/* Bottom Sticky Action Zone */}
+      <View style={styles.bottomControls}>
         {/* Pagination Dots */}
-        <View style={[styles.paginationDots, isCompactHeight && { marginBottom: 6 }]}>
+        <View style={styles.paginationDots}>
           {SLIDES.map((_, idx) => (
             <Pressable
               key={idx}
@@ -429,17 +361,17 @@ export default function OnboardingScreen() {
           title={isLastSlide ? 'CREATE YOUR FIRST STAMP (FREE)' : 'NEXT STEP'}
           onPress={handleNext}
           variant="primary"
-          style={[styles.primaryBtn, isCompactHeight && { minHeight: 44 }]}
+          style={styles.primaryBtn}
           icon={
             isLastSlide ? (
-              <Ionicons name="sparkles" size={16} color={colors.paper} />
+              <Ionicons name="sparkles" size={17} color={colors.paper} />
             ) : (
-              <Ionicons name="arrow-forward" size={16} color={colors.paper} />
+              <Ionicons name="arrow-forward" size={17} color={colors.paper} />
             )
           }
         />
 
-        <View style={[styles.secondaryLinkRow, isCompactHeight && { marginTop: 2 }]}>
+        <View style={styles.secondaryLinkRow}>
           <Pressable onPress={() => handleFinish('home')} hitSlop={10} style={styles.secondaryLink}>
             <TypewriterText size="xs" color={colors.inkSecondary} style={styles.secondaryLinkText}>
               Explore notebook first
@@ -650,10 +582,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.md,
-  },
-  tapeCompact: {
-    width: 32,
-    height: 12,
   },
   paginationDots: {
     flexDirection: 'row',
