@@ -7,6 +7,7 @@ import {
   TextStyle,
   ActivityIndicator,
   View,
+  StyleProp,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { colors, fonts, fontSizes, spacing } from '../theme';
@@ -17,8 +18,8 @@ interface StampButtonProps {
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
   disabled?: boolean;
   loading?: boolean;
-  style?: ViewStyle;
-  textStyle?: TextStyle;
+  style?: StyleProp<ViewStyle>;
+  textStyle?: StyleProp<TextStyle>;
   icon?: React.ReactNode;
 }
 

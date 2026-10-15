@@ -1,12 +1,11 @@
-import React from 'react';
-import { Text, TextStyle, StyleSheet, TextProps } from 'react-native';
+import { Text, TextStyle, StyleSheet, TextProps, StyleProp } from 'react-native';
 import { colors, fonts, fontSizes } from '../theme';
 
 interface TypewriterTextProps extends TextProps {
   children: React.ReactNode;
   size?: keyof typeof fontSizes;
   color?: string;
-  style?: TextStyle | TextStyle[];
+  style?: StyleProp<TextStyle>;
   bold?: boolean;
   letterSpacing?: number;
 }
