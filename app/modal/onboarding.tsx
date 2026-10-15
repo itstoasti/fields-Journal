@@ -184,17 +184,19 @@ export default function OnboardingScreen() {
   const isLastSlide = currentIndex === SLIDES.length - 1;
 
   // Balanced responsive sizing:
-  // On large displays (e.g. 27" monitor, windowHeight >= 800), full 340px card with generous 24px margins.
-  // On compact viewports (e.g. 13" MacBook Air, windowHeight < 800), 280px card with compact spacing so it never scrolls.
-  const isCompact = windowHeight < 800;
+  // On desktop / large displays (e.g. 27" monitor, windowHeight >= 700 and windowWidth >= 560):
+  // Full 500px hero card, 520px text section, single-line headline and pills (matching Picture 1).
+  // On compact viewports (e.g. 13" MacBook Air with short window height < 700):
+  // Dynamically scales card width down to 320-360px with compact spacing so the button never scrolls.
+  const isCompact = windowHeight < 700 || windowWidth < 560;
   const HERO_CARD_WIDTH = isCompact
-    ? Math.min(280, Math.max(220, windowWidth - spacing.lg * 2))
-    : Math.min(340, windowWidth - spacing.lg * 2);
+    ? Math.min(360, Math.max(260, Math.round((windowHeight - 360) * (4 / 3))))
+    : Math.min(500, windowWidth - spacing.lg * 2);
 
   const renderSlide = (item: OnboardingSlide) => (
     <View style={[styles.slidePage, Platform.OS === 'web' ? styles.webSlidePage : { width: windowWidth }]}>
       {/* Visual Hero Stamp Card - True 4:3 landscape ratio so it NEVER cuts off */}
-      <View style={[styles.heroWrapper, isCompact && { marginBottom: 12 }]}>
+      <View style={[styles.heroWrapper, isCompact && { marginBottom: 10 }]}>
         <View style={[styles.posterFrame, { width: HERO_CARD_WIDTH }]}>
           {/* 4 Diagonal Translucent Masking Tape Strips on corners */}
           <View style={[styles.tape, styles.tapeTopLeft, isCompact && styles.tapeCompact]} pointerEvents="none" />
@@ -259,19 +261,16 @@ export default function OnboardingScreen() {
         </View>
 
         <TypewriterText
-          size={isCompact ? 'md' : 'lg'}
           bold
           color={colors.charcoal}
-          letterSpacing={1.2}
-          style={[styles.headline, isCompact && { lineHeight: 20, marginBottom: 4 }]}
+          style={isCompact ? styles.headlineCompact : styles.headline}
         >
           {item.headline}
         </TypewriterText>
 
         <TypewriterText
-          size="xs"
           color={colors.inkSecondary}
-          style={[styles.bodyText, isCompact && { lineHeight: 16, marginBottom: 6 }]}
+          style={isCompact ? styles.bodyTextCompact : styles.bodyText}
         >
           {item.body}
         </TypewriterText>
@@ -406,7 +405,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xs,
     paddingBottom: spacing.sm,
     width: '100%',
-    maxWidth: 540,
+    maxWidth: 520,
     alignSelf: 'center',
   },
   brandPill: {
@@ -437,7 +436,7 @@ const styles = StyleSheet.create({
   heroWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   posterFrame: {
     aspectRatio: layout.posterAspectRatio, // 4 / 3 true landscape ratio!
@@ -557,7 +556,7 @@ const styles = StyleSheet.create({
   },
   textSection: {
     width: '100%',
-    maxWidth: 360,
+    maxWidth: 520,
     alignSelf: 'center',
     paddingHorizontal: spacing.xs,
   },
@@ -565,13 +564,28 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   headline: {
-    lineHeight: 24,
+    fontSize: 16,
+    lineHeight: 22,
     marginBottom: 8,
     fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  headlineCompact: {
+    fontSize: 13.5,
+    lineHeight: 18,
+    marginBottom: 4,
+    fontWeight: '900',
+    letterSpacing: 0.4,
   },
   bodyText: {
-    lineHeight: 19,
+    fontSize: 11.5,
+    lineHeight: 18,
     marginBottom: spacing.sm,
+  },
+  bodyTextCompact: {
+    fontSize: 10.5,
+    lineHeight: 15,
+    marginBottom: 6,
   },
   featurePillsRow: {
     flexDirection: 'row',
@@ -594,7 +608,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.lg,
     paddingTop: spacing.xs,
     width: '100%',
-    maxWidth: 540,
+    maxWidth: 520,
     alignSelf: 'center',
   },
   webSlideContainer: {
@@ -606,7 +620,7 @@ const styles = StyleSheet.create({
   webSlidePage: {
     flex: 1,
     width: '100%',
-    maxWidth: 540,
+    maxWidth: 520,
     alignSelf: 'center',
     alignItems: 'center',
     justifyContent: 'center',
