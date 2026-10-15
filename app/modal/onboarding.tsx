@@ -7,7 +7,6 @@ import {
   FlatList,
   Image,
   Platform,
-  ScrollView,
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from 'react-native';
@@ -188,24 +187,26 @@ export default function OnboardingScreen() {
   const isCompactHeight = windowHeight < 800;
   const isVeryCompactHeight = windowHeight < 680;
 
-  // Calculate target height for the 4:3 hero stamp so the entire slide fits on-screen without requiring scroll
-  const targetCardHeight = Math.max(
-    115,
-    Math.min(
-      isVeryCompactHeight ? 135 : isCompactHeight ? 160 : 210,
-      Math.round(windowHeight * 0.22)
-    )
-  );
-  const HERO_CARD_WIDTH = Math.min(
-    windowWidth - spacing.lg * 2,
-    Math.round(targetCardHeight * (4 / 3))
-  );
+  // Strict card sizing so hero + text never exceeds available vertical screen height
+  const targetCardHeight = isVeryCompactHeight ? 120 : isCompactHeight ? 140 : 185;
+  const HERO_CARD_WIDTH = Math.round(targetCardHeight * (4 / 3));
 
   const renderSlide = (item: OnboardingSlide) => (
     <View style={[styles.slidePage, Platform.OS === 'web' ? styles.webSlidePage : { width: windowWidth }]}>
       {/* Visual Hero Stamp Card - True 4:3 landscape ratio so it NEVER cuts off */}
-      <View style={[styles.heroWrapper, isCompactHeight && { marginBottom: 6 }]}>
-        <View style={[styles.posterFrame, { width: HERO_CARD_WIDTH }, isCompactHeight && { padding: 6 }]}>
+      <View style={[styles.heroWrapper, isCompactHeight && { marginBottom: 4 }]}>
+        <View
+          style={[
+            styles.posterFrame,
+            {
+              width: HERO_CARD_WIDTH,
+              maxWidth: HERO_CARD_WIDTH,
+              height: targetCardHeight,
+              maxHeight: targetCardHeight,
+            },
+            isCompactHeight && { padding: 5 },
+          ]}
+        >
           {/* 4 Diagonal Translucent Masking Tape Strips on corners */}
           <View style={[styles.tape, styles.tapeTopLeft, isCompactHeight && styles.tapeCompact]} pointerEvents="none" />
           <View style={[styles.tape, styles.tapeTopRight, isCompactHeight && styles.tapeCompact]} pointerEvents="none" />
@@ -238,7 +239,7 @@ export default function OnboardingScreen() {
             <View
               style={[
                 styles.floatingSealBadge,
-                isCompactHeight && { paddingHorizontal: 6, paddingVertical: 2, bottom: 5, right: 5 },
+                isCompactHeight && { paddingHorizontal: 5, paddingVertical: 2, bottom: 4, right: 4 },
               ]}
             >
               <Ionicons name="sparkles" size={isCompactHeight ? 8 : 10} color={colors.oxblood} />
@@ -260,18 +261,18 @@ export default function OnboardingScreen() {
           <View
             style={[
               styles.metaPillBox,
-              { width: HERO_CARD_WIDTH },
-              isCompactHeight && { marginTop: 4, paddingVertical: 3, paddingHorizontal: 8 },
+              { width: HERO_CARD_WIDTH, maxWidth: HERO_CARD_WIDTH },
+              isCompactHeight && { marginTop: 4, paddingVertical: 2, paddingHorizontal: 6 },
             ]}
           >
             <View style={styles.metaPillHeader}>
-              <Ionicons name="location-sharp" size={11} color={colors.brickRed} />
+              <Ionicons name="location-sharp" size={10} color={colors.brickRed} />
               <TypewriterText
                 size="xs"
                 bold
                 color={colors.charcoal}
                 letterSpacing={0.8}
-                style={{ marginLeft: 4, fontSize: isCompactHeight ? 10 : 12 }}
+                style={{ marginLeft: 3, fontSize: isCompactHeight ? 9.5 : 11 }}
               >
                 {item.metaPlace}
               </TypewriterText>
@@ -279,7 +280,7 @@ export default function OnboardingScreen() {
             <TypewriterText
               size="xs"
               color={colors.inkSecondary}
-              style={[styles.metaPillSub, isCompactHeight && { fontSize: 9.5 }]}
+              style={[styles.metaPillSub, isCompactHeight && { fontSize: 8.5 }]}
             >
               {item.metaDetails}
             </TypewriterText>
@@ -288,14 +289,14 @@ export default function OnboardingScreen() {
       </View>
 
       {/* Content & Excitement Text Section */}
-      <View style={[styles.textSection, isCompactHeight && { maxWidth: 440 }]}>
+      <View style={[styles.textSection, isCompactHeight && { maxWidth: 380 }]}>
         <View style={[styles.tagBadge, isCompactHeight && { marginBottom: 2 }]}>
           <TypewriterText
             size="xs"
             bold
             color={colors.brickRed}
             letterSpacing={1.1}
-            style={isCompactHeight ? { fontSize: 10 } : undefined}
+            style={isCompactHeight ? { fontSize: 9.5 } : undefined}
           >
             {item.tag}
           </TypewriterText>
@@ -306,7 +307,7 @@ export default function OnboardingScreen() {
           bold
           color={colors.charcoal}
           letterSpacing={1.2}
-          style={[styles.headline, isCompactHeight && { lineHeight: 18, marginBottom: 4 }]}
+          style={[styles.headline, isCompactHeight && { lineHeight: 18, marginBottom: 3, fontSize: 14 }]}
         >
           {item.headline}
         </TypewriterText>
@@ -314,31 +315,31 @@ export default function OnboardingScreen() {
         <TypewriterText
           size="xs"
           color={colors.inkSecondary}
-          style={[styles.bodyText, isCompactHeight && { lineHeight: 15, marginBottom: 6, fontSize: 11.5 }]}
+          style={[styles.bodyText, isCompactHeight && { lineHeight: 14, marginBottom: 4, fontSize: 11 }]}
         >
           {item.body}
         </TypewriterText>
 
         {/* Value Feature Pills Row */}
-        <View style={[styles.featurePillsRow, isCompactHeight && { gap: 6, marginBottom: 2 }]}>
-          <View style={[styles.featurePill, isCompactHeight && { paddingHorizontal: 7, paddingVertical: 3 }]}>
-            <Ionicons name="checkmark-circle" size={12} color={colors.deepGreen} />
+        <View style={[styles.featurePillsRow, isCompactHeight && { gap: 6, marginBottom: 0 }]}>
+          <View style={[styles.featurePill, isCompactHeight && { paddingHorizontal: 6, paddingVertical: 2 }]}>
+            <Ionicons name="checkmark-circle" size={11} color={colors.deepGreen} />
             <TypewriterText
               size="xs"
               bold
               color={colors.charcoal}
-              style={{ marginLeft: 4, fontSize: isCompactHeight ? 10.5 : 12 }}
+              style={{ marginLeft: 3, fontSize: isCompactHeight ? 10 : 12 }}
             >
               {item.pill1}
             </TypewriterText>
           </View>
-          <View style={[styles.featurePill, isCompactHeight && { paddingHorizontal: 7, paddingVertical: 3 }]}>
-            <Ionicons name="checkmark-circle" size={12} color={colors.deepGreen} />
+          <View style={[styles.featurePill, isCompactHeight && { paddingHorizontal: 6, paddingVertical: 2 }]}>
+            <Ionicons name="checkmark-circle" size={11} color={colors.deepGreen} />
             <TypewriterText
               size="xs"
               bold
               color={colors.charcoal}
-              style={{ marginLeft: 4, fontSize: isCompactHeight ? 10.5 : 12 }}
+              style={{ marginLeft: 3, fontSize: isCompactHeight ? 10 : 12 }}
             >
               {item.pill2}
             </TypewriterText>
@@ -350,170 +351,102 @@ export default function OnboardingScreen() {
 
   return (
     <PaperContainer>
-      {Platform.OS === 'web' ? (
-        <ScrollView
-          style={{ flex: 1, width: '100%' }}
-          contentContainerStyle={styles.webScrollContent}
-          showsVerticalScrollIndicator={false}
-          bounces={false}
+      {/* Top Header Bar */}
+      <View style={styles.topBar}>
+        <View style={styles.brandPill}>
+          <TypewriterText size="xs" bold color={colors.charcoal} letterSpacing={1.5}>
+            ✦ FIELDS · TRAVEL SCRAPBOOK ✦
+          </TypewriterText>
+        </View>
+
+        <Pressable
+          onPress={handleSkip}
+          style={styles.skipButton}
+          hitSlop={14}
+          accessibilityRole="button"
+          accessibilityLabel="Skip onboarding"
         >
-          {/* Top Header Bar */}
-          <View style={styles.topBar}>
-            <View style={styles.brandPill}>
-              <TypewriterText size="xs" bold color={colors.charcoal} letterSpacing={1.5}>
-                ✦ FIELDS · TRAVEL SCRAPBOOK ✦
-              </TypewriterText>
-            </View>
+          <TypewriterText size="xs" bold color={colors.inkSecondary} letterSpacing={1}>
+            SKIP
+          </TypewriterText>
+          <Ionicons name="arrow-forward" size={14} color={colors.inkSecondary} />
+        </Pressable>
+      </View>
 
-            <Pressable
-              onPress={handleSkip}
-              style={styles.skipButton}
-              hitSlop={14}
-              accessibilityRole="button"
-              accessibilityLabel="Skip onboarding"
-            >
-              <TypewriterText size="xs" bold color={colors.inkSecondary} letterSpacing={1}>
-                SKIP
-              </TypewriterText>
-              <Ionicons name="arrow-forward" size={14} color={colors.inkSecondary} />
-            </Pressable>
-          </View>
-
-          {/* Main Slide Presentation */}
-          <View
-            style={styles.webSlideContainer}
-            onTouchStart={handleTouchStart}
-            onTouchEnd={handleTouchEnd}
-          >
-            {renderSlide(SLIDES[currentIndex])}
-          </View>
-
-          {/* Bottom Action Zone */}
-          <View style={[styles.bottomControls, isCompactHeight && { paddingBottom: spacing.sm, paddingTop: 2 }]}>
-            {/* Pagination Dots */}
-            <View style={[styles.paginationDots, isCompactHeight && { marginBottom: 6 }]}>
-              {SLIDES.map((_, idx) => (
-                <Pressable
-                  key={idx}
-                  onPress={() => handleDotPress(idx)}
-                  hitSlop={10}
-                >
-                  <View style={[styles.dot, idx === currentIndex ? styles.activeDot : styles.inactiveDot]} />
-                </Pressable>
-              ))}
-            </View>
-
-            {/* Action Button */}
-            <StampButton
-              title={isLastSlide ? 'CREATE YOUR FIRST STAMP (FREE)' : 'NEXT STEP'}
-              onPress={handleNext}
-              variant="primary"
-              style={[styles.primaryBtn, isCompactHeight && { minHeight: 42 }]}
-              icon={
-                isLastSlide ? (
-                  <Ionicons name="sparkles" size={isCompactHeight ? 15 : 17} color={colors.paper} />
-                ) : (
-                  <Ionicons name="arrow-forward" size={isCompactHeight ? 15 : 17} color={colors.paper} />
-                )
-              }
-            />
-
-            <View style={[styles.secondaryLinkRow, isCompactHeight && { marginTop: 2 }]}>
-              <Pressable onPress={() => handleFinish('home')} hitSlop={10} style={styles.secondaryLink}>
-                <TypewriterText size="xs" color={colors.inkSecondary} style={styles.secondaryLinkText}>
-                  Explore notebook first
-                </TypewriterText>
-              </Pressable>
-            </View>
-          </View>
-        </ScrollView>
+      {/* Main Slide Presentation (Web renders current slide directly, Native uses FlatList) */}
+      {Platform.OS === 'web' ? (
+        <View
+          style={styles.webSlideContainer}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
+          {renderSlide(SLIDES[currentIndex])}
+        </View>
       ) : (
-        <>
-          {/* Top Header Bar */}
-          <View style={styles.topBar}>
-            <View style={styles.brandPill}>
-              <TypewriterText size="xs" bold color={colors.charcoal} letterSpacing={1.5}>
-                ✦ FIELDS · TRAVEL SCRAPBOOK ✦
-              </TypewriterText>
-            </View>
-
-            <Pressable
-              onPress={handleSkip}
-              style={styles.skipButton}
-              hitSlop={14}
-              accessibilityRole="button"
-              accessibilityLabel="Skip onboarding"
-            >
-              <TypewriterText size="xs" bold color={colors.inkSecondary} letterSpacing={1}>
-                SKIP
-              </TypewriterText>
-              <Ionicons name="arrow-forward" size={14} color={colors.inkSecondary} />
-            </Pressable>
-          </View>
-
-          <FlatList
-            ref={flatListRef}
-            data={SLIDES}
-            keyExtractor={(item) => item.id}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onMomentumScrollEnd={handleScroll}
-            getItemLayout={(_data, index) => ({
-              length: windowWidth,
-              offset: windowWidth * index,
-              index,
-            })}
-            onScrollToIndexFailed={(info) => {
-              setTimeout(() => {
-                flatListRef.current?.scrollToOffset({
-                  offset: info.index * windowWidth,
-                  animated: true,
-                });
-              }, 50);
-            }}
-            style={styles.carousel}
-            renderItem={({ item }) => renderSlide(item)}
-          />
-
-          {/* Bottom Sticky Action Zone */}
-          <View style={styles.bottomControls}>
-            <View style={styles.paginationDots}>
-              {SLIDES.map((_, idx) => (
-                <Pressable
-                  key={idx}
-                  onPress={() => handleDotPress(idx)}
-                  hitSlop={10}
-                >
-                  <View style={[styles.dot, idx === currentIndex ? styles.activeDot : styles.inactiveDot]} />
-                </Pressable>
-              ))}
-            </View>
-
-            <StampButton
-              title={isLastSlide ? 'CREATE YOUR FIRST STAMP (FREE)' : 'NEXT STEP'}
-              onPress={handleNext}
-              variant="primary"
-              style={styles.primaryBtn}
-              icon={
-                isLastSlide ? (
-                  <Ionicons name="sparkles" size={17} color={colors.paper} />
-                ) : (
-                  <Ionicons name="arrow-forward" size={17} color={colors.paper} />
-                )
-              }
-            />
-
-            <View style={styles.secondaryLinkRow}>
-              <Pressable onPress={() => handleFinish('home')} hitSlop={10} style={styles.secondaryLink}>
-                <TypewriterText size="xs" color={colors.inkSecondary} style={styles.secondaryLinkText}>
-                  Explore notebook first
-                </TypewriterText>
-              </Pressable>
-            </View>
-          </View>
-        </>
+        <FlatList
+          ref={flatListRef}
+          data={SLIDES}
+          keyExtractor={(item) => item.id}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onMomentumScrollEnd={handleScroll}
+          getItemLayout={(_data, index) => ({
+            length: windowWidth,
+            offset: windowWidth * index,
+            index,
+          })}
+          onScrollToIndexFailed={(info) => {
+            setTimeout(() => {
+              flatListRef.current?.scrollToOffset({
+                offset: info.index * windowWidth,
+                animated: true,
+              });
+            }, 50);
+          }}
+          style={styles.carousel}
+          renderItem={({ item }) => renderSlide(item)}
+        />
       )}
+
+      {/* Bottom Sticky Action Zone - PINNED TO BOTTOM, ALWAYS IN VIEW WITHOUT SCROLLING */}
+      <View style={[styles.bottomControls, isCompactHeight && { paddingBottom: spacing.sm, paddingTop: 2 }]}>
+        {/* Pagination Dots */}
+        <View style={[styles.paginationDots, isCompactHeight && { marginBottom: 6 }]}>
+          {SLIDES.map((_, idx) => (
+            <Pressable
+              key={idx}
+              onPress={() => handleDotPress(idx)}
+              hitSlop={10}
+            >
+              <View style={[styles.dot, idx === currentIndex ? styles.activeDot : styles.inactiveDot]} />
+            </Pressable>
+          ))}
+        </View>
+
+        {/* Action Button */}
+        <StampButton
+          title={isLastSlide ? 'CREATE YOUR FIRST STAMP (FREE)' : 'NEXT STEP'}
+          onPress={handleNext}
+          variant="primary"
+          style={[styles.primaryBtn, isCompactHeight && { minHeight: 44 }]}
+          icon={
+            isLastSlide ? (
+              <Ionicons name="sparkles" size={16} color={colors.paper} />
+            ) : (
+              <Ionicons name="arrow-forward" size={16} color={colors.paper} />
+            )
+          }
+        />
+
+        <View style={[styles.secondaryLinkRow, isCompactHeight && { marginTop: 2 }]}>
+          <Pressable onPress={() => handleFinish('home')} hitSlop={10} style={styles.secondaryLink}>
+            <TypewriterText size="xs" color={colors.inkSecondary} style={styles.secondaryLinkText}>
+              Explore notebook first
+            </TypewriterText>
+          </Pressable>
+        </View>
+      </View>
     </PaperContainer>
   );
 }
@@ -702,22 +635,15 @@ const styles = StyleSheet.create({
     maxWidth: 540,
     alignSelf: 'center',
   },
-  webScrollContent: {
-    flexGrow: 1,
-    justifyContent: 'space-between',
-    paddingVertical: spacing.xs,
-    width: '100%',
-    maxWidth: 580,
-    alignSelf: 'center',
-    alignItems: 'center',
-  },
   webSlideContainer: {
+    flex: 1,
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 2,
   },
   webSlidePage: {
+    flex: 1,
     width: '100%',
     maxWidth: 540,
     alignSelf: 'center',
