@@ -53,20 +53,14 @@ export default function ComposeScreen() {
   const handleBack = () => {
     if (Platform.OS === 'web') {
       try {
-        if (router.canGoBack()) {
-          router.back();
-        } else {
-          router.replace('/app' as any);
-        }
-      } catch {
         router.replace('/app' as any);
-      }
+      } catch {}
       if (typeof window !== 'undefined') {
         setTimeout(() => {
           if (window.location.pathname.includes('/compose')) {
             window.location.href = '/app';
           }
-        }, 80);
+        }, 60);
       }
     } else if (router.canGoBack()) {
       router.back();
