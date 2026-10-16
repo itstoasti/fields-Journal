@@ -10,6 +10,7 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
@@ -90,6 +91,45 @@ export default function ResultScreen() {
 
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const flatListRef = useRef<FlatList<Note>>(null);
+
+  const { width: rnWidth, height: rnHeight } = useWindowDimensions();
+  const [webDimensions, setWebDimensions] = useState(() => ({
+    width: Platform.OS === 'web' && typeof window !== 'undefined' ? window.innerWidth : 1200,
+    height: Platform.OS === 'web' && typeof window !== 'undefined' ? window.innerHeight : 800,
+  }));
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const handleResize = () => {
+        setWebDimensions({
+          width: window.innerWidth,
+          height: window.innerHeight,
+        });
+      };
+      handleResize();
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }
+  }, []);
+
+  const windowWidth = Platform.OS === 'web' ? webDimensions.width : rnWidth;
+  const windowHeight = Platform.OS === 'web' ? webDimensions.height : rnHeight;
+
+  // Responsive card size: stays true 4:3 landscape ratio and fits cleanly between top and bottom bars
+  // Available height accounts for topBar (~55px), bottomBar (~90px), and margins/dots (~55px)
+  const availableVertical = Platform.OS === 'web'
+    ? Math.max(220, windowHeight - 200)
+    : (SCREEN_WIDTH - 32) * 0.75;
+
+  const maxAllowedHeight = Platform.OS === 'web'
+    ? Math.min(390, Math.round(availableVertical * 0.88))
+    : 300;
+
+  const cardWidth = Platform.OS === 'web'
+    ? Math.min(520, Math.round(maxAllowedHeight * (4 / 3)), windowWidth - 32)
+    : Math.min(350, windowWidth - 32);
+
+  const cardHeight = Math.round(cardWidth * (3 / 4));
 
   const activeNote = displayNotes[currentIndex] || {
     id: params.noteId,
@@ -179,7 +219,28 @@ export default function ResultScreen() {
   };
 
   const handleBackToHome = () => {
-    router.replace((Platform.OS === 'web' ? '/app' : '/') as any);
+    if (Platform.OS === 'web') {
+      try {
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.replace('/app' as any);
+        }
+      } catch {
+        router.replace('/app' as any);
+      }
+      if (typeof window !== 'undefined') {
+        setTimeout(() => {
+          if (window.location.pathname.includes('/result')) {
+            window.location.href = '/app';
+          }
+        }, 80);
+      }
+    } else if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/');
+    }
   };
 
   const handleReportPress = () => {
@@ -240,10 +301,14 @@ export default function ResultScreen() {
   return (
     <PaperContainer>
       {/* Top Bar */}
-      <View style={styles.topBar}>
+      <View style={[styles.topBar, Platform.OS === 'web' && { width: '100%', maxWidth: 560, alignSelf: 'center' }]}>
         <Pressable
           onPress={handleBackToHome}
-          style={styles.backButton}
+          style={({ pressed }) => [
+            styles.backButton,
+            pressed && { opacity: 0.6 },
+            Platform.OS === 'web' && ({ cursor: 'pointer' } as any),
+          ]}
           hitSlop={14}
           accessibilityRole="button"
           accessibilityLabel="Back to Home"
@@ -264,7 +329,11 @@ export default function ResultScreen() {
         <View style={styles.topBarRight}>
           <Pressable
             onPress={handleReportPress}
-            style={styles.headerIconButton}
+            style={({ pressed }) => [
+              styles.headerIconButton,
+              pressed && { opacity: 0.6 },
+              Platform.OS === 'web' && ({ cursor: 'pointer' } as any),
+            ]}
             hitSlop={14}
             accessibilityRole="button"
             accessibilityLabel="Report inappropriate image"
@@ -274,7 +343,11 @@ export default function ResultScreen() {
 
           <Pressable
             onPress={handleDeletePress}
-            style={styles.headerIconButton}
+            style={({ pressed }) => [
+              styles.headerIconButton,
+              pressed && { opacity: 0.6 },
+              Platform.OS === 'web' && ({ cursor: 'pointer' } as any),
+            ]}
             hitSlop={14}
             accessibilityRole="button"
             accessibilityLabel="Delete note"
@@ -284,59 +357,121 @@ export default function ResultScreen() {
         </View>
       </View>
 
-      {/* Main Horizontal Swipeable FlatList */}
+      {/* Main Horizontal Presentation */}
       <View style={styles.posterWrapper}>
-        <FlatList
-          ref={flatListRef}
-          data={displayNotes}
-          keyExtractor={(item) => item.id}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          onMomentumScrollEnd={handleScroll}
-          initialScrollIndex={initialIndex > 0 && initialIndex < displayNotes.length ? initialIndex : undefined}
-          getItemLayout={(_data, index) => ({
-            length: SCREEN_WIDTH,
-            offset: SCREEN_WIDTH * index,
-            index,
-          })}
-          renderItem={({ item }) => (
-            <View style={styles.pageContainer}>
-              <View style={styles.posterCard}>
-                {Platform.OS === 'web' ? (
-                  <img
-                    src={item.posterUri}
-                    alt="Poster preview"
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'contain',
-                      display: 'block',
-                    }}
-                  />
-                ) : (
+        {Platform.OS === 'web' ? (
+          <View style={styles.webPosterContainer}>
+            {displayNotes.length > 1 && (
+              <Pressable
+                onPress={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
+                style={[
+                  styles.webNavArrow,
+                  styles.webNavArrowLeft,
+                  currentIndex === 0 && styles.webNavArrowDisabled,
+                ]}
+                disabled={currentIndex === 0}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel="Previous note"
+              >
+                <Ionicons
+                  name="chevron-back"
+                  size={24}
+                  color={currentIndex === 0 ? colors.paperBorder : colors.charcoal}
+                />
+              </Pressable>
+            )}
+
+            <View nativeID="result-poster-card" style={[styles.posterCard, { width: cardWidth, height: cardHeight }]}>
+              <img
+                src={activeNote.posterUri}
+                alt={activeNote.place || 'Poster preview'}
+                onError={(e) => {
+                  if ((e.currentTarget as HTMLImageElement).src !== '/assets/poster_kyoto.jpg') {
+                    (e.currentTarget as HTMLImageElement).src = '/assets/poster_kyoto.jpg';
+                  }
+                }}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                  display: 'block',
+                }}
+              />
+            </View>
+
+            {displayNotes.length > 1 && (
+              <Pressable
+                onPress={() => setCurrentIndex((prev) => Math.min(displayNotes.length - 1, prev + 1))}
+                style={[
+                  styles.webNavArrow,
+                  styles.webNavArrowRight,
+                  currentIndex === displayNotes.length - 1 && styles.webNavArrowDisabled,
+                ]}
+                disabled={currentIndex === displayNotes.length - 1}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel="Next note"
+              >
+                <Ionicons
+                  name="chevron-forward"
+                  size={24}
+                  color={currentIndex === displayNotes.length - 1 ? colors.paperBorder : colors.charcoal}
+                />
+              </Pressable>
+            )}
+          </View>
+        ) : (
+          <FlatList
+            ref={flatListRef}
+            data={displayNotes}
+            keyExtractor={(item) => item.id}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={handleScroll}
+            initialScrollIndex={initialIndex > 0 && initialIndex < displayNotes.length ? initialIndex : undefined}
+            getItemLayout={(_data, index) => ({
+              length: SCREEN_WIDTH,
+              offset: SCREEN_WIDTH * index,
+              index,
+            })}
+            renderItem={({ item }) => (
+              <View style={styles.pageContainer}>
+                <View style={[styles.posterCard, { width: cardWidth, height: cardHeight }]}>
                   <Image
                     source={{ uri: item.posterUri }}
                     style={styles.posterImage}
                     resizeMode="contain"
                   />
-                )}
+                </View>
               </View>
-            </View>
-          )}
-        />
+            )}
+          />
+        )}
 
         {/* Swipe Page Indicators */}
         {displayNotes.length > 1 && (
           <View style={styles.paginationDots}>
             {displayNotes.map((_, idx) => (
-              <View
+              <Pressable
                 key={idx}
-                style={[
-                  styles.dot,
-                  idx === currentIndex ? styles.activeDot : styles.inactiveDot,
-                ]}
-              />
+                onPress={() => {
+                  setCurrentIndex(idx);
+                  if (Platform.OS !== 'web' && flatListRef.current) {
+                    flatListRef.current.scrollToIndex({ index: idx, animated: true });
+                  }
+                }}
+                hitSlop={8}
+                style={Platform.OS === 'web' ? ({ cursor: 'pointer' } as any) : undefined}
+              >
+                <View
+                  style={[
+                    styles.dot,
+                    idx === currentIndex ? styles.activeDot : styles.inactiveDot,
+                  ]}
+                />
+              </Pressable>
             ))}
           </View>
         )}
@@ -374,8 +509,8 @@ export default function ResultScreen() {
       </View>
 
       {/* Bottom Action Bar: Save, Share, New */}
-      <View style={styles.bottomBar}>
-        <View style={styles.actionsRow}>
+      <View style={[styles.bottomBar, Platform.OS === 'web' && { width: '100%', alignItems: 'center' }]}>
+        <View style={[styles.actionsRow, Platform.OS === 'web' && { maxWidth: 560 }]}>
           <StampButton
             title={savedSuccess ? 'Saved' : 'Save'}
             onPress={handleSaveToGallery}
@@ -420,12 +555,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    width: '100%',
+    maxWidth: 560,
+    alignSelf: 'center',
   },
   backButton: {
     width: 44,
     height: 44,
     alignItems: 'flex-start',
     justifyContent: 'center',
+    ...(Platform.OS === 'web' ? ({ cursor: 'pointer' } as any) : {}),
   },
   titleBox: {
     alignItems: 'center',
@@ -440,11 +579,41 @@ const styles = StyleSheet.create({
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
+    ...(Platform.OS === 'web' ? ({ cursor: 'pointer' } as any) : {}),
   },
   posterWrapper: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    width: '100%',
+  },
+  webPosterContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    gap: spacing.sm,
+  },
+  webNavArrow: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.paper,
+    borderWidth: 1,
+    borderColor: colors.paperBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.charcoal,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    cursor: 'pointer',
+  },
+  webNavArrowLeft: {},
+  webNavArrowRight: {},
+  webNavArrowDisabled: {
+    opacity: 0.2,
+    cursor: 'default',
   },
   pageContainer: {
     width: SCREEN_WIDTH,
@@ -453,14 +622,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   posterCard: {
-    width: '100%',
-    aspectRatio: layout.posterAspectRatio,
     backgroundColor: '#FFFFFF',
-    borderRadius: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.paperBorder,
     shadowColor: colors.charcoal,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
     elevation: 6,
     overflow: 'hidden',
   },
@@ -472,8 +641,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    marginTop: spacing.sm,
+    gap: 8,
+    marginTop: spacing.md,
     marginBottom: spacing.xs,
   },
   dot: {
@@ -481,7 +650,7 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   activeDot: {
-    width: 16,
+    width: 20,
     backgroundColor: colors.brickRed,
   },
   inactiveDot: {
@@ -513,11 +682,14 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xl,
     paddingTop: spacing.md,
     backgroundColor: 'rgba(244, 239, 230, 0.95)',
+    width: '100%',
+    alignItems: 'center',
   },
   actionsRow: {
     flexDirection: 'row',
     gap: spacing.sm,
     width: '100%',
+    maxWidth: 560,
   },
   actionBtn: {
     flex: 1,

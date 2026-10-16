@@ -50,6 +50,31 @@ export default function ComposeScreen() {
     }, [syncWithBackend])
   );
 
+  const handleBack = () => {
+    if (Platform.OS === 'web') {
+      try {
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.replace('/app' as any);
+        }
+      } catch {
+        router.replace('/app' as any);
+      }
+      if (typeof window !== 'undefined') {
+        setTimeout(() => {
+          if (window.location.pathname.includes('/compose')) {
+            window.location.href = '/app';
+          }
+        }, 80);
+      }
+    } else if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/');
+    }
+  };
+
   // Form states: starts empty so user provides their own photo
   const [selectedPhotoUri, setSelectedPhotoUri] = useState<string | null>(
     params.photoUri || null
@@ -426,9 +451,13 @@ export default function ComposeScreen() {
           {/* Top Bar Navigation */}
           <View style={styles.topBar}>
             <Pressable
-              onPress={() => router.back()}
-              style={styles.backButton}
-              hitSlop={12}
+              onPress={handleBack}
+              style={({ pressed }) => [
+                styles.backButton,
+                pressed && { opacity: 0.6 },
+                Platform.OS === 'web' && ({ cursor: 'pointer' } as any),
+              ]}
+              hitSlop={14}
               accessibilityRole="button"
               accessibilityLabel="Back to Notebook"
             >
@@ -672,14 +701,16 @@ export default function ComposeScreen() {
         {/* Bottom Bar with MAKE NOTE Action Button - automatically hidden while keyboard is active */}
         {!isKeyboardVisible && (
           <View style={styles.bottomBar}>
-            <StampButton
-              title={getButtonTitle()}
-              onPress={handlePressAction}
-              variant="primary"
-              disabled={!selectedPhotoUri}
-              loading={isAdLoading}
-              style={styles.actionButton}
-            />
+            <View style={styles.bottomBarInner}>
+              <StampButton
+                title={getButtonTitle()}
+                onPress={handlePressAction}
+                variant="primary"
+                disabled={!selectedPhotoUri}
+                loading={isAdLoading}
+                style={styles.actionButton}
+              />
+            </View>
           </View>
         )}
       </KeyboardAvoidingView>
@@ -689,20 +720,27 @@ export default function ComposeScreen() {
 
 const styles = StyleSheet.create({
   scrollContent: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
+    width: '100%',
+    maxWidth: 580,
+    alignSelf: 'center',
   },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
+    width: '100%',
+    maxWidth: 580,
+    alignSelf: 'center',
   },
   backButton: {
     width: 40,
     height: 40,
     alignItems: 'flex-start',
     justifyContent: 'center',
+    ...(Platform.OS === 'web' ? ({ cursor: 'pointer' } as any) : {}),
   },
   placeholder: {
     width: 40,
@@ -737,9 +775,10 @@ const styles = StyleSheet.create({
     borderColor: colors.charcoal,
     borderStyle: 'dashed',
     borderRadius: 4,
-    padding: spacing.xl,
+    padding: spacing.lg,
     alignItems: 'center',
     marginBottom: spacing.md,
+    width: '100%',
   },
   pickerPromptTitle: {
     letterSpacing: 1.5,
@@ -894,10 +933,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: spacing.lg,
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
     paddingBottom: spacing.xl,
     paddingTop: spacing.md,
     backgroundColor: 'rgba(244, 239, 230, 0.95)',
+  },
+  bottomBarInner: {
+    width: '100%',
+    maxWidth: 580,
   },
   autoDetectBadge: {
     flexDirection: 'row',
