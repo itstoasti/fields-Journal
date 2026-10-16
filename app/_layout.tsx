@@ -34,7 +34,7 @@ export default function RootLayout() {
       Animated.timing(splashFade, {
         toValue: 0,
         duration: 350,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== 'web',
       }).start(() => {
         setShowSplash(false);
       });
