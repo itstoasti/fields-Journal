@@ -225,7 +225,7 @@ export default function OnboardingScreen() {
     <View style={[styles.slidePage, Platform.OS === 'web' ? [styles.webSlidePage, { maxWidth: CONTENT_MAX_WIDTH }] : { width: windowWidth }]}>
       {/* Visual Hero Stamp Card - True 4:3 landscape ratio so it NEVER cuts off */}
       <View style={[styles.heroWrapper, !isLargeScreen && { marginBottom: 8 }]}>
-        <View style={[styles.posterFrame, { width: HERO_CARD_WIDTH }]}>
+        <View nativeID="onboarding-hero-card" style={[styles.posterFrame, { width: HERO_CARD_WIDTH }]}>
           {/* 4 Diagonal Translucent Masking Tape Strips on corners */}
           <View style={[styles.tape, styles.tapeTopLeft, !isLargeScreen && styles.tapeCompact]} pointerEvents="none" />
           <View style={[styles.tape, styles.tapeTopRight, !isLargeScreen && styles.tapeCompact]} pointerEvents="none" />
@@ -266,7 +266,7 @@ export default function OnboardingScreen() {
 
         {/* Slide 2: Archival Metadata Inset Tag */}
         {item.metaPlace && (
-          <View style={[styles.metaPillBox, { width: HERO_CARD_WIDTH }, !isLargeScreen && styles.metaPillBoxCompact]}>
+          <View nativeID="onboarding-meta-box" style={[styles.metaPillBox, { width: HERO_CARD_WIDTH }, !isLargeScreen && styles.metaPillBoxCompact]}>
             <View style={styles.metaPillHeader}>
               <Ionicons name="location-sharp" size={isLargeScreen ? 12 : 11} color={colors.brickRed} />
               <TypewriterText size="xs" bold color={colors.charcoal} letterSpacing={0.8} style={{ marginLeft: 3, fontSize: isLargeScreen ? 11 : 10.5 }}>
@@ -281,7 +281,7 @@ export default function OnboardingScreen() {
       </View>
 
       {/* Content & Excitement Text Section */}
-      <View style={[styles.textSection, { maxWidth: CONTENT_MAX_WIDTH }]}>
+      <View nativeID="onboarding-text-section" style={[styles.textSection, { maxWidth: CONTENT_MAX_WIDTH }]}>
         <View style={styles.tagBadge}>
           <TypewriterText size="xs" bold color={colors.brickRed} letterSpacing={1.2}>
             {item.tag}
@@ -289,6 +289,7 @@ export default function OnboardingScreen() {
         </View>
 
         <TypewriterText
+          nativeID="onboarding-headline"
           bold
           color={colors.charcoal}
           style={isLargeScreen ? styles.headline : styles.headlineCompact}
@@ -297,6 +298,7 @@ export default function OnboardingScreen() {
         </TypewriterText>
 
         <TypewriterText
+          nativeID="onboarding-body"
           color={colors.inkSecondary}
           style={isLargeScreen ? styles.bodyText : styles.bodyTextCompact}
         >
@@ -324,8 +326,67 @@ export default function OnboardingScreen() {
 
   return (
     <PaperContainer>
+      {Platform.OS === 'web' && (
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `
+              /* Large Desktop / 27-inch display (height >= 800px and width >= 1000px): Picture 1 layout */
+              @media screen and (min-height: 800px) and (min-width: 1000px) {
+                #onboarding-hero-card,
+                #onboarding-meta-box {
+                  width: 500px !important;
+                }
+                #onboarding-top-bar,
+                #onboarding-text-section,
+                #onboarding-bottom-controls {
+                  max-width: 500px !important;
+                }
+                #onboarding-headline {
+                  font-size: 15.5px !important;
+                  line-height: 22px !important;
+                  letter-spacing: 0.3px !important;
+                  margin-bottom: 8px !important;
+                }
+                #onboarding-body {
+                  font-size: 11.5px !important;
+                  line-height: 18px !important;
+                  margin-bottom: 8px !important;
+                }
+              }
+
+              /* 13-inch MacBook Air / compact laptop screens (height < 800px or width < 1000px) */
+              @media screen and (max-height: 799px), screen and (max-width: 999px) {
+                #onboarding-hero-card,
+                #onboarding-meta-box {
+                  width: clamp(260px, 45vh, 320px) !important;
+                }
+                #onboarding-top-bar,
+                #onboarding-text-section,
+                #onboarding-bottom-controls {
+                  max-width: 400px !important;
+                }
+                #onboarding-headline {
+                  font-size: 13.5px !important;
+                  line-height: 18px !important;
+                  letter-spacing: 0.3px !important;
+                  margin-bottom: 4px !important;
+                }
+                #onboarding-body {
+                  font-size: 10.5px !important;
+                  line-height: 15px !important;
+                  margin-bottom: 6px !important;
+                }
+                #onboarding-bottom-controls {
+                  padding-bottom: 14px !important;
+                }
+              }
+            `,
+          }}
+        />
+      )}
+
       {/* Top Header Bar */}
-      <View style={[styles.topBar, { maxWidth: CONTENT_MAX_WIDTH }]}>
+      <View nativeID="onboarding-top-bar" style={[styles.topBar, { maxWidth: CONTENT_MAX_WIDTH }]}>
         <View style={styles.brandPill}>
           <TypewriterText size="xs" bold color={colors.charcoal} letterSpacing={1.5}>
             ✦ FIELDS · TRAVEL SCRAPBOOK ✦
@@ -383,7 +444,7 @@ export default function OnboardingScreen() {
       )}
 
       {/* Bottom Sticky Action Zone */}
-      <View style={[styles.bottomControls, { maxWidth: CONTENT_MAX_WIDTH }, !isLargeScreen && { paddingBottom: spacing.md }]}>
+      <View nativeID="onboarding-bottom-controls" style={[styles.bottomControls, { maxWidth: CONTENT_MAX_WIDTH }, !isLargeScreen && { paddingBottom: spacing.md }]}>
         {/* Pagination Dots */}
         <View style={styles.paginationDots}>
           {SLIDES.map((_, idx) => (
