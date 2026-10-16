@@ -204,26 +204,33 @@ export default function OnboardingScreen() {
 
   const isLastSlide = currentIndex === SLIDES.length - 1;
 
-  // Responsive hero card width:
-  // On web: Defaults to 500px wide (matching Picture 1 "much bigger perfect size"),
-  // dynamically scaling if available viewport height is constrained (< 700px) so the bottom button never scrolls off-screen.
-  const availableHeightForCard = windowHeight > 0 ? windowHeight - 330 : 400;
-  const maxCardWidthByHeight = Math.round(availableHeightForCard * (4 / 3));
+  // Screen distinction:
+  // Large desktop (27" monitor, windowHeight >= 820): Full 500px card width, 500px text section, single-line headline and pills (Picture 1).
+  // MacBook / compact laptop (13" MacBook Air, windowHeight < 820): Card height scales to ~32% of viewport height (approx 290-330px width),
+  // leaving generous breathing room so elements never overlap and the button never scrolls.
+  const isLargeScreen = Platform.OS === 'web' && windowHeight >= 820 && windowWidth >= 1200;
+
+  const compactCardHeight = Math.min(250, Math.max(190, Math.round(windowHeight * 0.32)));
+  const compactCardWidth = Math.round(compactCardHeight * (4 / 3));
 
   const HERO_CARD_WIDTH = Platform.OS === 'web'
-    ? Math.min(500, Math.max(340, maxCardWidthByHeight), windowWidth > 0 ? windowWidth - spacing.lg * 2 : 500)
+    ? (isLargeScreen
+        ? Math.min(500, windowWidth - spacing.lg * 2)
+        : Math.min(compactCardWidth, windowWidth - spacing.lg * 2))
     : Math.min(350, windowWidth - spacing.lg * 2);
 
+  const CONTENT_MAX_WIDTH = isLargeScreen ? 500 : 420;
+
   const renderSlide = (item: OnboardingSlide) => (
-    <View style={[styles.slidePage, Platform.OS === 'web' ? styles.webSlidePage : { width: windowWidth }]}>
+    <View style={[styles.slidePage, Platform.OS === 'web' ? [styles.webSlidePage, { maxWidth: CONTENT_MAX_WIDTH }] : { width: windowWidth }]}>
       {/* Visual Hero Stamp Card - True 4:3 landscape ratio so it NEVER cuts off */}
-      <View style={styles.heroWrapper}>
+      <View style={[styles.heroWrapper, !isLargeScreen && { marginBottom: 8 }]}>
         <View style={[styles.posterFrame, { width: HERO_CARD_WIDTH }]}>
           {/* 4 Diagonal Translucent Masking Tape Strips on corners */}
-          <View style={[styles.tape, styles.tapeTopLeft]} pointerEvents="none" />
-          <View style={[styles.tape, styles.tapeTopRight]} pointerEvents="none" />
-          <View style={[styles.tape, styles.tapeBottomLeft]} pointerEvents="none" />
-          <View style={[styles.tape, styles.tapeBottomRight]} pointerEvents="none" />
+          <View style={[styles.tape, styles.tapeTopLeft, !isLargeScreen && styles.tapeCompact]} pointerEvents="none" />
+          <View style={[styles.tape, styles.tapeTopRight, !isLargeScreen && styles.tapeCompact]} pointerEvents="none" />
+          <View style={[styles.tape, styles.tapeBottomLeft, !isLargeScreen && styles.tapeCompact]} pointerEvents="none" />
+          <View style={[styles.tape, styles.tapeBottomRight, !isLargeScreen && styles.tapeCompact]} pointerEvents="none" />
 
           {/* The Uncropped 4:3 Poster */}
           <View style={styles.posterInner}>
@@ -248,9 +255,9 @@ export default function OnboardingScreen() {
             )}
 
             {/* Stamp Badge Overlay in bottom-right corner */}
-            <View style={styles.floatingSealBadge}>
-              <Ionicons name="sparkles" size={10} color={colors.oxblood} />
-              <TypewriterText size="xs" bold color={colors.oxblood} letterSpacing={0.8} style={{ marginLeft: 3, fontSize: 11 }}>
+            <View style={[styles.floatingSealBadge, !isLargeScreen && styles.floatingSealBadgeCompact]}>
+              <Ionicons name="sparkles" size={isLargeScreen ? 10 : 9} color={colors.oxblood} />
+              <TypewriterText size="xs" bold color={colors.oxblood} letterSpacing={0.8} style={{ marginLeft: 3, fontSize: isLargeScreen ? 11 : 10 }}>
                 {item.badgeLabel}
               </TypewriterText>
             </View>
@@ -259,14 +266,14 @@ export default function OnboardingScreen() {
 
         {/* Slide 2: Archival Metadata Inset Tag */}
         {item.metaPlace && (
-          <View style={[styles.metaPillBox, { width: HERO_CARD_WIDTH }]}>
+          <View style={[styles.metaPillBox, { width: HERO_CARD_WIDTH }, !isLargeScreen && styles.metaPillBoxCompact]}>
             <View style={styles.metaPillHeader}>
-              <Ionicons name="location-sharp" size={12} color={colors.brickRed} />
-              <TypewriterText size="xs" bold color={colors.charcoal} letterSpacing={0.8} style={{ marginLeft: 3, fontSize: 11 }}>
+              <Ionicons name="location-sharp" size={isLargeScreen ? 12 : 11} color={colors.brickRed} />
+              <TypewriterText size="xs" bold color={colors.charcoal} letterSpacing={0.8} style={{ marginLeft: 3, fontSize: isLargeScreen ? 11 : 10.5 }}>
                 {item.metaPlace}
               </TypewriterText>
             </View>
-            <TypewriterText size="xs" color={colors.inkSecondary} style={styles.metaPillSub}>
+            <TypewriterText size="xs" color={colors.inkSecondary} style={[styles.metaPillSub, !isLargeScreen && { fontSize: 10 }]}>
               {item.metaDetails}
             </TypewriterText>
           </View>
@@ -274,7 +281,7 @@ export default function OnboardingScreen() {
       </View>
 
       {/* Content & Excitement Text Section */}
-      <View style={styles.textSection}>
+      <View style={[styles.textSection, { maxWidth: CONTENT_MAX_WIDTH }]}>
         <View style={styles.tagBadge}>
           <TypewriterText size="xs" bold color={colors.brickRed} letterSpacing={1.2}>
             {item.tag}
@@ -284,29 +291,29 @@ export default function OnboardingScreen() {
         <TypewriterText
           bold
           color={colors.charcoal}
-          style={styles.headline}
+          style={isLargeScreen ? styles.headline : styles.headlineCompact}
         >
           {item.headline}
         </TypewriterText>
 
         <TypewriterText
           color={colors.inkSecondary}
-          style={styles.bodyText}
+          style={isLargeScreen ? styles.bodyText : styles.bodyTextCompact}
         >
           {item.body}
         </TypewriterText>
 
         {/* Value Feature Pills Row */}
         <View style={styles.featurePillsRow}>
-          <View style={styles.featurePill}>
-            <Ionicons name="checkmark-circle" size={13} color={colors.deepGreen} />
-            <TypewriterText size="xs" bold color={colors.charcoal} style={{ marginLeft: 5, fontSize: 12 }}>
+          <View style={[styles.featurePill, !isLargeScreen && styles.featurePillCompact]}>
+            <Ionicons name="checkmark-circle" size={isLargeScreen ? 13 : 12} color={colors.deepGreen} />
+            <TypewriterText size="xs" bold color={colors.charcoal} style={{ marginLeft: 5, fontSize: isLargeScreen ? 12 : 11 }}>
               {item.pill1}
             </TypewriterText>
           </View>
-          <View style={styles.featurePill}>
-            <Ionicons name="checkmark-circle" size={13} color={colors.deepGreen} />
-            <TypewriterText size="xs" bold color={colors.charcoal} style={{ marginLeft: 5, fontSize: 12 }}>
+          <View style={[styles.featurePill, !isLargeScreen && styles.featurePillCompact]}>
+            <Ionicons name="checkmark-circle" size={isLargeScreen ? 13 : 12} color={colors.deepGreen} />
+            <TypewriterText size="xs" bold color={colors.charcoal} style={{ marginLeft: 5, fontSize: isLargeScreen ? 12 : 11 }}>
               {item.pill2}
             </TypewriterText>
           </View>
@@ -318,7 +325,7 @@ export default function OnboardingScreen() {
   return (
     <PaperContainer>
       {/* Top Header Bar */}
-      <View style={styles.topBar}>
+      <View style={[styles.topBar, { maxWidth: CONTENT_MAX_WIDTH }]}>
         <View style={styles.brandPill}>
           <TypewriterText size="xs" bold color={colors.charcoal} letterSpacing={1.5}>
             ✦ FIELDS · TRAVEL SCRAPBOOK ✦
@@ -376,7 +383,7 @@ export default function OnboardingScreen() {
       )}
 
       {/* Bottom Sticky Action Zone */}
-      <View style={styles.bottomControls}>
+      <View style={[styles.bottomControls, { maxWidth: CONTENT_MAX_WIDTH }, !isLargeScreen && { paddingBottom: spacing.md }]}>
         {/* Pagination Dots */}
         <View style={styles.paginationDots}>
           {SLIDES.map((_, idx) => (
@@ -592,11 +599,11 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   headlineCompact: {
-    fontSize: 13.5,
-    lineHeight: 18,
-    marginBottom: 4,
+    fontSize: 14,
+    lineHeight: 19,
+    marginBottom: 6,
     fontWeight: '900',
-    letterSpacing: 0.4,
+    letterSpacing: 0.3,
   },
   bodyText: {
     fontSize: 11.5,
@@ -605,7 +612,7 @@ const styles = StyleSheet.create({
   },
   bodyTextCompact: {
     fontSize: 10.5,
-    lineHeight: 15,
+    lineHeight: 15.5,
     marginBottom: 6,
   },
   featurePillsRow: {
@@ -623,6 +630,10 @@ const styles = StyleSheet.create({
     borderColor: colors.paperBorder,
     paddingHorizontal: 9,
     paddingVertical: 5,
+  },
+  featurePillCompact: {
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
   },
   bottomControls: {
     paddingHorizontal: spacing.xs,
