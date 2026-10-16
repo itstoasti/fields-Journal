@@ -93,7 +93,28 @@ export default function OnboardingScreen() {
   const setHasSeenOnboarding = useAppStore((state) => state.setHasSeenOnboarding);
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList<OnboardingSlide>>(null);
-  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const { width: rnWidth, height: rnHeight } = useWindowDimensions();
+  const [webDimensions, setWebDimensions] = useState(() => ({
+    width: Platform.OS === 'web' && typeof window !== 'undefined' ? window.innerWidth : 1200,
+    height: Platform.OS === 'web' && typeof window !== 'undefined' ? window.innerHeight : 900,
+  }));
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const handleResize = () => {
+        setWebDimensions({
+          width: window.innerWidth,
+          height: window.innerHeight,
+        });
+      };
+      handleResize();
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }
+  }, []);
+
+  const windowWidth = Platform.OS === 'web' ? webDimensions.width : rnWidth;
+  const windowHeight = Platform.OS === 'web' ? webDimensions.height : rnHeight;
 
   useEffect(() => {
     trackEvent(AnalyticsEvents.ONBOARDING_MODAL_SHOWN);
@@ -183,26 +204,26 @@ export default function OnboardingScreen() {
 
   const isLastSlide = currentIndex === SLIDES.length - 1;
 
-  // Balanced responsive sizing:
-  // On desktop / large displays (e.g. 27" monitor, windowHeight >= 700 and windowWidth >= 560):
-  // Full 500px hero card, 520px text section, single-line headline and pills (matching Picture 1).
-  // On compact viewports (e.g. 13" MacBook Air with short window height < 700):
-  // Dynamically scales card width down to 320-360px with compact spacing so the button never scrolls.
-  const isCompact = windowHeight < 700 || windowWidth < 560;
-  const HERO_CARD_WIDTH = isCompact
-    ? Math.min(360, Math.max(260, Math.round((windowHeight - 360) * (4 / 3))))
-    : Math.min(500, windowWidth - spacing.lg * 2);
+  // Responsive hero card width:
+  // On web: Defaults to 500px wide (matching Picture 1 "much bigger perfect size"),
+  // dynamically scaling if available viewport height is constrained (< 700px) so the bottom button never scrolls off-screen.
+  const availableHeightForCard = windowHeight > 0 ? windowHeight - 330 : 400;
+  const maxCardWidthByHeight = Math.round(availableHeightForCard * (4 / 3));
+
+  const HERO_CARD_WIDTH = Platform.OS === 'web'
+    ? Math.min(500, Math.max(340, maxCardWidthByHeight), windowWidth > 0 ? windowWidth - spacing.lg * 2 : 500)
+    : Math.min(350, windowWidth - spacing.lg * 2);
 
   const renderSlide = (item: OnboardingSlide) => (
     <View style={[styles.slidePage, Platform.OS === 'web' ? styles.webSlidePage : { width: windowWidth }]}>
       {/* Visual Hero Stamp Card - True 4:3 landscape ratio so it NEVER cuts off */}
-      <View style={[styles.heroWrapper, isCompact && { marginBottom: 10 }]}>
+      <View style={styles.heroWrapper}>
         <View style={[styles.posterFrame, { width: HERO_CARD_WIDTH }]}>
           {/* 4 Diagonal Translucent Masking Tape Strips on corners */}
-          <View style={[styles.tape, styles.tapeTopLeft, isCompact && styles.tapeCompact]} pointerEvents="none" />
-          <View style={[styles.tape, styles.tapeTopRight, isCompact && styles.tapeCompact]} pointerEvents="none" />
-          <View style={[styles.tape, styles.tapeBottomLeft, isCompact && styles.tapeCompact]} pointerEvents="none" />
-          <View style={[styles.tape, styles.tapeBottomRight, isCompact && styles.tapeCompact]} pointerEvents="none" />
+          <View style={[styles.tape, styles.tapeTopLeft]} pointerEvents="none" />
+          <View style={[styles.tape, styles.tapeTopRight]} pointerEvents="none" />
+          <View style={[styles.tape, styles.tapeBottomLeft]} pointerEvents="none" />
+          <View style={[styles.tape, styles.tapeBottomRight]} pointerEvents="none" />
 
           {/* The Uncropped 4:3 Poster */}
           <View style={styles.posterInner}>
@@ -227,9 +248,9 @@ export default function OnboardingScreen() {
             )}
 
             {/* Stamp Badge Overlay in bottom-right corner */}
-            <View style={[styles.floatingSealBadge, isCompact && styles.floatingSealBadgeCompact]}>
-              <Ionicons name="sparkles" size={isCompact ? 9 : 10} color={colors.oxblood} />
-              <TypewriterText size="xs" bold color={colors.oxblood} letterSpacing={0.8} style={{ marginLeft: 3, fontSize: isCompact ? 10 : 11 }}>
+            <View style={styles.floatingSealBadge}>
+              <Ionicons name="sparkles" size={10} color={colors.oxblood} />
+              <TypewriterText size="xs" bold color={colors.oxblood} letterSpacing={0.8} style={{ marginLeft: 3, fontSize: 11 }}>
                 {item.badgeLabel}
               </TypewriterText>
             </View>
@@ -238,14 +259,14 @@ export default function OnboardingScreen() {
 
         {/* Slide 2: Archival Metadata Inset Tag */}
         {item.metaPlace && (
-          <View style={[styles.metaPillBox, { width: HERO_CARD_WIDTH }, isCompact && styles.metaPillBoxCompact]}>
+          <View style={[styles.metaPillBox, { width: HERO_CARD_WIDTH }]}>
             <View style={styles.metaPillHeader}>
-              <Ionicons name="location-sharp" size={isCompact ? 11 : 12} color={colors.brickRed} />
-              <TypewriterText size="xs" bold color={colors.charcoal} letterSpacing={0.8} style={{ marginLeft: 3, fontSize: isCompact ? 10.5 : 11 }}>
+              <Ionicons name="location-sharp" size={12} color={colors.brickRed} />
+              <TypewriterText size="xs" bold color={colors.charcoal} letterSpacing={0.8} style={{ marginLeft: 3, fontSize: 11 }}>
                 {item.metaPlace}
               </TypewriterText>
             </View>
-            <TypewriterText size="xs" color={colors.inkSecondary} style={[styles.metaPillSub, isCompact && { fontSize: 10 }]}>
+            <TypewriterText size="xs" color={colors.inkSecondary} style={styles.metaPillSub}>
               {item.metaDetails}
             </TypewriterText>
           </View>
@@ -254,8 +275,8 @@ export default function OnboardingScreen() {
 
       {/* Content & Excitement Text Section */}
       <View style={styles.textSection}>
-        <View style={[styles.tagBadge, isCompact && { marginBottom: 2 }]}>
-          <TypewriterText size="xs" bold color={colors.brickRed} letterSpacing={1.2} style={isCompact ? { fontSize: 10 } : undefined}>
+        <View style={styles.tagBadge}>
+          <TypewriterText size="xs" bold color={colors.brickRed} letterSpacing={1.2}>
             {item.tag}
           </TypewriterText>
         </View>
@@ -263,29 +284,29 @@ export default function OnboardingScreen() {
         <TypewriterText
           bold
           color={colors.charcoal}
-          style={isCompact ? styles.headlineCompact : styles.headline}
+          style={styles.headline}
         >
           {item.headline}
         </TypewriterText>
 
         <TypewriterText
           color={colors.inkSecondary}
-          style={isCompact ? styles.bodyTextCompact : styles.bodyText}
+          style={styles.bodyText}
         >
           {item.body}
         </TypewriterText>
 
         {/* Value Feature Pills Row */}
-        <View style={[styles.featurePillsRow, isCompact && { gap: 6, marginBottom: spacing.xs }]}>
-          <View style={[styles.featurePill, isCompact && { paddingHorizontal: 8, paddingVertical: 4 }]}>
-            <Ionicons name="checkmark-circle" size={isCompact ? 12 : 13} color={colors.deepGreen} />
-            <TypewriterText size="xs" bold color={colors.charcoal} style={{ marginLeft: 5, fontSize: isCompact ? 11 : 12 }}>
+        <View style={styles.featurePillsRow}>
+          <View style={styles.featurePill}>
+            <Ionicons name="checkmark-circle" size={13} color={colors.deepGreen} />
+            <TypewriterText size="xs" bold color={colors.charcoal} style={{ marginLeft: 5, fontSize: 12 }}>
               {item.pill1}
             </TypewriterText>
           </View>
-          <View style={[styles.featurePill, isCompact && { paddingHorizontal: 8, paddingVertical: 4 }]}>
-            <Ionicons name="checkmark-circle" size={isCompact ? 12 : 13} color={colors.deepGreen} />
-            <TypewriterText size="xs" bold color={colors.charcoal} style={{ marginLeft: 5, fontSize: isCompact ? 11 : 12 }}>
+          <View style={styles.featurePill}>
+            <Ionicons name="checkmark-circle" size={13} color={colors.deepGreen} />
+            <TypewriterText size="xs" bold color={colors.charcoal} style={{ marginLeft: 5, fontSize: 12 }}>
               {item.pill2}
             </TypewriterText>
           </View>
@@ -297,7 +318,7 @@ export default function OnboardingScreen() {
   return (
     <PaperContainer>
       {/* Top Header Bar */}
-      <View style={[styles.topBar, isCompact && { paddingBottom: spacing.xs }]}>
+      <View style={styles.topBar}>
         <View style={styles.brandPill}>
           <TypewriterText size="xs" bold color={colors.charcoal} letterSpacing={1.5}>
             ✦ FIELDS · TRAVEL SCRAPBOOK ✦
@@ -355,9 +376,9 @@ export default function OnboardingScreen() {
       )}
 
       {/* Bottom Sticky Action Zone */}
-      <View style={[styles.bottomControls, isCompact && { paddingBottom: spacing.md }]}>
+      <View style={styles.bottomControls}>
         {/* Pagination Dots */}
-        <View style={[styles.paginationDots, isCompact && { marginBottom: 6 }]}>
+        <View style={styles.paginationDots}>
           {SLIDES.map((_, idx) => (
             <Pressable
               key={idx}
@@ -401,11 +422,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.xs,
     paddingTop: spacing.xs,
     paddingBottom: spacing.sm,
     width: '100%',
-    maxWidth: 520,
+    maxWidth: 500,
     alignSelf: 'center',
   },
   brandPill: {
@@ -556,7 +577,7 @@ const styles = StyleSheet.create({
   },
   textSection: {
     width: '100%',
-    maxWidth: 520,
+    maxWidth: 500,
     alignSelf: 'center',
     paddingHorizontal: spacing.xs,
   },
@@ -564,11 +585,11 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   headline: {
-    fontSize: 16,
+    fontSize: 15.5,
     lineHeight: 22,
     marginBottom: 8,
     fontWeight: '900',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
   headlineCompact: {
     fontSize: 13.5,
@@ -604,11 +625,11 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   bottomControls: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.xs,
     paddingBottom: spacing.lg,
     paddingTop: spacing.xs,
     width: '100%',
-    maxWidth: 520,
+    maxWidth: 500,
     alignSelf: 'center',
   },
   webSlideContainer: {
@@ -620,11 +641,11 @@ const styles = StyleSheet.create({
   webSlidePage: {
     flex: 1,
     width: '100%',
-    maxWidth: 520,
+    maxWidth: 500,
     alignSelf: 'center',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.xs,
   },
   paginationDots: {
     flexDirection: 'row',
