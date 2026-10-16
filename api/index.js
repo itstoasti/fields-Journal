@@ -11838,6 +11838,37 @@ async function initDb() {
       );
     `);
     await client.execute(`CREATE UNIQUE INDEX IF NOT EXISTS idx_blog_media_filename ON blog_media (filename);`);
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS completed_notes_cache (
+        request_fingerprint TEXT PRIMARY KEY,
+        note_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        device_id TEXT,
+        place TEXT,
+        number TEXT,
+        image_base64 TEXT NOT NULL,
+        model_used TEXT,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL
+      );
+    `);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_completed_notes_expires ON completed_notes_cache (expires_at);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_completed_notes_note_id ON completed_notes_cache (note_id);`);
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS generation_attempts (
+        id TEXT PRIMARY KEY,
+        request_fingerprint TEXT NOT NULL,
+        installation_id TEXT NOT NULL,
+        device_id TEXT,
+        entitlement_used TEXT NOT NULL,
+        retry_count INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_gen_attempts_fingerprint ON generation_attempts (request_fingerprint);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_gen_attempts_created ON generation_attempts (created_at);`);
     console.log(`[Database] Initialized successfully (${isTurso ? "Turso Cloud" : "Local SQLite"})`);
   } catch (err) {
     console.error("[Database] Schema initialization warning:", err);
@@ -12113,13 +12144,74 @@ function determineEntitlement(user) {
   }
   return "paywall";
 }
-async function reserveEntitlement(installationId, deviceId, rcUserId) {
+async function recordGenerationAttempt(requestFingerprint, installationId, deviceId, entitlementUsed) {
+  const id = `att_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  try {
+    await client.execute({
+      sql: `INSERT INTO generation_attempts (id, request_fingerprint, installation_id, device_id, entitlement_used, retry_count, status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 0, 'pending', ?, ?)`,
+      args: [id, requestFingerprint, installationId, deviceId || null, entitlementUsed, now, now]
+    });
+  } catch (err) {
+    console.warn("[Database] Failed to record generation attempt:", err);
+  }
+  return id;
+}
+async function updateGenerationAttemptStatus(attemptId, status) {
+  try {
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    await client.execute({
+      sql: `UPDATE generation_attempts SET status = ?, updated_at = ? WHERE id = ?`,
+      args: [status, now, attemptId]
+    });
+  } catch (err) {
+    console.warn("[Database] Failed to update attempt status:", err);
+  }
+}
+async function reserveEntitlement(installationId, deviceId, rcUserId, requestFingerprint) {
   const user = await getOrCreateUser(installationId, rcUserId, deviceId);
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const targetId = user.installation_id;
+  if (requestFingerprint) {
+    try {
+      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1e3).toISOString();
+      const attemptRes = await client.execute({
+        sql: `SELECT * FROM generation_attempts 
+              WHERE request_fingerprint = ? 
+                AND status IN ('pending', 'failed')
+                AND created_at > ?
+              ORDER BY created_at DESC LIMIT 1`,
+        args: [requestFingerprint, tenMinutesAgo]
+      });
+      if (attemptRes.rows.length > 0) {
+        const attempt = attemptRes.rows[0];
+        const retryCount = Number(attempt.retry_count || 0);
+        if (retryCount < 2) {
+          await client.execute({
+            sql: `UPDATE generation_attempts 
+                  SET retry_count = retry_count + 1, updated_at = ? 
+                  WHERE id = ?`,
+            args: [now, String(attempt.id)]
+          });
+          console.log(`[Entitlement] Retry grace granted for attempt ${attempt.id} (${attempt.entitlement_used}, retry #${retryCount + 1}) to user ${targetId}`);
+          return {
+            success: true,
+            entitlement: attempt.entitlement_used,
+            user,
+            attemptId: String(attempt.id),
+            isRetryGrace: true
+          };
+        }
+      }
+    } catch (attemptErr) {
+      console.warn("[Entitlement] Retry grace lookup warning:", attemptErr);
+    }
+  }
   if (user.is_pro) {
     if (!user.pro_expires_at || new Date(user.pro_expires_at).getTime() > Date.now()) {
-      return { success: true, entitlement: "pro", user };
+      const attemptId = requestFingerprint ? await recordGenerationAttempt(requestFingerprint, targetId, deviceId, "pro") : void 0;
+      return { success: true, entitlement: "pro", user, attemptId };
     }
   }
   if (user.free_used < 2) {
@@ -12131,7 +12223,8 @@ async function reserveEntitlement(installationId, deviceId, rcUserId) {
     });
     if (res.rowsAffected > 0) {
       user.free_used += 1;
-      return { success: true, entitlement: "free", user };
+      const attemptId = requestFingerprint ? await recordGenerationAttempt(requestFingerprint, targetId, deviceId, "free") : void 0;
+      return { success: true, entitlement: "free", user, attemptId };
     }
   }
   if (user.free_used >= 2 && user.ad_used === 0) {
@@ -12143,7 +12236,8 @@ async function reserveEntitlement(installationId, deviceId, rcUserId) {
     });
     if (res.rowsAffected > 0) {
       user.ad_used = 1;
-      return { success: true, entitlement: "ad", user };
+      const attemptId = requestFingerprint ? await recordGenerationAttempt(requestFingerprint, targetId, deviceId, "ad") : void 0;
+      return { success: true, entitlement: "ad", user, attemptId };
     }
   }
   const creditRes = await client.execute({
@@ -12154,7 +12248,8 @@ async function reserveEntitlement(installationId, deviceId, rcUserId) {
   });
   if (creditRes.rowsAffected > 0) {
     user.credits -= 1;
-    return { success: true, entitlement: "credit", user };
+    const attemptId = requestFingerprint ? await recordGenerationAttempt(requestFingerprint, targetId, deviceId, "credit") : void 0;
+    return { success: true, entitlement: "credit", user, attemptId };
   }
   return {
     success: false,
@@ -13255,6 +13350,99 @@ async function deleteBlogMedia(filenameOrId) {
     args: [filenameOrId, filenameOrId]
   });
   return (res.rowsAffected || 0) > 0;
+}
+async function getCachedCompletedNote(requestFingerprint) {
+  try {
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const res = await client.execute({
+      sql: `SELECT * FROM completed_notes_cache 
+            WHERE request_fingerprint = ? AND expires_at > ? 
+            LIMIT 1`,
+      args: [requestFingerprint, now]
+    });
+    if (res.rows.length > 0) {
+      const r = res.rows[0];
+      return {
+        request_fingerprint: String(r.request_fingerprint),
+        note_id: String(r.note_id),
+        user_id: String(r.user_id),
+        device_id: r.device_id ? String(r.device_id) : null,
+        place: r.place ? String(r.place) : null,
+        number: r.number ? String(r.number) : null,
+        image_base64: String(r.image_base64),
+        model_used: r.model_used ? String(r.model_used) : null,
+        created_at: String(r.created_at),
+        expires_at: String(r.expires_at)
+      };
+    }
+  } catch (err) {
+    console.warn("[Database] Failed to retrieve cached completed note:", err);
+  }
+  return null;
+}
+async function getCompletedNoteById(noteId) {
+  try {
+    const res = await client.execute({
+      sql: `SELECT * FROM completed_notes_cache WHERE note_id = ? LIMIT 1`,
+      args: [noteId]
+    });
+    if (res.rows.length > 0) {
+      const r = res.rows[0];
+      return {
+        request_fingerprint: String(r.request_fingerprint),
+        note_id: String(r.note_id),
+        user_id: String(r.user_id),
+        device_id: r.device_id ? String(r.device_id) : null,
+        place: r.place ? String(r.place) : null,
+        number: r.number ? String(r.number) : null,
+        image_base64: String(r.image_base64),
+        model_used: r.model_used ? String(r.model_used) : null,
+        created_at: String(r.created_at),
+        expires_at: String(r.expires_at)
+      };
+    }
+  } catch (err) {
+    console.warn("[Database] Failed to get note by ID:", err);
+  }
+  return null;
+}
+async function saveCompletedNoteCache(params) {
+  const ttl = params.ttlHours || 24;
+  const now = /* @__PURE__ */ new Date();
+  const createdAt = now.toISOString();
+  const expiresAt = new Date(now.getTime() + ttl * 60 * 60 * 1e3).toISOString();
+  try {
+    await client.execute({
+      sql: `INSERT OR REPLACE INTO completed_notes_cache 
+            (request_fingerprint, note_id, user_id, device_id, place, number, image_base64, model_used, created_at, expires_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        params.requestFingerprint,
+        params.noteId,
+        params.userId,
+        params.deviceId || null,
+        params.place || null,
+        params.number || null,
+        params.imageBase64,
+        params.modelUsed || null,
+        createdAt,
+        expiresAt
+      ]
+    });
+    if (Math.random() < 0.05) {
+      client.execute({
+        sql: `DELETE FROM completed_notes_cache WHERE expires_at < ?`,
+        args: [createdAt]
+      }).catch(() => {
+      });
+      client.execute({
+        sql: `DELETE FROM generation_attempts WHERE created_at < datetime('now', '-7 days')`
+      }).catch(() => {
+      });
+    }
+  } catch (err) {
+    console.warn("[Database] Failed to cache completed note:", err);
+  }
 }
 
 // server/src/prompt.ts
@@ -17676,10 +17864,29 @@ app.post("/v1/events", async (c) => {
 });
 var keywordRateLimitMap = /* @__PURE__ */ new Map();
 var freeGenerationIpMap = /* @__PURE__ */ new Map();
+app.get("/v1/notes/:id/image", async (c) => {
+  const noteId = c.req.param("id");
+  if (!noteId) {
+    return c.text("Not found", 404);
+  }
+  const cached = await getCompletedNoteById(noteId);
+  if (!cached || !cached.image_base64) {
+    return c.text("Image not found or expired", 404);
+  }
+  const cleanBase64 = cached.image_base64.replace(/^data:image\/\w+;base64,/, "");
+  const imageBuf = import_node_buffer.Buffer.from(cleanBase64, "base64");
+  return c.body(imageBuf, 200, {
+    "Content-Type": "image/jpeg",
+    "Content-Length": imageBuf.length.toString(),
+    "Cache-Control": "public, max-age=86400, immutable"
+  });
+});
 app.post("/v1/notes", async (c) => {
   const noteId = `fn_${Date.now()}_${import_node_crypto.default.randomBytes(4).toString("hex")}`;
   let installationId = "";
   let deviceId;
+  let attemptId;
+  let isRetryGrace = false;
   try {
     const contentType = c.req.header("Content-Type") || "";
     let imageBuffer;
@@ -17753,7 +17960,34 @@ app.post("/v1/notes", async (c) => {
     if (!deviceId || typeof deviceId !== "string" || deviceId.trim().length < 6 || deviceId.length > 128) {
       return c.json({ error: "MISSING_DEVICE_ID", message: "Valid persistent deviceId is required." }, 400);
     }
-    const reservation = await reserveEntitlement(installationId, deviceId, rcUserId);
+    const imageHash = import_node_crypto.default.createHash("sha256").update(imageBuffer).digest("hex");
+    const requestFingerprint = import_node_crypto.default.createHash("sha256").update(`${installationId}:${place}:${number2}:${imageHash}`).digest("hex");
+    const cachedNote = await getCachedCompletedNote(requestFingerprint);
+    if (cachedNote) {
+      console.log(`[Notes] Cache hit for fingerprint ${requestFingerprint} (noteId: ${cachedNote.note_id}). Returning existing artwork.`);
+      const user = await getOrCreateUser(installationId, void 0, deviceId);
+      const host2 = c.req.header("host") || "travel-scrapbook.com";
+      const protocol2 = host2.includes("localhost") ? "http" : "https";
+      const baseUrl2 = `${protocol2}://${host2}`;
+      return c.json({
+        success: true,
+        noteId: cachedNote.note_id,
+        imageBase64: cachedNote.image_base64,
+        imageUrl: `${baseUrl2}/v1/notes/${cachedNote.note_id}/image`,
+        modelUsed: cachedNote.model_used || "grok-imagine-image-2.0",
+        cached: true,
+        userState: {
+          freeUsed: user.free_used,
+          adUsed: Boolean(user.ad_used),
+          credits: user.credits,
+          isPro: Boolean(user.is_pro),
+          entitlement: determineEntitlement(user)
+        }
+      });
+    }
+    const reservation = await reserveEntitlement(installationId, deviceId, rcUserId, requestFingerprint);
+    attemptId = reservation.attemptId;
+    isRetryGrace = Boolean(reservation.isRetryGrace);
     if (!reservation.success) {
       return c.json({
         error: "PAYWALL_REQUIRED",
@@ -17774,7 +18008,9 @@ app.post("/v1/notes", async (c) => {
       const now = Date.now();
       const ipRecord = freeGenerationIpMap.get(clientIp);
       if (ipRecord && now < ipRecord.resetAt && ipRecord.count >= 6) {
-        await rollbackEntitlement(installationId, effectiveEntitlement, deviceId);
+        if (!isRetryGrace) {
+          await rollbackEntitlement(installationId, effectiveEntitlement, deviceId);
+        }
         return c.json({
           error: "FREE_LIMIT_REACHED",
           message: "Free note limit reached for this network. Please purchase a note pack or upgrade to Pro to continue.",
@@ -17801,7 +18037,7 @@ app.post("/v1/notes", async (c) => {
     });
     const serverActiveModel = await getSystemSetting("active_model", "grok-imagine-image-2.0");
     const effectiveModel = serverActiveModel || model || "grok-imagine-image-2.0";
-    console.log(`[Notes] Generating note ${noteId} for ${installationId} under reserved "${effectiveEntitlement}" with model ${effectiveModel}...`);
+    console.log(`[Notes] Generating note ${noteId} for ${installationId} under reserved "${effectiveEntitlement}" (retryGrace: ${isRetryGrace}) with model ${effectiveModel}...`);
     const isGeminiModel = effectiveModel?.toLowerCase().startsWith("gemini");
     let result;
     try {
@@ -17831,8 +18067,30 @@ app.post("/v1/notes", async (c) => {
         });
       }
     } catch (genErr) {
-      await rollbackEntitlement(installationId, effectiveEntitlement, deviceId);
+      if (attemptId) {
+        await updateGenerationAttemptStatus(attemptId, "failed");
+      }
+      if (!isRetryGrace) {
+        await rollbackEntitlement(installationId, effectiveEntitlement, deviceId);
+      }
       throw genErr;
+    }
+    const host = c.req.header("host") || "travel-scrapbook.com";
+    const protocol = host.includes("localhost") ? "http" : "https";
+    const baseUrl = `${protocol}://${host}`;
+    const generatedImageUrl = `${baseUrl}/v1/notes/${noteId}/image`;
+    await saveCompletedNoteCache({
+      requestFingerprint,
+      noteId,
+      userId: installationId,
+      deviceId,
+      place,
+      number: number2,
+      imageBase64: result.imageBase64 || "",
+      modelUsed: result.modelUsed
+    });
+    if (attemptId) {
+      await updateGenerationAttemptStatus(attemptId, "completed");
     }
     await logGenerationRecord(noteId, installationId, place, number2, "success", result.modelUsed);
     const updatedUser = await getOrCreateUser(installationId, void 0, deviceId);
@@ -17840,7 +18098,7 @@ app.post("/v1/notes", async (c) => {
       success: true,
       noteId,
       imageBase64: result.imageBase64,
-      imageUrl: result.imageUrl,
+      imageUrl: generatedImageUrl,
       modelUsed: result.modelUsed,
       userState: {
         freeUsed: updatedUser.free_used,
@@ -17870,6 +18128,9 @@ app.post("/v1/notes", async (c) => {
       tip = "Please check your connection and tap Retry to try pressing again.";
     }
     console.error(`[Notes] Generation error (${errorCode}): ${err.message}`);
+    if (attemptId) {
+      await updateGenerationAttemptStatus(attemptId, "failed");
+    }
     await logGenerationRecord(noteId, installationId, "", "", "failed", `${errorCode}: ${err.message}`);
     const user = await getOrCreateUser(installationId, void 0, deviceId);
     return c.json({

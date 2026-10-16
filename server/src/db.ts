@@ -204,6 +204,40 @@ export async function initDb(): Promise<void> {
       );
     `);
     await client.execute(`CREATE UNIQUE INDEX IF NOT EXISTS idx_blog_media_filename ON blog_media (filename);`);
+
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS completed_notes_cache (
+        request_fingerprint TEXT PRIMARY KEY,
+        note_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        device_id TEXT,
+        place TEXT,
+        number TEXT,
+        image_base64 TEXT NOT NULL,
+        model_used TEXT,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL
+      );
+    `);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_completed_notes_expires ON completed_notes_cache (expires_at);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_completed_notes_note_id ON completed_notes_cache (note_id);`);
+
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS generation_attempts (
+        id TEXT PRIMARY KEY,
+        request_fingerprint TEXT NOT NULL,
+        installation_id TEXT NOT NULL,
+        device_id TEXT,
+        entitlement_used TEXT NOT NULL,
+        retry_count INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_gen_attempts_fingerprint ON generation_attempts (request_fingerprint);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_gen_attempts_created ON generation_attempts (created_at);`);
+
     console.log(`[Database] Initialized successfully (${isTurso ? 'Turso Cloud' : 'Local SQLite'})`);
   } catch (err) {
     console.error('[Database] Schema initialization warning:', err);
@@ -563,25 +597,106 @@ export interface ReservationResult {
   entitlement: EntitlementStatus;
   user: UserRecord;
   error?: string;
+  attemptId?: string;
+  isRetryGrace?: boolean;
+}
+
+export async function recordGenerationAttempt(
+  requestFingerprint: string,
+  installationId: string,
+  deviceId: string | undefined,
+  entitlementUsed: string
+): Promise<string> {
+  const id = `att_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const now = new Date().toISOString();
+  try {
+    await client.execute({
+      sql: `INSERT INTO generation_attempts (id, request_fingerprint, installation_id, device_id, entitlement_used, retry_count, status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 0, 'pending', ?, ?)`,
+      args: [id, requestFingerprint, installationId, deviceId || null, entitlementUsed, now, now],
+    });
+  } catch (err) {
+    console.warn('[Database] Failed to record generation attempt:', err);
+  }
+  return id;
+}
+
+export async function updateGenerationAttemptStatus(
+  attemptId: string,
+  status: 'completed' | 'failed'
+): Promise<void> {
+  try {
+    const now = new Date().toISOString();
+    await client.execute({
+      sql: `UPDATE generation_attempts SET status = ?, updated_at = ? WHERE id = ?`,
+      args: [status, now, attemptId],
+    });
+  } catch (err) {
+    console.warn('[Database] Failed to update attempt status:', err);
+  }
 }
 
 /**
  * Atomically reserves a generation slot BEFORE invoking the AI model.
  * Eliminates TOCTOU race conditions where multiple parallel requests consume a single credit.
+ * Grants a 10-minute retry grace for unfulfilled generation attempts on the same photo.
  */
 export async function reserveEntitlement(
   installationId: string,
   deviceId?: string,
-  rcUserId?: string
+  rcUserId?: string,
+  requestFingerprint?: string
 ): Promise<ReservationResult> {
   const user = await getOrCreateUser(installationId, rcUserId, deviceId);
   const now = new Date().toISOString();
   const targetId = user.installation_id;
 
+  // 0. Retry Grace Check:
+  // If this exact request fingerprint was attempted recently (< 10 minutes ago)
+  // and did not complete (e.g. client network timeout or dropped connection),
+  // grant retry grace under the original entitlement without re-charging or paywalling.
+  if (requestFingerprint) {
+    try {
+      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+      const attemptRes = await client.execute({
+        sql: `SELECT * FROM generation_attempts 
+              WHERE request_fingerprint = ? 
+                AND status IN ('pending', 'failed')
+                AND created_at > ?
+              ORDER BY created_at DESC LIMIT 1`,
+        args: [requestFingerprint, tenMinutesAgo],
+      });
+
+      if (attemptRes.rows.length > 0) {
+        const attempt = attemptRes.rows[0];
+        const retryCount = Number(attempt.retry_count || 0);
+        if (retryCount < 2) {
+          await client.execute({
+            sql: `UPDATE generation_attempts 
+                  SET retry_count = retry_count + 1, updated_at = ? 
+                  WHERE id = ?`,
+            args: [now, String(attempt.id)],
+          });
+          console.log(`[Entitlement] Retry grace granted for attempt ${attempt.id} (${attempt.entitlement_used}, retry #${retryCount + 1}) to user ${targetId}`);
+          return {
+            success: true,
+            entitlement: attempt.entitlement_used as EntitlementStatus,
+            user,
+            attemptId: String(attempt.id),
+            isRetryGrace: true,
+          };
+        }
+      }
+    } catch (attemptErr) {
+      console.warn('[Entitlement] Retry grace lookup warning:', attemptErr);
+    }
+  }
+
   // 1. Pro Subscription check
   if (user.is_pro) {
     if (!user.pro_expires_at || new Date(user.pro_expires_at).getTime() > Date.now()) {
-      return { success: true, entitlement: 'pro', user };
+      const attemptId = requestFingerprint ? await recordGenerationAttempt(requestFingerprint, targetId, deviceId, 'pro') : undefined;
+      return { success: true, entitlement: 'pro', user, attemptId };
     }
   }
 
@@ -595,7 +710,8 @@ export async function reserveEntitlement(
     });
     if (res.rowsAffected > 0) {
       user.free_used += 1;
-      return { success: true, entitlement: 'free', user };
+      const attemptId = requestFingerprint ? await recordGenerationAttempt(requestFingerprint, targetId, deviceId, 'free') : undefined;
+      return { success: true, entitlement: 'free', user, attemptId };
     }
   }
 
@@ -609,7 +725,8 @@ export async function reserveEntitlement(
     });
     if (res.rowsAffected > 0) {
       user.ad_used = 1;
-      return { success: true, entitlement: 'ad', user };
+      const attemptId = requestFingerprint ? await recordGenerationAttempt(requestFingerprint, targetId, deviceId, 'ad') : undefined;
+      return { success: true, entitlement: 'ad', user, attemptId };
     }
   }
 
@@ -623,7 +740,8 @@ export async function reserveEntitlement(
 
   if (creditRes.rowsAffected > 0) {
     user.credits -= 1;
-    return { success: true, entitlement: 'credit', user };
+    const attemptId = requestFingerprint ? await recordGenerationAttempt(requestFingerprint, targetId, deviceId, 'credit') : undefined;
+    return { success: true, entitlement: 'credit', user, attemptId };
   }
 
   // Paywall required
@@ -1003,6 +1121,13 @@ export interface AdminStats {
     metadata: any;
     createdAt: string;
   }>;
+  blogStats?: {
+    totalPosts: number;
+    publishedPosts: number;
+    draftPosts: number;
+    totalViews: number;
+    avgSeoScore: number;
+  };
 }
 
 export async function getSystemSetting(key: string, defaultValue: string): Promise<string> {
@@ -2077,5 +2202,127 @@ export async function deleteBlogMedia(filenameOrId: string): Promise<boolean> {
     args: [filenameOrId, filenameOrId],
   });
   return (res.rowsAffected || 0) > 0;
+}
+
+export interface CachedCompletedNote {
+  request_fingerprint: string;
+  note_id: string;
+  user_id: string;
+  device_id: string | null;
+  place: string | null;
+  number: string | null;
+  image_base64: string;
+  model_used: string | null;
+  created_at: string;
+  expires_at: string;
+}
+
+export async function getCachedCompletedNote(requestFingerprint: string): Promise<CachedCompletedNote | null> {
+  try {
+    const now = new Date().toISOString();
+    const res = await client.execute({
+      sql: `SELECT * FROM completed_notes_cache 
+            WHERE request_fingerprint = ? AND expires_at > ? 
+            LIMIT 1`,
+      args: [requestFingerprint, now],
+    });
+
+    if (res.rows.length > 0) {
+      const r = res.rows[0];
+      return {
+        request_fingerprint: String(r.request_fingerprint),
+        note_id: String(r.note_id),
+        user_id: String(r.user_id),
+        device_id: r.device_id ? String(r.device_id) : null,
+        place: r.place ? String(r.place) : null,
+        number: r.number ? String(r.number) : null,
+        image_base64: String(r.image_base64),
+        model_used: r.model_used ? String(r.model_used) : null,
+        created_at: String(r.created_at),
+        expires_at: String(r.expires_at),
+      };
+    }
+  } catch (err) {
+    console.warn('[Database] Failed to retrieve cached completed note:', err);
+  }
+  return null;
+}
+
+export async function getCompletedNoteById(noteId: string): Promise<CachedCompletedNote | null> {
+  try {
+    const res = await client.execute({
+      sql: `SELECT * FROM completed_notes_cache WHERE note_id = ? LIMIT 1`,
+      args: [noteId],
+    });
+
+    if (res.rows.length > 0) {
+      const r = res.rows[0];
+      return {
+        request_fingerprint: String(r.request_fingerprint),
+        note_id: String(r.note_id),
+        user_id: String(r.user_id),
+        device_id: r.device_id ? String(r.device_id) : null,
+        place: r.place ? String(r.place) : null,
+        number: r.number ? String(r.number) : null,
+        image_base64: String(r.image_base64),
+        model_used: r.model_used ? String(r.model_used) : null,
+        created_at: String(r.created_at),
+        expires_at: String(r.expires_at),
+      };
+    }
+  } catch (err) {
+    console.warn('[Database] Failed to get note by ID:', err);
+  }
+  return null;
+}
+
+export async function saveCompletedNoteCache(params: {
+  requestFingerprint: string;
+  noteId: string;
+  userId: string;
+  deviceId?: string;
+  place?: string;
+  number?: string;
+  imageBase64: string;
+  modelUsed?: string;
+  ttlHours?: number;
+}): Promise<void> {
+  const ttl = params.ttlHours || 24;
+  const now = new Date();
+  const createdAt = now.toISOString();
+  const expiresAt = new Date(now.getTime() + ttl * 60 * 60 * 1000).toISOString();
+
+  try {
+    await client.execute({
+      sql: `INSERT OR REPLACE INTO completed_notes_cache 
+            (request_fingerprint, note_id, user_id, device_id, place, number, image_base64, model_used, created_at, expires_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        params.requestFingerprint,
+        params.noteId,
+        params.userId,
+        params.deviceId || null,
+        params.place || null,
+        params.number || null,
+        params.imageBase64,
+        params.modelUsed || null,
+        createdAt,
+        expiresAt,
+      ],
+    });
+
+    // Occasional cleanup of expired notes & stale attempts
+    if (Math.random() < 0.05) {
+      client.execute({
+        sql: `DELETE FROM completed_notes_cache WHERE expires_at < ?`,
+        args: [createdAt],
+      }).catch(() => {});
+      client.execute({
+        sql: `DELETE FROM generation_attempts WHERE created_at < datetime('now', '-7 days')`,
+      }).catch(() => {});
+    }
+  } catch (err) {
+    console.warn('[Database] Failed to cache completed note:', err);
+  }
 }
 

@@ -40,6 +40,10 @@ import {
   getBlogMedia,
   listBlogMedia,
   deleteBlogMedia,
+  getCachedCompletedNote,
+  getCompletedNoteById,
+  saveCompletedNoteCache,
+  updateGenerationAttemptStatus,
 } from './db.js';
 import { buildGrokPrompt } from './prompt.js';
 import { generateFieldNoteImage } from './grok.js';
@@ -1258,11 +1262,35 @@ const keywordRateLimitMap = new Map<string, { count: number; resetAt: number }>(
 // In-memory rate limiter for free/starter note generation per IP (max 6 free generations per 24 hours per IP)
 const freeGenerationIpMap = new Map<string, { count: number; resetAt: number }>();
 
+// Public binary image serving endpoint for generated notes
+app.get('/v1/notes/:id/image', async (c) => {
+  const noteId = c.req.param('id');
+  if (!noteId) {
+    return c.text('Not found', 404);
+  }
+
+  const cached = await getCompletedNoteById(noteId);
+  if (!cached || !cached.image_base64) {
+    return c.text('Image not found or expired', 404);
+  }
+
+  const cleanBase64 = cached.image_base64.replace(/^data:image\/\w+;base64,/, '');
+  const imageBuf = Buffer.from(cleanBase64, 'base64');
+
+  return c.body(imageBuf, 200, {
+    'Content-Type': 'image/jpeg',
+    'Content-Length': imageBuf.length.toString(),
+    'Cache-Control': 'public, max-age=86400, immutable',
+  });
+});
+
 // Generate Field Note Poster
 app.post('/v1/notes', async (c) => {
   const noteId = `fn_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
   let installationId = '';
   let deviceId: string | undefined;
+  let attemptId: string | undefined;
+  let isRetryGrace = false;
 
   try {
     const contentType = c.req.header('Content-Type') || '';
@@ -1348,9 +1376,44 @@ app.post('/v1/notes', async (c) => {
       return c.json({ error: 'MISSING_DEVICE_ID', message: 'Valid persistent deviceId is required.' }, 400);
     }
 
+    // Compute cryptographic request fingerprint: SHA-256(installationId + place + number + imageHash)
+    const imageHash = crypto.createHash('sha256').update(imageBuffer).digest('hex');
+    const requestFingerprint = crypto
+      .createHash('sha256')
+      .update(`${installationId}:${place}:${number}:${imageHash}`)
+      .digest('hex');
+
+    // Step 0: Check Completed Note Cache for instant recovery on retry
+    const cachedNote = await getCachedCompletedNote(requestFingerprint);
+    if (cachedNote) {
+      console.log(`[Notes] Cache hit for fingerprint ${requestFingerprint} (noteId: ${cachedNote.note_id}). Returning existing artwork.`);
+      const user = await getOrCreateUser(installationId, undefined, deviceId);
+      const host = c.req.header('host') || 'travel-scrapbook.com';
+      const protocol = host.includes('localhost') ? 'http' : 'https';
+      const baseUrl = `${protocol}://${host}`;
+
+      return c.json({
+        success: true,
+        noteId: cachedNote.note_id,
+        imageBase64: cachedNote.image_base64,
+        imageUrl: `${baseUrl}/v1/notes/${cachedNote.note_id}/image`,
+        modelUsed: cachedNote.model_used || 'grok-imagine-image-2.0',
+        cached: true,
+        userState: {
+          freeUsed: user.free_used,
+          adUsed: Boolean(user.ad_used),
+          credits: user.credits,
+          isPro: Boolean(user.is_pro),
+          entitlement: determineEntitlement(user),
+        },
+      });
+    }
+
     // Step 1: Atomically Reserve Entitlement in Database BEFORE Calling Model
-    // (Eliminates TOCTOU race conditions and rejects client-side entitlement spoofing)
-    const reservation = await reserveEntitlement(installationId, deviceId, rcUserId);
+    // (With 10-minute retry grace for unfulfilled generation attempts)
+    const reservation = await reserveEntitlement(installationId, deviceId, rcUserId, requestFingerprint);
+    attemptId = reservation.attemptId;
+    isRetryGrace = Boolean(reservation.isRetryGrace);
 
     if (!reservation.success) {
       return c.json({
@@ -1377,7 +1440,9 @@ app.post('/v1/notes', async (c) => {
       const ipRecord = freeGenerationIpMap.get(clientIp);
       if (ipRecord && now < ipRecord.resetAt && ipRecord.count >= 6) {
         // Rollback reserved free entitlement slot
-        await rollbackEntitlement(installationId, effectiveEntitlement, deviceId);
+        if (!isRetryGrace) {
+          await rollbackEntitlement(installationId, effectiveEntitlement, deviceId);
+        }
         return c.json({
           error: 'FREE_LIMIT_REACHED',
           message: 'Free note limit reached for this network. Please purchase a note pack or upgrade to Pro to continue.',
@@ -1409,7 +1474,7 @@ app.post('/v1/notes', async (c) => {
     const serverActiveModel = await getSystemSetting('active_model', 'grok-imagine-image-2.0');
     const effectiveModel = serverActiveModel || model || 'grok-imagine-image-2.0';
 
-    console.log(`[Notes] Generating note ${noteId} for ${installationId} under reserved "${effectiveEntitlement}" with model ${effectiveModel}...`);
+    console.log(`[Notes] Generating note ${noteId} for ${installationId} under reserved "${effectiveEntitlement}" (retryGrace: ${isRetryGrace}) with model ${effectiveModel}...`);
 
     // Step 3: Execute Image generation (Gemini or Grok Imagine)
     const isGeminiModel = effectiveModel?.toLowerCase().startsWith('gemini');
@@ -1442,11 +1507,37 @@ app.post('/v1/notes', async (c) => {
       }
     } catch (genErr: any) {
       // Model call failed: safely rollback / refund the reserved entitlement so user is not charged
-      await rollbackEntitlement(installationId, effectiveEntitlement, deviceId);
+      if (attemptId) {
+        await updateGenerationAttemptStatus(attemptId, 'failed');
+      }
+      if (!isRetryGrace) {
+        await rollbackEntitlement(installationId, effectiveEntitlement, deviceId);
+      }
       throw genErr;
     }
 
-    // Step 4: Log anonymous generation record
+    // Step 4: Cache completed note artwork for instant retry recovery
+    const host = c.req.header('host') || 'travel-scrapbook.com';
+    const protocol = host.includes('localhost') ? 'http' : 'https';
+    const baseUrl = `${protocol}://${host}`;
+    const generatedImageUrl = `${baseUrl}/v1/notes/${noteId}/image`;
+
+    await saveCompletedNoteCache({
+      requestFingerprint,
+      noteId,
+      userId: installationId,
+      deviceId,
+      place,
+      number,
+      imageBase64: result.imageBase64 || '',
+      modelUsed: result.modelUsed,
+    });
+
+    if (attemptId) {
+      await updateGenerationAttemptStatus(attemptId, 'completed');
+    }
+
+    // Step 5: Log anonymous generation record
     await logGenerationRecord(noteId, installationId, place, number, 'success', result.modelUsed);
 
     const updatedUser = await getOrCreateUser(installationId, undefined, deviceId);
@@ -1455,7 +1546,7 @@ app.post('/v1/notes', async (c) => {
       success: true,
       noteId,
       imageBase64: result.imageBase64,
-      imageUrl: result.imageUrl,
+      imageUrl: generatedImageUrl,
       modelUsed: result.modelUsed,
       userState: {
         freeUsed: updatedUser.free_used,
@@ -1500,6 +1591,9 @@ app.post('/v1/notes', async (c) => {
     }
 
     console.error(`[Notes] Generation error (${errorCode}): ${err.message}`);
+    if (attemptId) {
+      await updateGenerationAttemptStatus(attemptId, 'failed');
+    }
     await logGenerationRecord(noteId, installationId, '', '', 'failed', `${errorCode}: ${err.message}`);
 
     const user = await getOrCreateUser(installationId, undefined, deviceId);
