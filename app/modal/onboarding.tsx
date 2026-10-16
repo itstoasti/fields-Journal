@@ -130,20 +130,39 @@ export default function OnboardingScreen() {
     }
   };
 
+  const navigateToHome = () => {
+    if (Platform.OS === 'web') {
+      try {
+        router.replace('/app' as any);
+      } catch {}
+      if (typeof window !== 'undefined') {
+        setTimeout(() => {
+          if (window.location.pathname.includes('/modal/onboarding')) {
+            window.location.href = '/app';
+          }
+        }, 80);
+      }
+    } else if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/');
+    }
+  };
+
   const handleFinish = async (target: 'compose' | 'home') => {
     trackEvent(AnalyticsEvents.ONBOARDING_COMPLETED, { destination: target, finalSlide: currentIndex });
     await setHasSeenOnboarding(true);
     if (target === 'compose') {
       router.replace('/compose');
     } else {
-      router.back();
+      navigateToHome();
     }
   };
 
   const handleSkip = async () => {
     trackEvent(AnalyticsEvents.ONBOARDING_SKIPPED, { exitedAtSlide: currentIndex });
     await setHasSeenOnboarding(true);
-    router.back();
+    navigateToHome();
   };
 
   const handleNext = () => {
@@ -474,7 +493,17 @@ export default function OnboardingScreen() {
         />
 
         <View style={styles.secondaryLinkRow}>
-          <Pressable onPress={() => handleFinish('home')} hitSlop={10} style={styles.secondaryLink}>
+          <Pressable
+            onPress={() => handleFinish('home')}
+            hitSlop={14}
+            style={({ pressed }) => [
+              styles.secondaryLink,
+              pressed && { opacity: 0.6 },
+              Platform.OS === 'web' && ({ cursor: 'pointer' } as any),
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Explore notebook first"
+          >
             <TypewriterText size="xs" color={colors.inkSecondary} style={styles.secondaryLinkText}>
               Explore notebook first
             </TypewriterText>
@@ -511,6 +540,7 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 4,
+    ...(Platform.OS === 'web' ? ({ cursor: 'pointer' } as any) : {}),
   },
   carousel: {
     flex: 1,
@@ -747,8 +777,9 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   secondaryLink: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    ...(Platform.OS === 'web' ? ({ cursor: 'pointer' } as any) : {}),
   },
   secondaryLinkText: {
     textDecorationLine: 'underline',
