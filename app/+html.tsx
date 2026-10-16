@@ -19,6 +19,22 @@ export default function Root({ children }: { children: React.ReactNode }) {
           content="Create your digital travel scrapbook with Fields (travel-scrapbook.com). Turn vacation photos into vintage travel stamps and cherished trip memories."
         />
 
+        {/* Pinterest Domain Verification */}
+        <meta name="p:domain_verify" content="75a3616851b9f4e6de82922b8835bdba" />
+
+        {/* Google tag (gtag.js) */}
+        <script async src="https://www.googletagmanager.com/gtag/js?id=G-2K0FW843MP" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+              gtag('js', new Date());
+              gtag('config', 'G-2K0FW843MP');
+            `,
+          }}
+        />
+
         {/* PWA Web App Manifest */}
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#F4EFE6" />

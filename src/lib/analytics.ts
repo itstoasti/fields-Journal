@@ -61,6 +61,17 @@ export async function trackEvent(
       metadata: metadata || {},
     };
 
+    // Forward event to Google Analytics (gtag) on web
+    if (
+      Platform.OS === 'web' &&
+      typeof window !== 'undefined' &&
+      typeof (window as any).gtag === 'function'
+    ) {
+      try {
+        (window as any).gtag('event', eventName, metadata || {});
+      } catch {}
+    }
+
     // Non-blocking fetch with short 5s timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);

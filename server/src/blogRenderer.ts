@@ -951,11 +951,21 @@ export function renderBlogIndexHtml(posts: BlogPost[]): string {
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-2K0FW843MP"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-2K0FW843MP');
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Travel Scrapbook Journal &amp; Guides | Fields</title>
   <meta name="description" content="Explore expert tips, creative layout ideas, and step-by-step guides on making digital travel scrapbooks and vintage passport stamps from your phone." />
   <meta name="keywords" content="digital travel scrapbook, travel journal blog, photo scrapbook ideas, vintage travel stamps, fields journal" />
   <link rel="canonical" href="https://travel-scrapbook.com/blog" />
+  <meta name="p:domain_verify" content="75a3616851b9f4e6de82922b8835bdba" />
   
   <!-- Open Graph -->
   <meta property="og:type" content="website" />
@@ -1142,12 +1152,22 @@ export function renderBlogPostHtml(post: BlogPost, relatedPosts: BlogPost[] = []
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-2K0FW843MP"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-2K0FW843MP');
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${effectiveTitle} | Fields</title>
   <meta name="description" content="${post.meta_description || ''}" />
   <meta name="keywords" content="${(post.focus_keywords || []).join(', ')}" />
   <meta name="robots" content="${post.robots || 'index, follow'}" />
   <link rel="canonical" href="${canonicalUrl}" />
+  <meta name="p:domain_verify" content="75a3616851b9f4e6de82922b8835bdba" />
 
   <!-- Open Graph -->
   <meta property="og:type" content="article" />
