@@ -29,12 +29,19 @@ export default function RootLayout() {
       });
     }
 
-    // Guaranteed splash dismissal after 1.0s max, never blocks user UI
+    // Guaranteed splash dismissal after 500ms on web, 1.0s max on native, never blocks user UI
+    if (Platform.OS === 'web') {
+      const timer = setTimeout(() => {
+        setShowSplash(false);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+
     const timer = setTimeout(() => {
       Animated.timing(splashFade, {
         toValue: 0,
         duration: 350,
-        useNativeDriver: Platform.OS !== 'web',
+        useNativeDriver: true,
       }).start(() => {
         setShowSplash(false);
       });
