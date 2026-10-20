@@ -19,6 +19,9 @@ field-notes-debug.*
 field-notes-release.*
 mapping*.txt
 
+# Screenshots
+paywall_screenshot*.png
+
 # Environment files
 .env
 .env.local

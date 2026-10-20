@@ -116,8 +116,12 @@ export default function OnboardingScreen() {
   const windowWidth = Platform.OS === 'web' ? webDimensions.width : rnWidth;
   const windowHeight = Platform.OS === 'web' ? webDimensions.height : rnHeight;
 
+  const hasTrackedShown = useRef(false);
   useEffect(() => {
-    trackEvent(AnalyticsEvents.ONBOARDING_MODAL_SHOWN);
+    if (!hasTrackedShown.current) {
+      hasTrackedShown.current = true;
+      trackEvent(AnalyticsEvents.ONBOARDING_MODAL_SHOWN);
+    }
   }, []);
 
   const touchStartX = useRef<number | null>(null);

@@ -22,6 +22,9 @@ export default function Root({ children }: { children: React.ReactNode }) {
         {/* Pinterest Domain Verification */}
         <meta name="p:domain_verify" content="75a3616851b9f4e6de82922b8835bdba" />
 
+        {/* Bing Webmaster Tools Verification */}
+        <meta name="msvalidate.01" content="77A9B9358EEC3D88698EB74A11B14AA4" />
+
         {/* Google tag (gtag.js) */}
         <script async src="https://www.googletagmanager.com/gtag/js?id=G-2K0FW843MP" />
         <script

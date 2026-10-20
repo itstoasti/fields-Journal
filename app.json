@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "app.fields.journal",
-      "buildNumber": "1",
+      "buildNumber": "2",
       "infoPlist": {
         "NSCameraUsageDescription": "Fields accesses your camera to capture travel scenes for your carved stamp field notes.",
         "NSPhotoLibraryUsageDescription": "Fields accesses your photo gallery to select travel photos and read capture dates and locations.",

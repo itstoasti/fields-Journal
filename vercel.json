@@ -98,6 +98,10 @@
       "destination": "/api"
     },
     {
+      "source": "/app-ads.txt",
+      "destination": "/api"
+    },
+    {
       "source": "/admin",
       "destination": "/api"
     },

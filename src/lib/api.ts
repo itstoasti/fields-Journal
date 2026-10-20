@@ -100,7 +100,7 @@ export class ApiRequestError extends Error {
 export async function submitGenerateNote(request: GenerateNoteRequest): Promise<GenerateNoteResponse> {
   const baseUrl = getApiBaseUrl();
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 90000); // 90s client timeout
+  const timeoutId = setTimeout(() => controller.abort(), 120000); // 120s client timeout for AI linocut carving
 
   try {
     const response = await fetch(`${baseUrl}/v1/notes`, {

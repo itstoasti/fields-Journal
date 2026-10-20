@@ -660,17 +660,16 @@ export async function reserveEntitlement(
       const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
       const attemptRes = await client.execute({
         sql: `SELECT * FROM generation_attempts 
-              WHERE request_fingerprint = ? 
-                AND status IN ('pending', 'failed')
+              WHERE (request_fingerprint = ? OR (device_id = ? AND device_id IS NOT NULL))
                 AND created_at > ?
               ORDER BY created_at DESC LIMIT 1`,
-        args: [requestFingerprint, tenMinutesAgo],
+        args: [requestFingerprint, deviceId ? deviceId.trim() : null, tenMinutesAgo],
       });
 
       if (attemptRes.rows.length > 0) {
         const attempt = attemptRes.rows[0];
         const retryCount = Number(attempt.retry_count || 0);
-        if (retryCount < 2) {
+        if (retryCount < 3) {
           await client.execute({
             sql: `UPDATE generation_attempts 
                   SET retry_count = retry_count + 1, updated_at = ? 
@@ -779,12 +778,24 @@ export async function rollbackEntitlement(
         sql: 'UPDATE users SET free_used = MAX(0, free_used - 1), updated_at = ? WHERE installation_id = ?',
         args: [now, targetId],
       });
+      if (deviceId && deviceId.trim().length > 0) {
+        await client.execute({
+          sql: 'UPDATE users SET free_used = MAX(0, free_used - 1), updated_at = ? WHERE device_id = ?',
+          args: [now, deviceId.trim()],
+        });
+      }
       console.log(`[Entitlement] Safely refunded free slot to ${targetId}`);
     } else if (entitlement === 'ad') {
       await client.execute({
         sql: 'UPDATE users SET ad_used = 0, updated_at = ? WHERE installation_id = ?',
         args: [now, targetId],
       });
+      if (deviceId && deviceId.trim().length > 0) {
+        await client.execute({
+          sql: 'UPDATE users SET ad_used = 0, updated_at = ? WHERE device_id = ?',
+          args: [now, deviceId.trim()],
+        });
+      }
       console.log(`[Entitlement] Safely refunded ad slot to ${targetId}`);
     }
   } catch (err) {
@@ -2217,15 +2228,31 @@ export interface CachedCompletedNote {
   expires_at: string;
 }
 
-export async function getCachedCompletedNote(requestFingerprint: string): Promise<CachedCompletedNote | null> {
+export async function getCachedCompletedNote(
+  requestFingerprint: string,
+  deviceId?: string,
+  place?: string,
+  number?: string
+): Promise<CachedCompletedNote | null> {
   try {
     const now = new Date().toISOString();
-    const res = await client.execute({
+    let res = await client.execute({
       sql: `SELECT * FROM completed_notes_cache 
             WHERE request_fingerprint = ? AND expires_at > ? 
             LIMIT 1`,
       args: [requestFingerprint, now],
     });
+
+    // Fallback: If deviceId and place/number match and completed within the last 30 minutes, recover it
+    if (res.rows.length === 0 && deviceId && deviceId.trim().length > 0 && place && place.trim().length > 0) {
+      const thirtyMinsAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+      res = await client.execute({
+        sql: `SELECT * FROM completed_notes_cache 
+              WHERE device_id = ? AND place = ? AND number = ? AND created_at > ? AND expires_at > ? 
+              ORDER BY created_at DESC LIMIT 1`,
+        args: [deviceId.trim(), place.trim(), (number || '01').trim(), thirtyMinsAgo, now],
+      });
+    }
 
     if (res.rows.length > 0) {
       const r = res.rows[0];

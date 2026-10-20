@@ -40,15 +40,6 @@ export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, style }) => {
             resizeMode="cover"
           />
         )}
-        
-        {/* Mini Multi-Color Rubber Stamp Overlay in Bottom Right (1:1 with mockup) */}
-        <View style={styles.stampOverlay}>
-          <Image
-            source={require('../../assets/empty-stamp.png')}
-            style={styles.stampImage}
-            resizeMode="contain"
-          />
-        </View>
       </View>
 
       <View style={styles.labelContainer}>
@@ -82,27 +73,6 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   image: {
-    width: '100%',
-    height: '100%',
-  },
-  stampOverlay: {
-    position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 38,
-    height: 38,
-    backgroundColor: 'rgba(244, 239, 230, 0.92)',
-    borderRadius: 8,
-    padding: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  stampImage: {
     width: '100%',
     height: '100%',
   },

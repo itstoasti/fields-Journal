@@ -132,9 +132,21 @@ class RewardedAdController {
     }
 
     try {
+      // If ad is not ready, attempt an on-demand preload and wait up to 6 seconds
       if (!this.rewardedAdInstance || !this.isAdLoaded) {
-        console.warn('[AdMob] Ad not preloaded. Showing ad unavailable error.');
-        callbacks.onError('Ad unavailable. Try again or buy notes.');
+        console.log('[AdMob] Ad not ready on tap. Initiating on-demand load...');
+        this.preloadAd();
+
+        const startWait = Date.now();
+        while ((this.isLoading || !this.isAdLoaded) && Date.now() - startWait < 6000) {
+          await new Promise((resolve) => setTimeout(resolve, 250));
+          if (this.isAdLoaded) break;
+        }
+      }
+
+      if (!this.rewardedAdInstance || !this.isAdLoaded) {
+        console.warn('[AdMob] Ad still unavailable after wait.');
+        callbacks.onError('The sponsor video is currently preparing or temporarily unavailable in your region. Please tap Try Again in a moment.');
         return;
       }
 

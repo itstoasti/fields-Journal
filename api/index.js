@@ -12178,16 +12178,15 @@ async function reserveEntitlement(installationId, deviceId, rcUserId, requestFin
       const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1e3).toISOString();
       const attemptRes = await client.execute({
         sql: `SELECT * FROM generation_attempts 
-              WHERE request_fingerprint = ? 
-                AND status IN ('pending', 'failed')
+              WHERE (request_fingerprint = ? OR (device_id = ? AND device_id IS NOT NULL))
                 AND created_at > ?
               ORDER BY created_at DESC LIMIT 1`,
-        args: [requestFingerprint, tenMinutesAgo]
+        args: [requestFingerprint, deviceId ? deviceId.trim() : null, tenMinutesAgo]
       });
       if (attemptRes.rows.length > 0) {
         const attempt = attemptRes.rows[0];
         const retryCount = Number(attempt.retry_count || 0);
-        if (retryCount < 2) {
+        if (retryCount < 3) {
           await client.execute({
             sql: `UPDATE generation_attempts 
                   SET retry_count = retry_count + 1, updated_at = ? 
@@ -12275,12 +12274,24 @@ async function rollbackEntitlement(installationId, entitlement, deviceId) {
         sql: "UPDATE users SET free_used = MAX(0, free_used - 1), updated_at = ? WHERE installation_id = ?",
         args: [now, targetId]
       });
+      if (deviceId && deviceId.trim().length > 0) {
+        await client.execute({
+          sql: "UPDATE users SET free_used = MAX(0, free_used - 1), updated_at = ? WHERE device_id = ?",
+          args: [now, deviceId.trim()]
+        });
+      }
       console.log(`[Entitlement] Safely refunded free slot to ${targetId}`);
     } else if (entitlement === "ad") {
       await client.execute({
         sql: "UPDATE users SET ad_used = 0, updated_at = ? WHERE installation_id = ?",
         args: [now, targetId]
       });
+      if (deviceId && deviceId.trim().length > 0) {
+        await client.execute({
+          sql: "UPDATE users SET ad_used = 0, updated_at = ? WHERE device_id = ?",
+          args: [now, deviceId.trim()]
+        });
+      }
       console.log(`[Entitlement] Safely refunded ad slot to ${targetId}`);
     }
   } catch (err) {
@@ -13351,15 +13362,24 @@ async function deleteBlogMedia(filenameOrId) {
   });
   return (res.rowsAffected || 0) > 0;
 }
-async function getCachedCompletedNote(requestFingerprint) {
+async function getCachedCompletedNote(requestFingerprint, deviceId, place, number2) {
   try {
     const now = (/* @__PURE__ */ new Date()).toISOString();
-    const res = await client.execute({
+    let res = await client.execute({
       sql: `SELECT * FROM completed_notes_cache 
             WHERE request_fingerprint = ? AND expires_at > ? 
             LIMIT 1`,
       args: [requestFingerprint, now]
     });
+    if (res.rows.length === 0 && deviceId && deviceId.trim().length > 0 && place && place.trim().length > 0) {
+      const thirtyMinsAgo = new Date(Date.now() - 30 * 60 * 1e3).toISOString();
+      res = await client.execute({
+        sql: `SELECT * FROM completed_notes_cache 
+              WHERE device_id = ? AND place = ? AND number = ? AND created_at > ? AND expires_at > ? 
+              ORDER BY created_at DESC LIMIT 1`,
+        args: [deviceId.trim(), place.trim(), (number2 || "01").trim(), thirtyMinsAgo, now]
+      });
+    }
     if (res.rows.length > 0) {
       const r = res.rows[0];
       return {
@@ -16460,6 +16480,7 @@ function renderBlogIndexHtml(posts) {
   <meta name="keywords" content="digital travel scrapbook, travel journal blog, photo scrapbook ideas, vintage travel stamps, fields journal" />
   <link rel="canonical" href="https://travel-scrapbook.com/blog" />
   <meta name="p:domain_verify" content="75a3616851b9f4e6de82922b8835bdba" />
+  <meta name="msvalidate.01" content="77A9B9358EEC3D88698EB74A11B14AA4" />
   
   <!-- Open Graph -->
   <meta property="og:type" content="website" />
@@ -16645,6 +16666,7 @@ function renderBlogPostHtml(post, relatedPosts = []) {
   <meta name="robots" content="${post.robots || "index, follow"}" />
   <link rel="canonical" href="${canonicalUrl}" />
   <meta name="p:domain_verify" content="75a3616851b9f4e6de82922b8835bdba" />
+  <meta name="msvalidate.01" content="77A9B9358EEC3D88698EB74A11B14AA4" />
 
   <!-- Open Graph -->
   <meta property="og:type" content="article" />
@@ -17081,6 +17103,18 @@ app.get("/feed.xml", async (c) => {
 app.get(`/${INDEXNOW_KEY}.txt`, (c) => {
   c.header("Content-Type", "text/plain; charset=utf-8");
   return c.text(INDEXNOW_KEY);
+});
+app.get("/app-ads.txt", (c) => {
+  const filePath = findPublicFile("app-ads.txt");
+  if (filePath) {
+    c.header("Content-Type", "text/plain; charset=utf-8");
+    c.header("Cache-Control", "public, max-age=86400");
+    return c.text(import_node_fs2.default.readFileSync(filePath, "utf-8"));
+  }
+  return c.text("google.com, pub-5918407268001346, DIRECT, f08c47fec0942fa0\n", 200, {
+    "Content-Type": "text/plain; charset=utf-8",
+    "Cache-Control": "public, max-age=86400"
+  });
 });
 app.get("/blog", async (c) => {
   try {
@@ -17960,9 +17994,11 @@ app.post("/v1/notes", async (c) => {
     if (!deviceId || typeof deviceId !== "string" || deviceId.trim().length < 6 || deviceId.length > 128) {
       return c.json({ error: "MISSING_DEVICE_ID", message: "Valid persistent deviceId is required." }, 400);
     }
+    const primaryId = deviceId && deviceId.trim().length > 0 ? deviceId.trim() : installationId;
     const imageHash = import_node_crypto.default.createHash("sha256").update(imageBuffer).digest("hex");
-    const requestFingerprint = import_node_crypto.default.createHash("sha256").update(`${installationId}:${place}:${number2}:${imageHash}`).digest("hex");
-    const cachedNote = await getCachedCompletedNote(requestFingerprint);
+    const requestFingerprint = import_node_crypto.default.createHash("sha256").update(`${primaryId}:${place}:${number2}:${imageHash}`).digest("hex");
+    const legacyFingerprint = import_node_crypto.default.createHash("sha256").update(`${installationId}:${place}:${number2}:${imageHash}`).digest("hex");
+    const cachedNote = await getCachedCompletedNote(requestFingerprint, deviceId, place, number2) || (legacyFingerprint !== requestFingerprint ? await getCachedCompletedNote(legacyFingerprint, deviceId, place, number2) : null);
     if (cachedNote) {
       console.log(`[Notes] Cache hit for fingerprint ${requestFingerprint} (noteId: ${cachedNote.note_id}). Returning existing artwork.`);
       const user = await getOrCreateUser(installationId, void 0, deviceId);

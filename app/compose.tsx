@@ -322,7 +322,6 @@ export default function ComposeScreen() {
 
     // Step 1: Check First-run Privacy Consent
     if (!hasConsentedPrivacy) {
-      trackEvent(AnalyticsEvents.PRIVACY_MODAL_SHOWN);
       router.push('/modal/privacy-consent');
       return;
     }

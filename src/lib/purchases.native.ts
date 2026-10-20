@@ -4,7 +4,7 @@ import { FieldAlert } from '../components/FieldAlert';
 
 export const REVENUECAT_API_KEY =
   Platform.select({
-    ios: process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY || 'appl_SIioGMRmaGojibFnWhGHsUJkNkK',
+    ios: process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY || 'appl_pYtQXlizCIHIgITDDGWQIGsAOew',
     android: process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY || process.env.EXPO_PUBLIC_REVENUECAT_API_KEY || 'goog_SIioGMRmaGojibFnWhGHsUJkNkK',
     default: process.env.EXPO_PUBLIC_REVENUECAT_API_KEY || '',
   }) || '';

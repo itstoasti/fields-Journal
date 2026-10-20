@@ -115,21 +115,11 @@ export default function ResultScreen() {
   const windowWidth = Platform.OS === 'web' ? webDimensions.width : rnWidth;
   const windowHeight = Platform.OS === 'web' ? webDimensions.height : rnHeight;
 
-  // Responsive card size: stays true 4:3 landscape ratio and fits cleanly between top and bottom bars
-  // Available height accounts for topBar (~55px), bottomBar (~90px), and margins/dots (~55px)
-  const availableVertical = Platform.OS === 'web'
-    ? Math.max(220, windowHeight - 200)
-    : (SCREEN_WIDTH - 32) * 0.75;
-
-  const maxAllowedHeight = Platform.OS === 'web'
-    ? Math.min(390, Math.round(availableVertical * 0.88))
-    : 300;
-
-  const cardWidth = Platform.OS === 'web'
-    ? Math.min(520, Math.round(maxAllowedHeight * (4 / 3)), windowWidth - 32)
-    : Math.min(350, windowWidth - 32);
-
-  const cardHeight = Math.round(cardWidth * (3 / 4));
+  // Web-only responsive card constraints to prevent oversized cards on wide desktop displays
+  const availableVertical = Platform.OS === 'web' ? Math.max(220, windowHeight - 200) : 0;
+  const maxAllowedHeight = Platform.OS === 'web' ? Math.min(390, Math.round(availableVertical * 0.88)) : 0;
+  const webCardWidth = Platform.OS === 'web' ? Math.min(520, Math.round(maxAllowedHeight * (4 / 3)), windowWidth - 32) : 0;
+  const webCardHeight = Math.round(webCardWidth * (3 / 4));
 
   const activeNote = displayNotes[currentIndex] || {
     id: params.noteId,
@@ -376,7 +366,7 @@ export default function ResultScreen() {
               </Pressable>
             )}
 
-            <View nativeID="result-poster-card" style={[styles.posterCard, { width: cardWidth, height: cardHeight }]}>
+            <View nativeID="result-poster-card" style={[styles.posterCard, { width: webCardWidth, height: webCardHeight, aspectRatio: undefined }]}>
               <img
                 src={activeNote.posterUri}
                 alt={activeNote.place || 'Poster preview'}
@@ -432,7 +422,7 @@ export default function ResultScreen() {
             })}
             renderItem={({ item }) => (
               <View style={styles.pageContainer}>
-                <View style={[styles.posterCard, { width: cardWidth, height: cardHeight }]}>
+                <View style={styles.posterCard}>
                   <Image
                     source={{ uri: item.posterUri }}
                     style={styles.posterImage}
@@ -616,14 +606,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   posterCard: {
+    width: '100%',
+    aspectRatio: layout.posterAspectRatio,
     backgroundColor: '#FFFFFF',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: colors.paperBorder,
+    borderRadius: 4,
     shadowColor: colors.charcoal,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.16,
-    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
     elevation: 6,
     overflow: 'hidden',
   },
@@ -635,8 +625,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    marginTop: spacing.md,
+    gap: 6,
+    marginTop: spacing.sm,
     marginBottom: spacing.xs,
   },
   dot: {
@@ -644,7 +634,7 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   activeDot: {
-    width: 20,
+    width: 16,
     backgroundColor: colors.brickRed,
   },
   inactiveDot: {

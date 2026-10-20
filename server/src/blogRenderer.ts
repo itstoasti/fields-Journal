@@ -966,6 +966,7 @@ export function renderBlogIndexHtml(posts: BlogPost[]): string {
   <meta name="keywords" content="digital travel scrapbook, travel journal blog, photo scrapbook ideas, vintage travel stamps, fields journal" />
   <link rel="canonical" href="https://travel-scrapbook.com/blog" />
   <meta name="p:domain_verify" content="75a3616851b9f4e6de82922b8835bdba" />
+  <meta name="msvalidate.01" content="77A9B9358EEC3D88698EB74A11B14AA4" />
   
   <!-- Open Graph -->
   <meta property="og:type" content="website" />
@@ -1168,6 +1169,7 @@ export function renderBlogPostHtml(post: BlogPost, relatedPosts: BlogPost[] = []
   <meta name="robots" content="${post.robots || 'index, follow'}" />
   <link rel="canonical" href="${canonicalUrl}" />
   <meta name="p:domain_verify" content="75a3616851b9f4e6de82922b8835bdba" />
+  <meta name="msvalidate.01" content="77A9B9358EEC3D88698EB74A11B14AA4" />
 
   <!-- Open Graph -->
   <meta property="og:type" content="article" />

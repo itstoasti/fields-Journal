@@ -317,6 +317,20 @@ app.get(`/${INDEXNOW_KEY}.txt`, (c) => {
   return c.text(INDEXNOW_KEY);
 });
 
+// 6. Authorized Digital Sellers File (Google AdMob app-ads.txt verification)
+app.get('/app-ads.txt', (c) => {
+  const filePath = findPublicFile('app-ads.txt');
+  if (filePath) {
+    c.header('Content-Type', 'text/plain; charset=utf-8');
+    c.header('Cache-Control', 'public, max-age=86400');
+    return c.text(fs.readFileSync(filePath, 'utf-8'));
+  }
+  return c.text('google.com, pub-5918407268001346, DIRECT, f08c47fec0942fa0\n', 200, {
+    'Content-Type': 'text/plain; charset=utf-8',
+    'Cache-Control': 'public, max-age=86400',
+  });
+});
+
 // ==========================================
 // PUBLIC BLOG PAGES (/blog and /blog/:slug)
 // ==========================================
@@ -1376,15 +1390,23 @@ app.post('/v1/notes', async (c) => {
       return c.json({ error: 'MISSING_DEVICE_ID', message: 'Valid persistent deviceId is required.' }, 400);
     }
 
-    // Compute cryptographic request fingerprint: SHA-256(installationId + place + number + imageHash)
+    // Compute cryptographic request fingerprint: SHA-256(persistent identifier + place + number + imageHash)
+    const primaryId = (deviceId && deviceId.trim().length > 0) ? deviceId.trim() : installationId;
     const imageHash = crypto.createHash('sha256').update(imageBuffer).digest('hex');
     const requestFingerprint = crypto
+      .createHash('sha256')
+      .update(`${primaryId}:${place}:${number}:${imageHash}`)
+      .digest('hex');
+
+    // Also compute legacy installation-based fingerprint for backwards compatibility
+    const legacyFingerprint = crypto
       .createHash('sha256')
       .update(`${installationId}:${place}:${number}:${imageHash}`)
       .digest('hex');
 
     // Step 0: Check Completed Note Cache for instant recovery on retry
-    const cachedNote = await getCachedCompletedNote(requestFingerprint);
+    const cachedNote = (await getCachedCompletedNote(requestFingerprint, deviceId, place, number)) ||
+                       (legacyFingerprint !== requestFingerprint ? await getCachedCompletedNote(legacyFingerprint, deviceId, place, number) : null);
     if (cachedNote) {
       console.log(`[Notes] Cache hit for fingerprint ${requestFingerprint} (noteId: ${cachedNote.note_id}). Returning existing artwork.`);
       const user = await getOrCreateUser(installationId, undefined, deviceId);
